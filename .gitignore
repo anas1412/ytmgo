@@ -1,0 +1,32 @@
+# Binaries
+ytmgo
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Test binary, built with `go test -c`
+*.test
+
+# Output of the go coverage tool
+*.out
+
+# Go workspace file
+go.work
+
+# Downloaded media (don't commit user content)
+downloads/
+
+# IDE / Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temp / session files from OpenAgent / OpenCoder
+.tmp/
