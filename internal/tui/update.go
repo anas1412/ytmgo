@@ -9,9 +9,10 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
-// Init satisfies tea.Model. It starts the tick for progress animation.
+// Init satisfies tea.Model. It starts the tick for progress animation
+// and fetches personalized YouTube recommendations.
 func (m Model) Init() tea.Cmd {
-	return tickCmd()
+	return tea.Batch(tickCmd(), fetchRecommendationsCmd())
 }
 
 // Update satisfies tea.Model. It handles all messages without making
@@ -83,6 +84,23 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
+	// ── Recommendations (YouTube home feed) ──────────────────────
+	case RecommendationsMsg:
+		m.showingRecommendations = msg.Error == nil
+		if msg.Error != nil {
+			m.err = msg.Error
+			m.statusMessage = "Recommendations unavailable: " + msg.Error.Error()
+		} else {
+			m.results = msg.Results
+			m.searchCursor = 0
+			if len(msg.Results) > 0 {
+				m.statusMessage = fmt.Sprintf("%d recommendations", len(msg.Results))
+			} else {
+				m.statusMessage = "No recommendations available"
+			}
+		}
+		return m, nil
+
 	// ── Download progress ────────────────────────────────────────
 	case DownloadProgressMsg:
 		m.downloadPct = msg.Progress
@@ -103,6 +121,31 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					t.FilePath = msg.FilePath
 				}
 			})
+			// Auto-play the downloaded track if nothing is currently playing
+			if m.playerState == player.StateStopped {
+				tracks := m.queue.Tracks()
+				for i, t := range tracks {
+					if t.ID == msg.TrackID && t.Downloaded && t.FilePath != "" {
+						m.queue.SetCurrentIndex(i)
+						m.queueCursor = i
+						m.playerState = player.StatePlaying
+						m.duration = float64(t.DurationSec)
+						m.position = 0
+						m.statusMessage = "Now playing: " + t.Title
+						m.ensurePlayer()
+						if err := m.player.Play(t.FilePath); err != nil {
+							m.err = err
+							m.playerState = player.StateStopped
+							return m, downloadCmd(m.downloader)
+						}
+						return m, tea.Batch(
+							downloadCmd(m.downloader),
+							positionCmd(m.player),
+							endedCmd(m.player),
+						)
+					}
+				}
+			}
 			// Keep listening for next download
 			return m, downloadCmd(m.downloader)
 		}
@@ -191,6 +234,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.activePanel = PanelSearch
 				query := m.searchInput.Value()
 				if query != "" {
+					m.showingRecommendations = false
 					m.isSearching = true
 					m.searchCursor = 0
 					m.err = nil
