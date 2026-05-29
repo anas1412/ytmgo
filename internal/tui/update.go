@@ -12,7 +12,8 @@ import (
 // Init satisfies tea.Model. It starts the tick for progress animation
 // and fetches personalized YouTube recommendations.
 func (m Model) Init() tea.Cmd {
-	return tea.Batch(tickCmd(), fetchRecommendationsCmd())
+	m.results = nil // will be filled incrementally via streaming
+	return tea.Batch(tickCmd(), startRecStreamCmd(), scanLibraryCmd())
 }
 
 // Update satisfies tea.Model. It handles all messages without making
@@ -39,12 +40,19 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.Button == tea.MouseButtonWheelUp {
 			switch m.activePanel {
 			case PanelSearch:
-				if m.searchCursor > 0 {
+				if m.showingLibrary {
+					if m.libraryCursor > 0 {
+						m.libraryCursor--
+						m.clampLibraryOffset()
+					}
+				} else if m.searchCursor > 0 {
 					m.searchCursor--
+					m.clampSearchOffset()
 				}
 			case PanelQueue:
 				if m.queueCursor > 0 {
 					m.queueCursor--
+					m.clampQueueOffset()
 				}
 			}
 			return m, nil
@@ -52,12 +60,20 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.Button == tea.MouseButtonWheelDown {
 			switch m.activePanel {
 			case PanelSearch:
-				if m.searchCursor < len(m.results)-1 {
+				if m.showingLibrary {
+					maxIdx := len(m.filteredLibrary()) - 1
+					if m.libraryCursor < maxIdx {
+						m.libraryCursor++
+						m.clampLibraryOffset()
+					}
+				} else if m.searchCursor < len(m.results)-1 {
 					m.searchCursor++
+					m.clampSearchOffset()
 				}
 			case PanelQueue:
 				if m.queueCursor < m.queue.Len()-1 {
 					m.queueCursor++
+					m.clampQueueOffset()
 				}
 			}
 			return m, nil
@@ -76,6 +92,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.statusMessage = "Search failed: " + msg.Error.Error()
 		} else {
 			m.results = msg.Results
+			m.searchCursor = 0
+			m.searchOffset = 0
 			if len(msg.Results) > 0 {
 				m.statusMessage = fmt.Sprintf("Found %d results", len(msg.Results))
 			} else {
@@ -84,20 +102,50 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
-	// ── Recommendations (YouTube home feed) ──────────────────────
-	case RecommendationsMsg:
-		m.showingRecommendations = msg.Error == nil
-		if msg.Error != nil {
-			m.err = msg.Error
-			m.statusMessage = "Recommendations unavailable: " + msg.Error.Error()
+	// ── Streaming recommendations ───────────────────────────────
+	case RecStreamMsg:
+		if msg.Cancel != nil {
+			// First message from a stream — store channel & cancel.
+			m.recStreamCh = msg.Ch
+			m.recStreamCancel = msg.Cancel
+		}
+		if msg.Result != nil {
+			m.results = append(m.results, *msg.Result)
+			m.showingRecommendations = true
+			// Read the next result.
+			return m, readNextRecCmd(msg.Ch)
+		}
+		// Stream ended.
+		if len(m.results) == 0 {
+			m.statusMessage = "No recommendations available"
 		} else {
-			m.results = msg.Results
-			m.searchCursor = 0
-			if len(msg.Results) > 0 {
+			m.statusMessage = fmt.Sprintf("%d recommendations", len(m.results))
+		}
+		return m, nil
+
+	// ── Recommendations (YouTube home feed) ──────────────────────
+		case RecommendationsMsg:
+			m.showingRecommendations = msg.Error == nil
+			if msg.Error != nil {
+				m.err = msg.Error
+				m.statusMessage = "Recommendations unavailable: " + msg.Error.Error()
+			} else {
+				m.results = msg.Results
+				m.searchCursor = 0
+				m.searchOffset = 0
+				if len(msg.Results) > 0 {
 				m.statusMessage = fmt.Sprintf("%d recommendations", len(msg.Results))
 			} else {
 				m.statusMessage = "No recommendations available"
 			}
+		}
+		return m, nil
+
+	// ── Library scan complete ────────────────────────────────────
+	case LibraryScanMsg:
+		m.library = msg.Tracks
+		if len(msg.Tracks) > 0 {
+			m.statusMessage = fmt.Sprintf("Library: %d downloaded tracks", len(msg.Tracks))
 		}
 		return m, nil
 
@@ -233,8 +281,20 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.searchInput.Blur()
 				m.activePanel = PanelSearch
 				query := m.searchInput.Value()
+				if m.showingLibrary {
+					// In library view, Enter just exits the search field (filtering already happened live)
+					return m, nil
+				}
 				if query != "" {
 					m.showingRecommendations = false
+					m.showingLibrary = false
+					// Cancel any running recommendation stream.
+					if m.recStreamCancel != nil {
+						m.recStreamCancel()
+						m.recStreamCancel = nil
+						m.recStreamCh = nil
+					}
+					m.results = nil
 					m.isSearching = true
 					m.searchCursor = 0
 					m.err = nil
@@ -250,6 +310,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			var cmd tea.Cmd
 			m.searchInput, cmd = m.searchInput.Update(msg)
+			// When typing in library mode, clamp cursor to filtered results
+			if m.showingLibrary {
+				m.clampLibraryOffset()
+			}
 			return m, cmd
 		}
 
@@ -285,12 +349,19 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "up", "k":
 			switch m.activePanel {
 			case PanelSearch:
-				if m.searchCursor > 0 {
+				if m.showingLibrary {
+					if m.libraryCursor > 0 {
+						m.libraryCursor--
+						m.clampLibraryOffset()
+					}
+				} else if m.searchCursor > 0 {
 					m.searchCursor--
+					m.clampSearchOffset()
 				}
 			case PanelQueue:
 				if m.queueCursor > 0 {
 					m.queueCursor--
+					m.clampQueueOffset()
 				}
 			}
 			return m, nil
@@ -298,12 +369,20 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "down", "j":
 			switch m.activePanel {
 			case PanelSearch:
-				if m.searchCursor < len(m.results)-1 {
+				if m.showingLibrary {
+					maxIdx := len(m.filteredLibrary()) - 1
+					if m.libraryCursor < maxIdx {
+						m.libraryCursor++
+						m.clampLibraryOffset()
+					}
+				} else if m.searchCursor < len(m.results)-1 {
 					m.searchCursor++
+					m.clampSearchOffset()
 				}
 			case PanelQueue:
 				if m.queueCursor < m.queue.Len()-1 {
 					m.queueCursor++
+					m.clampQueueOffset()
 				}
 			}
 			return m, nil
@@ -311,7 +390,29 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "enter":
 			switch m.activePanel {
 			case PanelSearch:
-				if len(m.results) > 0 {
+				if m.showingLibrary {
+					// Library mode: play a downloaded track directly (use filtered list)
+					tracks := m.filteredLibrary()
+					if len(tracks) > 0 && m.libraryCursor >= 0 && m.libraryCursor < len(tracks) {
+						t := tracks[m.libraryCursor]
+						m.queue.Add(t)
+						m.queue.SetCurrentIndex(m.queue.Len() - 1)
+						m.queueCursor = m.queue.Len() - 1
+						m.playerState = player.StatePlaying
+						m.duration = float64(t.DurationSec)
+						m.position = 0
+						m.statusMessage = "Now playing: " + t.Title
+						m.ensurePlayer()
+						if err := m.player.Play(t.FilePath); err != nil {
+							m.err = err
+							m.playerState = player.StateStopped
+						} else {
+							return m, tea.Batch(positionCmd(m.player), endedCmd(m.player))
+						}
+					}
+					return m, nil
+				}
+				if len(m.results) > 0 && m.searchCursor >= 0 && m.searchCursor < len(m.results) {
 					r := m.results[m.searchCursor]
 					t := searchResultToTrack(r)
 					m.queue.Add(t)
@@ -449,6 +550,39 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.player.Seek(5)
 			}
 			return m, nil
+
+		case "L":
+			// Toggle library view
+			m.showingLibrary = !m.showingLibrary
+			if m.showingLibrary {
+				m.showingRecommendations = false
+				m.libraryCursor = 0
+				m.libraryOffset = 0
+				n := len(m.library)
+				if n > 0 {
+					m.statusMessage = fmt.Sprintf("Library: %d tracks  (type to filter)", n)
+				} else {
+					m.statusMessage = "No downloaded tracks"
+				}
+			} else {
+				m.statusMessage = ""
+			}
+			return m, nil
+
+		case "R":
+			// Cancel any existing recommendation stream and start fresh.
+			if m.recStreamCancel != nil {
+				m.recStreamCancel()
+				m.recStreamCancel = nil
+				m.recStreamCh = nil
+			}
+			m.showingRecommendations = true
+			m.showingLibrary = false
+			m.results = nil
+			m.searchCursor = 0
+			m.searchOffset = 0
+			m.statusMessage = "Loading recommendations…"
+			return m, startRecStreamCmd()
 
 		case "h", "ctrl+b":
 			m.position = max(m.position-5, 0)
@@ -597,20 +731,34 @@ func (m Model) handleClick(x, y int) Model {
 
 		midX := m.width / 2
 		if x < midX {
-			// Left panel: search results
+			// Left panel: search results / library
 			m.activePanel = PanelSearch
 			idx := (y - clickItemOffsetY) / clickLinesPerItem
-			switch {
-			case idx < 0:
-				idx = 0
-			case idx >= len(m.results):
-				idx = len(m.results) - 1
+			if m.showingLibrary {
+				tracks := m.filteredLibrary()
+				idx += m.libraryOffset
+				switch {
+				case idx < 0:
+					idx = 0
+				case idx >= len(tracks):
+					idx = len(tracks) - 1
+				}
+				m.libraryCursor = idx
+			} else {
+				idx += m.searchOffset
+				switch {
+				case idx < 0:
+					idx = 0
+				case idx >= len(m.results):
+					idx = len(m.results) - 1
+				}
+				m.searchCursor = idx
 			}
-			m.searchCursor = idx
 		} else {
 			// Right panel: queue
 			m.activePanel = PanelQueue
 			idx := (y - clickItemOffsetY) / clickLinesPerItem
+			idx += m.queueOffset
 			switch {
 			case idx < 0:
 				idx = 0

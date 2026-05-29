@@ -23,8 +23,10 @@ type KeyMap struct {
 	ClearQueue   key.Binding
 	MoveUp       key.Binding
 	MoveDown     key.Binding
-	Download     key.Binding
-	Escape       key.Binding
+	Download      key.Binding
+	Library       key.Binding
+	Recs          key.Binding
+	Escape        key.Binding
 }
 
 // Keys is the canonical keymap singleton.
@@ -109,6 +111,14 @@ var Keys = KeyMap{
 		key.WithKeys("x"),
 		key.WithHelp("x", "download track"),
 	),
+	Library: key.NewBinding(
+		key.WithKeys("L"),
+		key.WithHelp("L", "library toggle"),
+	),
+	Recs: key.NewBinding(
+		key.WithKeys("R"),
+		key.WithHelp("R", "recommendations"),
+	),
 	Escape: key.NewBinding(
 		key.WithKeys("esc"),
 		key.WithHelp("esc", "back / close"),
@@ -121,6 +131,8 @@ func (k KeyMap) ShortHelp() []key.Binding {
 		k.FocusNext,
 		k.Enter,
 		k.PlayPause,
+		k.Library,
+		k.Recs,
 		k.Help,
 		k.Quit,
 	}
@@ -157,6 +169,8 @@ func (k KeyMap) FullHelp() [][]key.Binding {
 		},
 		{
 			k.Help,
+			k.Library,
+			k.Recs,
 			k.Escape,
 			k.Quit,
 		},

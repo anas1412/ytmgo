@@ -1,12 +1,15 @@
 package tui
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"ytmgo/internal/downloader"
+	"ytmgo/internal/library"
 	"ytmgo/internal/player"
 	"ytmgo/internal/queue"
 	"ytmgo/internal/search"
@@ -51,6 +54,27 @@ type (
 		Results []search.Result
 		Error   error
 	}
+
+	// RecommendationsMsg carries the YouTube home page recommendations.
+	RecommendationsMsg struct {
+		Results []search.Result
+		Error   error
+	}
+
+	// RecStreamMsg carries one incremental result from the streaming
+	// recommendation fetcher. Result is nil when the stream has ended.
+	// Ch is the stream channel (included every msg so the handler never
+	// loses it). Cancel is only set on the first message.
+	RecStreamMsg struct {
+		Result *search.Result
+		Ch     chan search.Result
+		Cancel context.CancelFunc
+	}
+
+	// LibraryScanMsg carries the list of downloaded tracks found on disk.
+	LibraryScanMsg struct {
+		Tracks []queue.Track
+	}
 )
 
 // tickMsg triggers periodic UI updates (progress bar animation).
@@ -71,15 +95,26 @@ type Model struct {
 	quitting    bool
 
 	// ── Search ──
-	searchInput  textinput.Model
-	searchFocused bool
-	searchCursor int
-	results      []search.Result
-	isSearching  bool
+	searchInput           textinput.Model
+	searchFocused         bool
+	searchCursor          int
+	searchOffset          int
+	results               []search.Result
+	isSearching           bool
+	showingRecommendations bool
+	recStreamCh            chan search.Result
+	recStreamCancel        context.CancelFunc
+
+	// ── Library (local downloaded files) ──
+	library       []queue.Track
+	libraryCursor int
+	libraryOffset int
+	showingLibrary bool
 
 	// ── Queue ──
 	queue       *queue.Queue
 	queueCursor int
+	queueOffset int
 
 	// ── Player ──
 	player      *player.Player
@@ -115,12 +150,13 @@ func InitialModel() Model {
 	ti.Width = 40
 
 	return Model{
-		activePanel:  PanelSearch,
-		searchInput:  ti,
-		results:      []search.Result{},
-		queue:        queue.New(),
-		playerState:  player.StateStopped,
-		volume:       80,
+		activePanel:            PanelSearch,
+		searchInput:            ti,
+		results:                []search.Result{},
+		queue:                  queue.New(),
+		playerState:            player.StateStopped,
+		volume:                 80,
+		showingRecommendations: true,
 	}
 }
 
@@ -137,6 +173,63 @@ func searchCmd(query string, limit int) tea.Cmd {
 			results = []search.Result{} // never nil
 		}
 		return SearchResultsMsg{Results: results}
+	}
+}
+
+// fetchRecommendationsCmd fires a request for YouTube home page recommendations.
+func fetchRecommendationsCmd() tea.Cmd {
+	return func() tea.Msg {
+		results, err := search.FetchRecommendations(40)
+		if err != nil {
+			return RecommendationsMsg{Error: err}
+		}
+		if results == nil {
+			results = []search.Result{}
+		}
+		return RecommendationsMsg{Results: results}
+	}
+}
+
+// startRecStreamCmd spins up a new recommendation stream. The first
+// RecStreamMsg carries the channel and cancel function so the model can
+// store them for subsequent reads and cancellation (e.g. when R is
+// pressed again).
+func startRecStreamCmd() tea.Cmd {
+	return func() tea.Msg {
+		ch := make(chan search.Result, 10)
+		ctx, cancel := context.WithCancel(context.Background())
+		go search.StreamRecommendations(20, ch, ctx.Done())
+
+		// Block until the first result arrives or the stream ends.
+		r, ok := <-ch
+		if !ok {
+			return RecStreamMsg{Ch: ch, Cancel: cancel, Result: nil}
+		}
+		return RecStreamMsg{Ch: ch, Cancel: cancel, Result: &r}
+	}
+}
+
+// readNextRecCmd returns a tea.Cmd that reads one result from the
+// recommendation stream channel and returns it as a RecStreamMsg.
+func readNextRecCmd(ch chan search.Result) tea.Cmd {
+	return func() tea.Msg {
+		r, ok := <-ch
+		if !ok {
+			return RecStreamMsg{Ch: ch, Result: nil}
+		}
+		return RecStreamMsg{Ch: ch, Result: &r}
+	}
+}
+
+// scanLibraryCmd scans the downloads directory for existing audio files.
+func scanLibraryCmd() tea.Cmd {
+	return func() tea.Msg {
+		tracks, err := library.ScanDir(downloadDir())
+		if err != nil {
+			// Non-fatal — just return empty library
+			return LibraryScanMsg{Tracks: []queue.Track{}}
+		}
+		return LibraryScanMsg{Tracks: tracks}
 	}
 }
 
@@ -223,8 +316,99 @@ func (m Model) panelHeight() int {
 	return h
 }
 
+// visibleItems returns how many list rows fit in the panel.
+// Must stay in sync with renderSearchResults / renderLibrary / renderQueue
+// which use (height - 1) / 2 where height = panelHeight - 2.
+func (m Model) visibleItems() int {
+	n := (m.panelHeight() - 3) / 2
+	if n < 1 {
+		n = 1
+	}
+	return n
+}
+
+// filteredLibrary returns library tracks that match the search input (case-insensitive).
+// When the input is empty or not showing library, returns all tracks.
+func (m Model) filteredLibrary() []queue.Track {
+	if !m.showingLibrary {
+		return m.library
+	}
+	q := m.searchInput.Value()
+	if q == "" {
+		return m.library
+	}
+	q = strings.ToLower(q)
+	var out []queue.Track
+	for _, t := range m.library {
+		if strings.Contains(strings.ToLower(t.Title), q) || strings.Contains(strings.ToLower(t.Artist), q) {
+			out = append(out, t)
+		}
+	}
+	return out
+}
+
+// clampSearchOffset adjusts searchOffset so the cursor is visible.
+func (m *Model) clampSearchOffset() {
+	vis := m.visibleItems()
+	if m.searchCursor < m.searchOffset {
+		m.searchOffset = m.searchCursor
+	}
+	if m.searchCursor >= m.searchOffset+vis {
+		m.searchOffset = m.searchCursor - vis + 1
+	}
+}
+
+// clampLibraryOffset adjusts libraryOffset so the cursor is visible.
+func (m *Model) clampLibraryOffset() {
+	vis := m.visibleItems()
+	n := len(m.filteredLibrary())
+	if n == 0 {
+		m.libraryCursor = 0
+		m.libraryOffset = 0
+		return
+	}
+	if m.libraryCursor >= n {
+		m.libraryCursor = n - 1
+	}
+	if m.libraryCursor < 0 {
+		m.libraryCursor = 0
+	}
+	if m.libraryCursor < m.libraryOffset {
+		m.libraryOffset = m.libraryCursor
+	}
+	if m.libraryCursor >= m.libraryOffset+vis {
+		m.libraryOffset = m.libraryCursor - vis + 1
+	}
+}
+
+// clampQueueOffset adjusts queueOffset so the cursor is visible.
+func (m *Model) clampQueueOffset() {
+	vis := m.visibleItems()
+	n := m.queue.Len()
+	if n == 0 {
+		m.queueCursor = 0
+		m.queueOffset = 0
+		return
+	}
+	if m.queueCursor >= n {
+		m.queueCursor = n - 1
+	}
+	if m.queueCursor < 0 {
+		m.queueCursor = 0
+	}
+	if m.queueCursor < m.queueOffset {
+		m.queueOffset = m.queueCursor
+	}
+	if m.queueCursor >= m.queueOffset+vis {
+		m.queueOffset = m.queueCursor - vis + 1
+	}
+}
+
 // Shutdown cleans up background processes. Call on program exit.
 func (m Model) Shutdown() {
+	if m.recStreamCancel != nil {
+		m.recStreamCancel()
+	}
 	if m.player != nil {
 		m.player.Stop()
 	}

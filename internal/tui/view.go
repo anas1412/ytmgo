@@ -209,7 +209,17 @@ func (m Model) renderPanels() string {
 	}
 
 	// Search panel title
-	searchTitle := stylePanelTitle.Render("SEARCH RESULTS")
+	panelLabel := "SEARCH RESULTS"
+	if m.showingLibrary {
+		panelLabel = "LIBRARY"
+		q := m.searchInput.Value()
+		if q != "" {
+			panelLabel = "LIBRARY  🔍 \"" + q + "\""
+		}
+	} else if m.showingRecommendations {
+		panelLabel = "RECOMMENDATIONS"
+	}
+	searchTitle := stylePanelTitle.Render(panelLabel)
 
 	// Search panel content
 	searchContent := m.renderSearchResults(panelWidth, panelHeight-2)
@@ -250,7 +260,20 @@ func (m Model) renderPanels() string {
 // ─── Search Results List ───────────────────────────────────────────
 
 func (m Model) renderSearchResults(width, height int) string {
+	if m.showingLibrary {
+		return m.renderLibrary(width, height)
+	}
+	if m.isSearching {
+		return styleEmpty.Width(width - 2).Height(height).Render(
+			"⏳ Searching…",
+		)
+	}
 	if len(m.results) == 0 {
+		if m.showingRecommendations {
+			return styleEmpty.Width(width - 2).Height(height).Render(
+				"Loading recommendations…",
+			)
+		}
 		return styleEmpty.Width(width - 2).Height(height).Render(
 			"No results.\nSearch for something above.",
 		)
@@ -261,16 +284,20 @@ func (m Model) renderSearchResults(width, height int) string {
 	if maxItems < 1 {
 		maxItems = 1
 	}
-	if maxItems > len(m.results) {
-		maxItems = len(m.results)
+	start := m.searchOffset
+	end := start + maxItems
+	if end > len(m.results) {
+		end = len(m.results)
 	}
 
-	for i := 0; i < maxItems; i++ {
-		lines = append(lines, m.formatResultRow(i, m.results[i], width-2))
+	for i := start; i < end; i++ {
+		isSelected := !m.searchFocused && m.activePanel == PanelSearch && i == m.searchCursor
+		lines = append(lines, m.formatResultRow(i-start, m.results[i], width-2, isSelected))
 	}
 
-	if len(m.results) > maxItems {
-		scrollbar := fmt.Sprintf("  ↓ %d more results", len(m.results)-maxItems)
+	remaining := len(m.results) - end
+	if remaining > 0 {
+		scrollbar := fmt.Sprintf("  ↓ %d more  [cursor %d/%d]", remaining, m.searchCursor+1, len(m.results))
 		lines = append(lines,
 			       lipgloss.NewStyle().Foreground(colorTextDim).Italic(true).PaddingLeft(1).Render(scrollbar),
 		)
@@ -279,7 +306,76 @@ func (m Model) renderSearchResults(width, height int) string {
 	return strings.Join(lines, "\n")
 }
 
-func (m Model) formatResultRow(idx int, r search.Result, width int) string {
+func (m Model) renderLibrary(width, height int) string {
+	tracks := m.filteredLibrary()
+	if len(tracks) == 0 {
+		if m.searchInput.Value() != "" {
+			return styleEmpty.Width(width - 2).Height(height).Render(
+				"No tracks match \"" + m.searchInput.Value() + "\".",
+			)
+		}
+		return styleEmpty.Width(width - 2).Height(height).Render(
+			"No downloaded tracks yet.\nSearch, add to queue, and download.",
+		)
+	}
+
+	var lines []string
+	maxItems := (height - 1) / 2
+	if maxItems < 1 {
+		maxItems = 1
+	}
+	start := m.libraryOffset
+	end := start + maxItems
+	if end > len(tracks) {
+		end = len(tracks)
+	}
+
+	for i := start; i < end; i++ {
+		isSelected := !m.searchFocused && m.activePanel == PanelSearch && i == m.libraryCursor
+		t := tracks[i]
+		prefix := fmt.Sprintf("%d. ", i+1)
+		title := t.Title
+		maxTitle := width - len(prefix) - 2
+		if len(title) > maxTitle && maxTitle > 3 {
+			title = title[:maxTitle-1] + "…"
+		}
+		line := prefix + title
+
+		artist := t.Artist
+		if artist == "" {
+			artist = "Unknown artist"
+		}
+		dur := t.Duration
+		if dur == "" {
+			dur = "0:00"
+		}
+		leftInfo := "   " + artist
+		rightInfo := dur + "  ✓"
+		maxLeft := width - lipgloss.Width(rightInfo) - 2
+		if len(leftInfo) > maxLeft && maxLeft > 3 {
+			leftInfo = leftInfo[:maxLeft-1] + "…"
+		}
+		spacing := width - lipgloss.Width(leftInfo) - lipgloss.Width(rightInfo)
+		if spacing < 1 {
+			spacing = 1
+		}
+		info := leftInfo + strings.Repeat(" ", spacing) + rightInfo
+
+		lines = append(lines, renderListItemBlock(line, info, isSelected, false, width))
+	}
+
+	remaining := len(tracks) - end
+	if remaining > 0 {
+		scrollbar := fmt.Sprintf("  ↓ %d more  [cursor %d/%d]", remaining, m.libraryCursor+1, len(tracks))
+		lines = append(lines,
+			lipgloss.NewStyle().Foreground(colorTextDim).Italic(true).PaddingLeft(1).Render(scrollbar),
+		)
+	}
+
+	return strings.Join(lines, "\n")
+}
+
+func (m Model) formatResultRow(idx int, r search.Result, width int, isSelected bool) string {
 	title := r.Title
 	artist := r.Uploader
 	dur := formatDuration(r.Duration)
@@ -305,8 +401,6 @@ func (m Model) formatResultRow(idx int, r search.Result, width int) string {
 	}
 	info := leftInfo + strings.Repeat(" ", spacing) + rightInfo
 
-	// Don't show cursor highlight while typing in the search field
-	isSelected := !m.searchFocused && m.activePanel == PanelSearch && idx == m.searchCursor
 	return renderListItemBlock(line, info, isSelected, false, width)
 }
 
@@ -325,16 +419,18 @@ func (m Model) renderQueue(width, height int) string {
 	if maxItems < 1 {
 		maxItems = 1
 	}
-	if maxItems > len(tracks) {
-		maxItems = len(tracks)
+	start := m.queueOffset
+	end := start + maxItems
+	if end > len(tracks) {
+		end = len(tracks)
 	}
 
-	for i := 0; i < maxItems; i++ {
-		lines = append(lines, m.formatQueueRow(i, tracks[i], width-2))
+	for i := start; i < end; i++ {
+		lines = append(lines, m.formatQueueRow(i-start, tracks[i], width-2))
 	}
 
-	if len(tracks) > maxItems {
-		scrollbar := fmt.Sprintf("  ↓ %d more in queue", len(tracks)-maxItems)
+	if len(tracks) > end {
+		scrollbar := fmt.Sprintf("  ↓ %d more  [cursor %d/%d]", len(tracks)-end, m.queueCursor+1, len(tracks))
 		lines = append(lines,
 			       lipgloss.NewStyle().Foreground(colorTextDim).Italic(true).PaddingLeft(1).Render(scrollbar),
 		)

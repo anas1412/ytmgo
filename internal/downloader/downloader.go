@@ -145,6 +145,8 @@ func (d *Downloader) runJob(job *Job, outDir string) {
 		"--extract-audio",
 		"--audio-format", "mp3",
 		"--audio-quality", "0",
+		"--embed-metadata",
+		"--embed-thumbnail",
 		"--output", outTemplate,
 		"--newline",
 		"--no-playlist",
