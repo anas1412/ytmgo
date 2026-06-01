@@ -35,15 +35,19 @@ jobs:
           - os: linux
             arch: x86_64
             goarch: amd64
+            asset_os: Linux   # capitalized to match install.sh's `uname -s`
           - os: linux
             arch: arm64
             goarch: arm64
+            asset_os: Linux
           - os: darwin
             arch: x86_64
             goarch: amd64
+            asset_os: Darwin
           - os: darwin
             arch: arm64
             goarch: arm64
+            asset_os: Darwin
 
     steps:
       - name: Checkout
@@ -57,21 +61,29 @@ jobs:
 
       - name: Build static binary
         env:
-          GOOS:   ${{ matrix.os == 'darwin' && 'darwin' || 'linux' }}
-          GOARCH: ${{ matrix.goarch }}
+          # Version metadata — baked into the binary at link time.
+          # github.ref_name is the tag name (e.g. "v0.1.1") on tag pushes.
+          VERSION:    ${{ github.ref_name }}
+          COMMIT:     ${{ github.sha }}
+          BUILD_DATE: ${{ github.event.repository.updated_at }}
+          GOOS:       ${{ matrix.os == 'darwin' && 'darwin' || 'linux' }}
+          GOARCH:     ${{ matrix.goarch }}
           CGO_ENABLED: "0"
         run: |
           set -euo pipefail
           go build \
             -trimpath \
-            -ldflags="-s -w" \
+            -ldflags="-s -w \
+              -X 'ytmgo/internal/version.Version=$VERSION' \
+              -X 'ytmgo/internal/version.Commit=${COMMIT:0:7}' \
+              -X 'ytmgo/internal/version.BuildDate=$BUILD_DATE'" \
             -o "ytmgo" \
             .
 
       - name: Package + checksum
         run: |
           set -euo pipefail
-          asset="ytmgo_${{ matrix.os }}_${{ matrix.arch }}.tar.gz"
+          asset="ytmgo_${{ matrix.asset_os }}_${{ matrix.arch }}.tar.gz"
           tar -czf "$asset" ytmgo
           sha256sum "$asset" | tee "${asset}.sha256"
           ls -la "$asset" "${asset}.sha256"
@@ -82,5 +94,5 @@ jobs:
           tag_name: ${{ github.ref_name }}
           generate_release_notes: true
           files: |
-            ytmgo_${{ matrix.os }}_${{ matrix.arch }}.tar.gz
-            ytmgo_${{ matrix.os }}_${{ matrix.arch }}.tar.gz.sha256
+            ytmgo_${{ matrix.asset_os }}_${{ matrix.arch }}.tar.gz
+            ytmgo_${{ matrix.asset_os }}_${{ matrix.arch }}.tar.gz.sha256

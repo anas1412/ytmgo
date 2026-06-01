@@ -140,6 +140,7 @@ esac
 # ─── System deps check + install ───────────────────────────────────
 # Auto-install any missing mpv/yt-dlp/ffmpeg via the user's package
 # manager. Uses sudo for system PMs (apt/dnf/pacman/apk) — not for brew.
+missing=()                        # init for `set -u` (line 154 reads ${#missing[@]})
 deps=("mpv" "yt-dlp")
 for dep in "${deps[@]}"; do
   if ! command -v "$dep" >/dev/null 2>&1; then

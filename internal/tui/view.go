@@ -8,6 +8,7 @@ import (
 	"ytmgo/internal/player"
 	"ytmgo/internal/queue"
 	"ytmgo/internal/search"
+	ver "ytmgo/internal/version"
 
 	"github.com/charmbracelet/lipgloss"
 )
@@ -150,7 +151,7 @@ func (m Model) renderSettingsPage() string {
 func (m Model) renderHeader() string {
 	// Logo & Version
 	logo := styleLogo.Render("♫ ytmgo")
-	version := styleVersion.Render("v0.1")
+	version := styleVersion.Render(ver.Version)
 	title := lipgloss.JoinHorizontal(lipgloss.Left, logo, " ", version)
 
 	// Search input

@@ -66,22 +66,12 @@ body::after{content:'';position:fixed;inset:0;background:repeating-linear-gradie
 /* TERMINAL */
 .terminal-wrapper{position:relative;z-index:1;margin-top:80px;width:100%;max-width:900px;animation:fadeInUp 1s ease-out .5s both}
 .terminal{background:var(--bg-panel);border:1px solid var(--border);border-radius:12px;overflow:hidden;box-shadow:0 0 0 1px rgba(42,42,62,.5),0 20px 60px rgba(0,0,0,.5),0 0 80px rgba(124,58,237,.08),inset 0 1px 0 rgba(255,255,255,.03);position:relative}
-.terminal::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse at center,transparent 60%,rgba(0,0,0,.3) 100%);pointer-events:none;z-index:10;border-radius:12px}
+
 .terminal-bar{display:flex;align-items:center;gap:8px;padding:14px 18px;background:rgba(17,17,24,.8);border-bottom:1px solid var(--border)}
 .terminal-dot{width:12px;height:12px;border-radius:50%}
 .terminal-dot--red{background:#ff5f57}.terminal-dot--yellow{background:#febc2e}.terminal-dot--green{background:#28c840}
 .terminal-title{flex:1;text-align:center;font-family:var(--font-mono);font-size:.75rem;color:var(--text-dim);letter-spacing:.5px}
-.terminal-body{padding:24px;font-family:var(--font-mono);font-size:.82rem;line-height:1.8;min-height:580px;position:relative;overflow:hidden}
-.t-line{opacity:0;animation:typeIn .3s ease-out forwards;white-space:nowrap}
-.t-header{color:var(--accent);font-weight:600}
-.t-mint{color:var(--mint)}.t-pink{color:var(--pink)}.t-orange{color:var(--orange)}
-.t-dim{color:var(--text-dim)}.t-mid{color:var(--text-mid)}.t-white{color:var(--white);font-weight:500}.t-accent{color:var(--accent)}
-.t-progress-fill{color:var(--accent)}.t-progress-empty{color:var(--border)}
-.t-ctrl{color:var(--text-dim)}.t-ctrl-active{color:var(--accent);font-weight:600}
-.t-cursor{display:inline-block;width:8px;height:16px;background:var(--mint);animation:blink 1s step-end infinite;vertical-align:text-bottom;margin-left:2px;box-shadow:0 0 8px var(--mint-glow)}
-@keyframes blink{0%,50%{opacity:1}51%,100%{opacity:0}}
-@keyframes typeIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
-.t-vol-fill{color:var(--mint)}.t-vol-empty{color:var(--border)}
+.terminal-screenshot{display:block;width:100%;height:auto;border-radius:0 0 12px 12px}
 
 /* SECTIONS */
 .section{padding:0 40px;max-width:1200px;margin:0 auto var(--section-gap)}
@@ -210,7 +200,7 @@ kbd{font-family:var(--font-mono);font-size:.75rem;background:var(--bg-panel);bor
         <div class="terminal-dot terminal-dot--green"></div>
         <div class="terminal-title">ytmgo &mdash; ~/music</div>
       </div>
-      <div class="terminal-body" id="terminal-body"></div>
+      <img src="ytmgo.png" alt="ytmgo TUI screenshot" class="terminal-screenshot">
     </div>
   </div>
 </section>
@@ -295,67 +285,6 @@ kbd{font-family:var(--font-mono);font-size:.75rem;background:var(--bg-panel);bor
 </footer>
 
 <script>
-// Terminal animation
-const termLines = [
-  '<span class="t-header">┌─────────────────────────────────────────────────────────────┐</span>',
-  '<span class="t-header">│</span> <span class="t-mint" style="font-weight:700">&#9835; ytmgo v0.1</span>  <span class="t-dim">[search:</span> <span class="t-mint">daft punk</span><span class="t-dim">___]</span>  <span class="t-mid">1 Stream</span>  <span class="t-accent" style="font-weight:600">2 Library</span> <span class="t-mid">3</span> <span class="t-header">│</span>',
-  '<span class="t-header">├──────────────────────────┬──────────────────────────────────┤</span>',
-  '<span class="t-header">│</span>  <span class="t-accent" style="font-weight:600">SEARCH RESULTS</span>          <span class="t-header">│</span>  <span class="t-accent" style="font-weight:600">QUEUE  [3]</span>                      <span class="t-header">│</span>',
-  '<span class="t-header">│</span>                          <span class="t-header">│</span>                                  <span class="t-header">│</span>',
-  '<span class="t-header">│</span>  <span class="t-mint">&#9654; 1. Get Lucky</span>          <span class="t-header">│</span>  <span class="t-mint">&#9654; 1. Get Lucky</span>                  <span class="t-header">│</span>',
-'<span class="t-header">│</span>  <span class="t-mid">    Daft Punk</span>           <span class="t-header">│</span>  <span class="t-mid">    Daft Punk</span>                   <span class="t-header">│</span>',
-'<span class="t-header">│</span>                          <span class="t-header">│</span>                                  <span class="t-header">│</span>',
-'<span class="t-header">│</span>  <span class="t-mid">  2. Instant Crush</span>      <span class="t-header">│</span>  <span class="t-mid">  2. Instant Crush</span>              <span class="t-header">│</span>',
-'<span class="t-header">│</span>  <span class="t-mid">    Daft Punk</span>           <span class="t-header">│</span>  <span class="t-mid">    Daft Punk</span>                   <span class="t-header">│</span>',
-'<span class="t-header">│</span>                          <span class="t-header">│</span>                                  <span class="t-header">│</span>',
-'<span class="t-header">│</span>  <span class="t-mid">  3. One More Time</span>      <span class="t-header">│</span>  <span class="t-mid">  3. Around the World</span>           <span class="t-header">│</span>',
-'<span class="t-header">│</span>  <span class="t-mid">    Daft Punk</span>           <span class="t-header">│</span>  <span class="t-mid">    Daft Punk</span>                   <span class="t-header">│</span>',
-  '<span class="t-header">│</span>                          <span class="t-header">│</span>                                  <span class="t-header">│</span>',
-  '<span class="t-header">│</span>  <span class="t-dim" style="font-style:italic">  &#8595; 5 more</span>              <span class="t-header">│</span>                                  <span class="t-header">│</span>',
-  '<span class="t-header">├──────────────────────────┴──────────────────────────────────┤</span>',
-  '<span class="t-header">│</span>  <span class="t-orange" style="font-weight:600">&#11015; Downloading:</span> <span class="t-white">"Instant Crush"</span>  <span class="t-progress-fill">&#9608;&#9608;&#9608;&#9608;&#9608;&#9608;&#9608;&#9608;</span><span class="t-progress-empty">&#9608;&#9608;&#9608;&#9608;</span>  <span class="t-mid">67%</span>          <span class="t-header">│</span>',
-  '<span class="t-header" style="color:#06d6a0">╔═════════════════════════════════════════════════════════════╗</span>',
-  '<span class="t-header" style="color:#06d6a0">║</span>  <span class="t-mint" style="font-weight:700">&#9654;</span>  <span class="t-white" style="font-weight:500">Get Lucky &mdash; Daft Punk</span>                    <span class="t-dim">3:45 / 4:20</span>    <span class="t-header" style="color:#06d6a0">║</span>',
-  '<span class="t-header" style="color:#06d6a0">║</span>  <span class="t-progress-fill">&#9608;&#9608;&#9608;&#9608;&#9608;&#9608;&#9608;&#9608;&#9608;&#9608;&#9608;&#9608;&#9608;&#9608;&#9608;&#9608;&#9608;&#9608;&#9608;&#9608;&#9608;&#9608;&#9608;&#9608;&#9608;&#9608;&#9608;&#9608;&#9608;&#9608;&#9608;&#9608;&#9608;&#9608;&#9608;&#9608;&#9608;&#9608;&#9608;</span><span class="t-progress-empty">&#9608;&#9608;&#9608;&#9608;&#9608;&#9608;&#9608;</span>  <span class="t-dim">3:45/4:20</span>  <span class="t-header" style="color:#06d6a0">║</span>',
-  '<span class="t-header" style="color:#06d6a0">║</span>  <span class="t-dim">&#9206;</span>  <span class="t-mint">&#9208;</span>  <span class="t-dim">&#9205;</span>    <span class="t-dim">&#9474;</span>   <span class="t-vol-fill">&#9608;&#9608;&#9608;&#9608;&#9608;&#9608;&#9608;&#9608;</span><span class="t-vol-empty">&#9608;&#9608;</span>      <span class="t-dim">80%</span>    <span class="t-dim">&#9474;</span>   <span class="t-ctrl-active">&#128257; SHFL</span>   <span class="t-accent">&#128257; ONE</span>   <span class="t-header" style="color:#06d6a0">║</span>',
-  '<span class="t-header" style="color:#06d6a0">╚═════════════════════════════════════════════════════════════╝</span>',
-  '<span class="t-accent">&#9679;</span> <span class="t-mid">Playing "Get Lucky" from Daft Punk</span>',
-  '<span class="t-dim">tab cycle focus</span>  <span class="t-dim">&#8226;</span>  <span class="t-ctrl-active">enter play/add</span>  <span class="t-dim">&#8226;</span>  <span class="t-mint">space play/pause</span>  <span class="t-dim">&#8226;</span>  <span class="t-dim">s shuffle</span>  <span class="t-dim">&#8226;</span>  <span class="t-dim">r repeat</span>  <span class="t-dim">&#8226;</span>  <span class="t-dim">x download</span>  <span class="t-dim">&#8226;</span>  <span class="t-dim">R recs</span>  <span class="t-dim">&#8226;</span>  <span class="t-dim">? help</span>  <span class="t-dim">&#8226;</span>  <span class="t-dim">q quit</span>',
-];
-
-const termBody = document.getElementById('terminal-body');
-let lineIdx = 0;
-
-function addLine() {
-  if (lineIdx >= termLines.length) {
-    // Add blinking cursor after last line
-    const cursor = document.createElement('div');
-    cursor.innerHTML = '<span class="t-dim">$</span> <span class="t-cursor"></span>';
-    cursor.className = 't-line';
-    cursor.style.animationDelay = '0s';
-    termBody.appendChild(cursor);
-    return;
-  }
-  const div = document.createElement('div');
-  div.innerHTML = termLines[lineIdx];
-  div.className = 't-line';
-  div.style.animationDelay = (lineIdx * 0.06) + 's';
-  termBody.appendChild(div);
-  lineIdx++;
-  setTimeout(addLine, 60);
-}
-
-// Start terminal animation when visible
-const termObserver = new IntersectionObserver((entries) => {
-  entries.forEach(e => {
-    if (e.isIntersecting) {
-      addLine();
-      termObserver.disconnect();
-    }
-  });
-}, { threshold: 0.3 });
-termObserver.observe(document.querySelector('.terminal-wrapper'));
-
 // Scroll reveal
 const revealObserver = new IntersectionObserver((entries) => {
   entries.forEach(e => {
