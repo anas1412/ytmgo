@@ -4,7 +4,9 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 
@@ -265,9 +267,9 @@ func readNextRecCmd(ch chan search.Result) tea.Cmd {
 }
 
 // scanLibraryCmd scans the downloads directory for existing audio files.
-func scanLibraryCmd() tea.Cmd {
+func scanLibraryCmd(dir string) tea.Cmd {
 	return func() tea.Msg {
-		tracks, err := library.ScanDir(downloadDir())
+		tracks, err := library.ScanDir(dir)
 		if err != nil {
 			// Non-fatal — just return empty library
 			return LibraryScanMsg{Tracks: []queue.Track{}}
@@ -354,21 +356,67 @@ func searchResultToTrack(r search.Result) queue.Track {
 	}
 }
 
-// downloadDir returns the downloads directory next to the binary.
-func downloadDir() string {
-	exe, err := os.Executable()
-	if err != nil {
-		return "downloads" // fallback
+// downloadDir returns the directory where downloaded tracks are stored.
+//
+// Resolution order:
+//  1. If the user has set a custom path via the Settings page, use it.
+//  2. Otherwise, fall back to the platform-appropriate user data directory
+//     (XDG_DATA_HOME/ytmgo/downloads on Linux,
+//     ~/Library/Application Support/ytmgo/downloads on macOS).
+//
+// The legacy default value "downloads" is treated as "unset" so existing
+// users get the new XDG location instead of a stray "downloads" folder
+// next to the binary after upgrading.
+func (m *Model) downloadDir() string {
+	if dir := m.settings.DownloadDir; dir != "" && dir != "downloads" {
+		os.MkdirAll(dir, 0755)
+		return dir
 	}
-	dir := filepath.Join(filepath.Dir(exe), "downloads")
+	base, err := userDataDir()
+	if err != nil {
+		return "downloads" // last-ditch fallback
+	}
+	dir := filepath.Join(base, "ytmgo", "downloads")
 	os.MkdirAll(dir, 0755)
 	return dir
+}
+
+// userDataDir returns the platform-appropriate base directory for app data
+// (NOT configuration — for that, see settings.configPath).
+//   - Linux:   $XDG_DATA_HOME, or ~/.local/share if unset
+//   - macOS:   ~/Library/Application Support
+func userDataDir() (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	if runtime.GOOS == "darwin" {
+		return filepath.Join(home, "Library", "Application Support"), nil
+	}
+	if xdg := os.Getenv("XDG_DATA_HOME"); xdg != "" {
+		return xdg, nil
+	}
+	return filepath.Join(home, ".local", "share"), nil
+}
+
+// openInOS opens the given path in the system's default file manager
+// (xdg-open on Linux/BSD, open on macOS). Uses Start, not Run, so it
+// returns immediately without waiting for the launched process to exit.
+func openInOS(path string) error {
+	var cmd *exec.Cmd
+	switch runtime.GOOS {
+	case "darwin":
+		cmd = exec.Command("open", path)
+	default:
+		cmd = exec.Command("xdg-open", path)
+	}
+	return cmd.Start()
 }
 
 // ensureDownloader creates the downloader if it doesn't exist yet.
 func (m *Model) ensureDownloader() {
 	if m.downloader == nil {
-		m.downloader = downloader.New(downloadDir(), m.settings.CookieBrowser, m.settings.UserAgent)
+		m.downloader = downloader.New(m.downloadDir(), m.settings.CookieBrowser, m.settings.UserAgent)
 	}
 }
 

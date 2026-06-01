@@ -25,6 +25,7 @@ type KeyMap struct {
 	MoveDown     key.Binding
 	Download     key.Binding
 	Recs         key.Binding
+	Open         key.Binding
 	PageStream   key.Binding // 1
 	PageLibrary  key.Binding // 2
 	PageSettings key.Binding // 3
@@ -116,6 +117,10 @@ var Keys = KeyMap{
 	Recs: key.NewBinding(
 		key.WithKeys("R"),
 		key.WithHelp("R", "recommendations"),
+	),
+	Open: key.NewBinding(
+		key.WithKeys("o"),
+		key.WithHelp("o", "open download dir"),
 	),
 	PageStream: key.NewBinding(
 		key.WithKeys("1"),

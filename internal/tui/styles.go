@@ -268,6 +268,10 @@ var (
 
 	styleSettingsBoolOff = lipgloss.NewStyle().
 				Foreground(colorTextDim)
+
+	styleSettingsOpenBtn = lipgloss.NewStyle().
+				Foreground(colorDownload).
+				Bold(true)
 )
 
 // ─── Confirmation Dialog ────────────────────────────────────────────

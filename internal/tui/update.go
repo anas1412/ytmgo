@@ -13,7 +13,7 @@ import (
 // and fetches personalized YouTube recommendations.
 func (m Model) Init() tea.Cmd {
 	m.results = nil // will be filled incrementally via streaming
-	return tea.Batch(tickCmd(), startRecStreamCmd(m.settings.CookieBrowser, m.settings.UserAgent), scanLibraryCmd())
+	return tea.Batch(tickCmd(), startRecStreamCmd(m.settings.CookieBrowser, m.settings.UserAgent), scanLibraryCmd(m.downloadDir()))
 }
 
 // Update satisfies tea.Model. It handles all messages without making
@@ -454,6 +454,20 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 
+		case "o":
+			// Settings page: open the download dir when cursor is on the
+			// Download Dir row (index 4). No-op on other pages / rows.
+			if m.activePage == PageSettings && !m.settingsEditField && m.settingsCursor == 4 {
+				path := m.downloadDir()
+				if err := openInOS(path); err != nil {
+					m.statusMessage = "Failed to open: " + err.Error()
+				} else {
+					m.statusMessage = "Opened: " + path
+				}
+				return m, nil
+			}
+			return m, nil
+
 		// ── Panel navigation ─────────────────────────────────
 		case "up", "k":
 			// Settings page: navigate settings list
@@ -593,7 +607,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						// Legacy mode: enqueue download
 						m.statusMessage = "Added to queue: " + t.Title
 						m.ensureDownloader()
-						m.downloader.Enqueue(t.ID, t.Title, r.URL, downloadDir())
+						m.downloader.Enqueue(t.ID, t.Title, r.URL, m.downloadDir())
 						m.downloading = true
 						m.downloadTitle = t.Title
 						m.downloadPct = 0
@@ -769,7 +783,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					return m, nil
 				}
 				m.ensureDownloader()
-				m.downloader.Enqueue(t.ID, t.Title, t.URL, downloadDir())
+				m.downloader.Enqueue(t.ID, t.Title, t.URL, m.downloadDir())
 				m.downloading = true
 				m.downloadTitle = t.Title
 				m.statusMessage = "Download queued: " + t.Title

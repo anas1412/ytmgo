@@ -100,18 +100,31 @@ body::after{content:'';position:fixed;inset:0;background:repeating-linear-gradie
 .feature-name{font-family:var(--font-display);font-size:1.15rem;font-weight:600;color:var(--white);margin-bottom:10px}
 .feature-desc{font-size:.9rem;color:var(--text-mid);line-height:1.6}
 
-/* INSTALL */
-.install-section{display:grid;grid-template-columns:1fr 1fr;gap:60px;align-items:start}
-.install-steps{display:flex;flex-direction:column;gap:20px;margin-top:40px}
-.install-step{display:flex;gap:20px;align-items:flex-start}
-.step-num{font-family:var(--font-mono);font-size:.7rem;color:var(--accent);border:1px solid var(--accent);width:28px;height:28px;display:flex;align-items:center;justify-content:center;border-radius:6px;flex-shrink:0;margin-top:2px}
-.step-content h4{font-family:var(--font-display);font-size:1rem;font-weight:600;color:var(--white);margin-bottom:6px}
-.step-content p{font-size:.9rem;color:var(--text-mid);line-height:1.5}
-.code-block{background:var(--bg-panel);border:1px solid var(--border);border-radius:10px;padding:28px;font-family:var(--font-mono);font-size:.85rem;line-height:2;position:relative;overflow:hidden}
-.code-block::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,var(--accent),transparent)}
-.code-comment{color:var(--text-dim)}.code-cmd{color:var(--mint)}.code-flag{color:var(--accent)}.code-string{color:var(--orange)}
-.copy-btn{position:absolute;top:16px;right:16px;background:rgba(255,255,255,.05);border:1px solid var(--border);color:var(--text-dim);font-family:var(--font-mono);font-size:.7rem;padding:6px 12px;border-radius:4px;cursor:pointer;transition:all .2s}
-.copy-btn:hover{background:rgba(255,255,255,.1);color:var(--text)}
+/* INSTALL HERO BAR */
+.install-section-hero{position:relative;z-index:1;display:flex;flex-direction:column;align-items:center;width:100%;max-width:760px;margin-top:48px;animation:fadeInUp .8s ease-out .3s both}
+.install-label{font-family:var(--font-mono);font-size:.7rem;color:var(--accent);text-transform:uppercase;letter-spacing:2px;margin-bottom:14px;display:flex;align-items:center;gap:10px}
+.install-label::before,.install-label::after{content:'';width:18px;height:1px;background:var(--accent);opacity:.5}
+.install-bar{width:100%;background:var(--bg-panel);border:1px solid var(--border);border-radius:10px;display:flex;align-items:stretch;overflow:hidden;font-family:var(--font-mono);font-size:.82rem;box-shadow:0 0 0 1px rgba(42,42,62,.5),0 12px 40px rgba(0,0,0,.3),0 0 60px rgba(124,58,237,.06);transition:all .3s;position:relative}
+.install-bar::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent 15%,var(--mint) 50%,transparent 85%);opacity:.6;pointer-events:none}
+.install-bar:hover{border-color:rgba(6,214,160,.3);box-shadow:0 0 0 1px rgba(6,214,160,.12),0 12px 40px rgba(0,0,0,.4),0 0 80px rgba(6,214,160,.08)}
+.install-bar-content{padding:18px 22px;flex:1;display:flex;align-items:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;color:var(--text);gap:1px}
+.ib-prompt{color:var(--mint);font-weight:700;margin-right:10px;text-shadow:0 0 8px var(--mint-glow)}
+.ib-cmd{color:var(--mint)}
+.ib-flag{color:var(--accent);margin:0 2px}
+.ib-url{color:var(--orange);margin:0 2px}
+.ib-pipe{color:var(--text-dim);margin:0 6px;font-weight:600}
+.ib-bash{color:var(--accent)}
+.install-bar-cursor{display:inline-block;width:7px;height:14px;background:var(--mint);margin-left:8px;animation:blink 1s step-end infinite;flex-shrink:0;box-shadow:0 0 6px var(--mint-glow)}
+.install-bar-copy{padding:0 22px;background:rgba(124,58,237,.08);border:none;border-left:1px solid var(--border);color:var(--accent);font-family:var(--font-mono);font-size:.8rem;font-weight:600;cursor:pointer;transition:all .2s;display:flex;align-items:center;gap:8px;flex-shrink:0;letter-spacing:.3px}
+.install-bar-copy:hover{background:var(--accent);color:var(--white)}
+.install-bar-copy:hover .ib-icon-copy{stroke:var(--white)}
+.install-bar-copy.copied{background:var(--mint);color:var(--bg-deep)}
+.install-bar-copy.copied .ib-icon-copy{display:none}
+.install-bar-copy .ib-icon-check{display:none}
+.install-bar-copy.copied .ib-icon-check{display:inline-block}
+.ib-icon{flex-shrink:0;display:inline-block;vertical-align:middle}
+.hero-source-link{margin-top:18px;font-family:var(--font-mono);font-size:.8rem;color:var(--text-dim);transition:color .2s;animation:fadeInUp .8s ease-out .4s both}
+.hero-source-link:hover{color:var(--mint)}
 
 /* KEYBINDINGS */
 .keys-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:2px;background:var(--border);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-top:40px}
@@ -152,8 +165,9 @@ kbd{font-family:var(--font-mono);font-size:.75rem;background:var(--bg-panel);bor
 .reveal.visible{opacity:1;transform:translateY(0)}
 
 /* RESPONSIVE */
-@media(max-width:900px){.features-grid{grid-template-columns:repeat(2,1fr)}.install-section{grid-template-columns:1fr}.keys-grid{grid-template-columns:1fr}.arch-grid{grid-template-columns:repeat(2,1fr)}.nav-links{display:none}}
-@media(max-width:600px){.features-grid{grid-template-columns:1fr}.arch-grid{grid-template-columns:1fr}.hero{padding:100px 20px 60px}.section{padding:0 20px}.hero-actions{flex-direction:column;width:100%}.btn-primary,.btn-secondary{width:100%;justify-content:center}.footer{flex-direction:column;gap:20px;text-align:center}}
+@media(max-width:900px){.features-grid{grid-template-columns:repeat(2,1fr)}.keys-grid{grid-template-columns:1fr}.arch-grid{grid-template-columns:repeat(2,1fr)}.nav-links{display:none}}
+@media(max-width:760px){.install-bar{flex-direction:column}.install-bar-content{padding:16px 18px;font-size:.72rem;overflow-x:auto;text-overflow:clip;white-space:nowrap}.install-bar-copy{border-left:none;border-top:1px solid var(--border);padding:14px;justify-content:center}}
+@media(max-width:600px){.features-grid{grid-template-columns:1fr}.arch-grid{grid-template-columns:1fr}.hero{padding:100px 20px 60px}.section{padding:0 20px}.btn-primary,.btn-secondary{width:100%;justify-content:center}.footer{flex-direction:column;gap:20px;text-align:center}}
 </style>
 </head>
 <body>
@@ -162,7 +176,6 @@ kbd{font-family:var(--font-mono);font-size:.75rem;background:var(--bg-panel);bor
   <a href="#" class="nav-logo"><span class="dot"></span>ytmgo</a>
   <div class="nav-links">
     <a href="#features">Features</a>
-    <a href="#install">Install</a>
     <a href="#keys">Keybindings</a>
     <a href="#arch">Architecture</a>
     <a href="https://github.com/anas1412/ytmgo" class="nav-cta"><span>&#9733; Star on GitHub</span></a>
@@ -175,9 +188,19 @@ kbd{font-family:var(--font-mono);font-size:.75rem;background:var(--bg-panel);bor
   <div class="hero-glow hero-glow--pink"></div>
   <h1 class="hero-title"><span class="thin">Your music.</span><br><span class="accent">Your terminal.</span></h1>
   <p class="hero-sub">Search YouTube, download audio, manage your queue, and play music &mdash; all from the keyboard, inside your terminal. No browser. No bloat. Just vibes.</p>
-  <div class="hero-actions">
-    <button class="btn-primary" onclick="document.getElementById('install').scrollIntoView({behavior:'smooth'})"><span>&#9656; Get Started</span></button>
-    <button class="btn-secondary" onclick="window.open('https://github.com/anas1412/ytmgo','_blank')"><span>View Source</span></button>
+  <div class="install-section-hero">
+    <div class="install-label">Install &mdash; one line, zero config</div>
+    <div class="install-bar">
+      <div class="install-bar-content">
+        <span class="ib-prompt">$</span><span class="ib-cmd">curl</span> <span class="ib-flag">-fsSL</span> <span class="ib-url">https://raw.githubusercontent.com/anas1412/ytmgo/main/install.sh</span> <span class="ib-pipe">|</span> <span class="ib-bash">bash</span><span class="install-bar-cursor"></span>
+      </div>
+      <button class="install-bar-copy" type="button" onclick="copyInstall(this)" aria-label="Copy install command">
+        <svg class="ib-icon ib-icon-copy" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+        <svg class="ib-icon ib-icon-check" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+        <span class="ib-label">Copy</span>
+      </button>
+    </div>
+    <a href="https://github.com/anas1412/ytmgo" target="_blank" rel="noopener" class="hero-source-link">or view on GitHub &rarr;</a>
   </div>
   <div class="terminal-wrapper">
     <div class="terminal">
@@ -205,34 +228,6 @@ kbd{font-family:var(--font-mono);font-size:.75rem;background:var(--bg-panel);bor
     <div class="feature-card"><span class="feature-icon">&#9654;</span><div class="feature-name">Audio Playback</div><div class="feature-desc">Plays through mpv with seek, volume control, and real-time progress tracking via IPC.</div></div>
     <div class="feature-card"><span class="feature-icon">&#8984;</span><div class="feature-name">Keyboard Driven</div><div class="feature-desc">Every action bound to a key. Tab between panels, j/k to navigate, Enter to select. Zero mouse.</div></div>
     <div class="feature-card"><span class="feature-icon">&#9889;</span><div class="feature-name">Concurrency Safe</div><div class="feature-desc">Mutex-guarded queue, single-playback lock, serial download pipeline. No race conditions.</div></div>
-  </div>
-</section>
-
-<section class="section" id="install">
-  <div class="install-section">
-    <div class="reveal">
-      <div class="section-label">Installation</div>
-      <h2 class="section-title">Up and running<br>in 30 seconds.</h2>
-      <p class="section-desc">Install dependencies, build, and go. It's that simple.</p>
-      <div class="install-steps">
-        <div class="install-step"><div class="step-num">1</div><div class="step-content"><h4>Install dependencies</h4><p>You need mpv for playback and yt-dlp for search/download. Optionally install Brave/Firefox/Chrome for cookie extraction.</p></div></div>
-        <div class="install-step"><div class="step-num">2</div><div class="step-content"><h4>Build the binary</h4><p>One command compiles everything into a single binary.</p></div></div>
-        <div class="install-step"><div class="step-num">3</div><div class="step-content"><h4>Run it</h4><p>Launch ytmgo and start listening. That's it.</p></div></div>
-      </div>
-    </div>
-    <div class="code-block reveal">
-      <button class="copy-btn" onclick="copyCode(this)">Copy</button>
-      <span class="code-comment"># Debian / Ubuntu</span><br>
-      <span class="code-cmd">sudo apt install</span> <span class="code-string">mpv yt-dlp</span><br><br>
-      <span class="code-comment"># macOS</span><br>
-      <span class="code-cmd">brew install</span> <span class="code-string">mpv yt-dlp</span><br><br>
-      <span class="code-comment"># Clone & build</span><br>
-      <span class="code-cmd">git clone</span> <span class="code-string">https://github.com/anas1412/ytmgo.git</span><br>
-      <span class="code-cmd">cd</span> <span class="code-string">ytmgo</span><br>
-      <span class="code-cmd">go build</span> <span class="code-flag">-o</span> <span class="code-string">ytmgo .</span><br><br>
-      <span class="code-comment"># Run</span><br>
-      <span class="code-cmd">./ytmgo</span>
-    </div>
   </div>
 </section>
 
@@ -277,20 +272,16 @@ kbd{font-family:var(--font-mono);font-size:.75rem;background:var(--bg-panel);bor
     <div class="arch-card"><span class="arch-icon">&#8981;</span><div class="arch-name">yt-dlp</div><div class="arch-desc">YouTube search and audio downloading engine</div></div>
     <div class="arch-card"><span class="arch-icon">&#9881;</span><div class="arch-name">Bubble Tea</div><div class="arch-desc">Elm-architecture TUI framework for Go</div></div>
     <div class="arch-card"><span class="arch-icon">&#9889;</span><div class="arch-name">Lipgloss</div><div class="arch-desc">Declarative terminal styling with color palettes</div></div>
-    <div class="arch-card" style="display:none"></div>
-    <div class="arch-card"><span class="arch-icon">&#9881;</span><div class="arch-name">ytdlp</div><div class="arch-desc">Shared arg helpers for cookie &amp; user-agent across search/download</div></div>
-    <div class="arch-card"><span class="arch-icon">&#9881;</span><div class="arch-name">Settings</div><div class="arch-desc">Persistent config with 7 editable fields, stored on disk</div></div>
-    <div class="arch-card" style="display:none"></div>
   </div>
 </section>
 
 <section class="cta-section">
   <div class="reveal">
     <h2 class="cta-title">Ready to take control?</h2>
-    <p class="cta-desc">Join the growing community of terminal-native music listeners. Open source, MIT licensed, built with Go.</p>
+    <p class="cta-desc">One line. Installs the binary, mpv, yt-dlp, and ffmpeg. No browser, no Electron, no nonsense.</p>
     <div class="cta-actions">
-      <button class="btn-primary" onclick="document.getElementById('install').scrollIntoView({behavior:'smooth'})"><span>&#9656; Install ytmgo</span></button>
-      <button class="btn-secondary" onclick="window.open('https://github.com/anas1412/ytmgo','_blank')"><span>View on GitHub</span></button>
+      <button class="btn-primary" onclick="window.open('https://github.com/anas1412/ytmgo','_blank')"><span>&#9733; Star on GitHub</span></button>
+      <button class="btn-secondary" onclick="window.open('https://github.com/anas1412/ytmgo','_blank')"><span>View Source &rarr;</span></button>
     </div>
   </div>
 </section>
@@ -382,6 +373,21 @@ function copyCode(btn) {
   navigator.clipboard.writeText(text).then(() => {
     btn.textContent = 'Copied!';
     setTimeout(() => btn.textContent = 'Copy', 2000);
+  });
+}
+
+// Copy install command
+function copyInstall(btn) {
+  const cmd = 'curl -fsSL https://raw.githubusercontent.com/anas1412/ytmgo/main/install.sh | bash';
+  navigator.clipboard.writeText(cmd).then(() => {
+    btn.classList.add('copied');
+    const label = btn.querySelector('.ib-label');
+    const orig = label.textContent;
+    label.textContent = 'Copied!';
+    setTimeout(() => {
+      btn.classList.remove('copied');
+      label.textContent = orig;
+    }, 2000);
   });
 }
 

@@ -30,3 +30,5 @@ Thumbs.db
 
 # Temp / session files from OpenAgent / OpenCoder
 .tmp/
+
+notes.txt

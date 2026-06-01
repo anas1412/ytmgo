@@ -1,0 +1,86 @@
+name: release
+
+# Build static binaries for 4 OS/arch combos and attach them to a
+# GitHub Release whenever you push a tag like `v0.2.0`.
+#
+# Asset naming follows the convention expected by install.sh:
+#   ytmgo_Linux_x86_64.tar.gz
+#   ytmgo_Linux_arm64.tar.gz
+#   ytmgo_Darwin_x86_64.tar.gz
+#   ytmgo_Darwin_arm64.tar.gz
+# Each tarball contains a single `ytmgo` binary + a `ytmgo_<asset>.sha256`
+# sidecar so install.sh can verify the download.
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write   # required to create / upload release assets
+
+# Don't pile up concurrent release jobs for the same tag
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: build ${{ matrix.os }}/${{ matrix.arch }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: linux
+            arch: x86_64
+            goarch: amd64
+          - os: linux
+            arch: arm64
+            goarch: arm64
+          - os: darwin
+            arch: x86_64
+            goarch: amd64
+          - os: darwin
+            arch: arm64
+            goarch: arm64
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+          cache: true
+
+      - name: Build static binary
+        env:
+          GOOS:   ${{ matrix.os == 'darwin' && 'darwin' || 'linux' }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: "0"
+        run: |
+          set -euo pipefail
+          go build \
+            -trimpath \
+            -ldflags="-s -w" \
+            -o "ytmgo" \
+            .
+
+      - name: Package + checksum
+        run: |
+          set -euo pipefail
+          asset="ytmgo_${{ matrix.os }}_${{ matrix.arch }}.tar.gz"
+          tar -czf "$asset" ytmgo
+          sha256sum "$asset" | tee "${asset}.sha256"
+          ls -la "$asset" "${asset}.sha256"
+
+      - name: Upload release asset
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          generate_release_notes: true
+          files: |
+            ytmgo_${{ matrix.os }}_${{ matrix.arch }}.tar.gz
+            ytmgo_${{ matrix.os }}_${{ matrix.arch }}.tar.gz.sha256

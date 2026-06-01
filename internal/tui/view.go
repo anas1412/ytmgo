@@ -606,7 +606,7 @@ func (m Model) renderSettingsList() string {
 		{"Auto-Download", boolStr(m.settings.AutoDownload), "Auto-download queued tracks for offline"},
 		{"Default Volume", fmt.Sprintf("%d", m.settings.DefaultVolume), "0-100  (+/- adjust)"},
 		{"Search Limit", fmt.Sprintf("%d", m.settings.SearchLimit), "Results per search  (+/- adjust)"},
-		{"Download Dir", truncate(m.settings.DownloadDir, 40), "Path for downloaded files"},
+		{"Download Dir", truncate(m.settings.DownloadDir, 40), "Path for downloaded files  (press 'o' to open)"},
 		{"Cookie Browser", truncate(m.settings.CookieBrowser, 20), "Browser for YouTube cookies"},
 		{"User-Agent", truncate(m.settings.UserAgent, 30), "Custom UA for yt-dlp (empty = default)"},
 	}
@@ -629,6 +629,13 @@ func (m Model) renderSettingsList() string {
 		label := styleSettingsLabel.Render(cursor + item.label)
 		value := styleSettingsValue.Render(item.value)
 		desc := styleSettingsDesc.Render(item.desc)
+
+		// Show an inline [Open] button when the cursor is on the Download
+		// Dir row and we're not editing — makes the 'o' shortcut discoverable.
+		if idx == 4 && !m.settingsEditField {
+			openBtn := "  " + styleSettingsOpenBtn.Render("[Open]")
+			value = value + openBtn
+		}
 
 		// When editing a string field, show the input
 		if m.settingsEditField && idx == m.settingsCursor {

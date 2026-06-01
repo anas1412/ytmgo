@@ -7,6 +7,26 @@ A terminal-based YouTube Music client written in Go. Search YouTube, download au
 
 ---
 
+## Install
+
+One line does everything — grabs the static binary for your OS/arch, installs it, and auto-installs `mpv`/`yt-dlp`/`ffmpeg` if they're missing (using `sudo` for system package managers):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/anas1412/ytmgo/main/install.sh | bash
+```
+
+> Override the version: `YTMGO_VERSION=v0.2.0 curl ... | bash`
+> Override the install dir: `YTMGO_INSTALL_DIR=/opt/bin curl ... | bash`
+
+Or build from source (after installing `mpv`/`yt-dlp`/`ffmpeg` yourself):
+
+```bash
+go build -o ytmgo .
+./ytmgo
+```
+
+---
+
 ## Features
 
 - **YouTube Search** — Search YouTube directly from the terminal via `yt-dlp`
