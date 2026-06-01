@@ -302,6 +302,32 @@ func (m *Model) ensurePlayer() {
 	}
 }
 
+// startTrackPlayback is the single source of truth for launching a new
+// playback session. It centralises the model setup, calls Player.Play,
+// and — critically — mirrors the player's authoritative state back to
+// the model on success. This avoids the optimistic `m.playerState =
+// player.StatePlaying` write that the old call sites used, which could
+// drift from what the player actually does (causing the play/pause icon
+// to stay stale until the user pressed Space to force a re-sync).
+//
+// Returns the tea.Cmd to attach (position + ended listeners) on success,
+// or nil on failure. Callers can combine this with their own commands
+// (e.g. downloadCmd) using tea.Batch.
+func (m *Model) startTrackPlayback(playURL, title string, durationSec int) tea.Cmd {
+	m.duration = float64(durationSec)
+	m.position = 0
+	m.statusMessage = "Now playing: " + title
+	m.ensurePlayer()
+	if err := m.player.Play(playURL); err != nil {
+		m.err = err
+		m.playerState = player.StateStopped
+		return nil
+	}
+	// Mirror the player's state — it is the single source of truth.
+	m.playerState = m.player.State()
+	return tea.Batch(positionCmd(m.player), endedCmd(m.player))
+}
+
 // tickCmd returns a command that fires every 500ms for progress animation.
 func tickCmd() tea.Cmd {
 	return tea.Tick(progressTickInterval, func(_ time.Time) tea.Msg {

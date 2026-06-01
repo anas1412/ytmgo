@@ -186,21 +186,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					if t.ID == msg.TrackID && t.Downloaded && t.FilePath != "" {
 						m.queue.SetCurrentIndex(i)
 						m.queueCursor = i
-						m.playerState = player.StatePlaying
-						m.duration = float64(t.DurationSec)
-						m.position = 0
-						m.statusMessage = "Now playing: " + t.Title
-						m.ensurePlayer()
-						if err := m.player.Play(t.FilePath); err != nil {
-							m.err = err
-							m.playerState = player.StateStopped
+						playCmd := m.startTrackPlayback(t.FilePath, t.Title, t.DurationSec)
+						if playCmd == nil {
+							// startTrackPlayback already set m.err / m.playerState.
 							return m, downloadCmd(m.downloader)
 						}
-						return m, tea.Batch(
-							downloadCmd(m.downloader),
-							positionCmd(m.player),
-							endedCmd(m.player),
-						)
+						return m, tea.Batch(downloadCmd(m.downloader), playCmd)
 					}
 				}
 			}
@@ -245,17 +236,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				continue // skip — nothing to play
 			}
 
-			m.playerState = player.StatePlaying
-			m.duration = float64(t.DurationSec)
-			m.position = 0
-			m.statusMessage = "Now playing: " + t.Title
-			m.ensurePlayer()
-			if err := m.player.Play(playURL); err != nil {
-				m.err = err
-				m.playerState = player.StateStopped
-				return m, nil
-			}
-			return m, tea.Batch(positionCmd(m.player), endedCmd(m.player))
+			return m, m.startTrackPlayback(playURL, t.Title, t.DurationSec)
 		}
 
 	// ── Periodic tick (progress bar animation) ───────────────────
@@ -578,17 +559,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						m.queue.Add(t)
 						m.queue.SetCurrentIndex(m.queue.Len() - 1)
 						m.queueCursor = m.queue.Len() - 1
-						m.playerState = player.StatePlaying
-						m.duration = float64(t.DurationSec)
-						m.position = 0
-						m.statusMessage = "Now playing: " + t.Title
-						m.ensurePlayer()
-						if err := m.player.Play(t.FilePath); err != nil {
-							m.err = err
-							m.playerState = player.StateStopped
-						} else {
-							return m, tea.Batch(positionCmd(m.player), endedCmd(m.player))
+						playCmd := m.startTrackPlayback(t.FilePath, t.Title, t.DurationSec)
+						if playCmd != nil {
+							return m, playCmd
 						}
+						// startTrackPlayback already set m.err / m.playerState.
 					}
 					return m, nil
 				}
@@ -613,17 +588,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						// Check auto-download setting
 						if m.settings.StreamMode {
 							// Stream via URL — play immediately
-							m.playerState = player.StatePlaying
-							m.duration = float64(t.DurationSec)
-							m.position = 0
-							m.statusMessage = "Now playing: " + t.Title
-							m.ensurePlayer()
-							if err := m.player.Play(t.URL); err != nil {
-								m.err = err
-								m.playerState = player.StateStopped
-								return m, nil
-							}
-							return m, tea.Batch(positionCmd(m.player), endedCmd(m.player))
+							return m, m.startTrackPlayback(t.URL, t.Title, t.DurationSec)
 						}
 						// Legacy mode: enqueue download
 						m.statusMessage = "Added to queue: " + t.Title
@@ -937,15 +902,12 @@ func (m *Model) playSelectedQueueItem() {
 		return
 	}
 
-	m.playerState = player.StatePlaying
-	m.duration = float64(t.DurationSec)
-	m.position = 0
-	m.statusMessage = "Now playing: " + t.Title
-	m.ensurePlayer()
-	if err := m.player.Play(playURL); err != nil {
-		m.err = err
-		m.playerState = player.StateStopped
-	}
+	// startTrackPlayback mirrors the player's authoritative state back to
+	// the model. We discard the returned cmd here because the caller of
+	// playSelectedQueueItem is responsible for attaching position/ended
+	// listeners (see the n/p/Enter handlers, which check
+	// m.playerState == StatePlaying to decide whether to batch them in).
+	_ = m.startTrackPlayback(playURL, t.Title, t.DurationSec)
 }
 
 // ─── Mouse click handling ──────────────────────────────────────────
