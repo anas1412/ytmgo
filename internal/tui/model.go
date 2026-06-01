@@ -25,9 +25,9 @@ import (
 type Page int
 
 const (
-	PageStream  Page = iota // search / recommendations / queue / player
-	PageLibrary             // downloaded tracks + download queue
-	PageSettings            // configuration
+	PageStream   Page = iota // search / recommendations / queue / player
+	PageLibrary              // downloaded tracks + download queue
+	PageSettings             // configuration
 )
 
 // Panel identifies which panel within a page has keyboard focus.
@@ -115,12 +115,12 @@ type Model struct {
 	confirmData   string // context for the confirm message (e.g. track title)
 
 	// ── Search ──
-	searchInput           textinput.Model
-	searchFocused         bool
-	searchCursor          int
-	searchOffset          int
-	results               []search.Result
-	isSearching           bool
+	searchInput            textinput.Model
+	searchFocused          bool
+	searchCursor           int
+	searchOffset           int
+	results                []search.Result
+	isSearching            bool
 	showingRecommendations bool
 	recStreamCh            chan search.Result
 	recStreamCancel        context.CancelFunc
@@ -580,8 +580,8 @@ func downloadCmd(d *downloader.Downloader) tea.Cmd {
 
 // confirmAction values
 const (
-	confirmNone       = ""
-	confirmClearQueue = "clear-queue"
+	confirmNone        = ""
+	confirmClearQueue  = "clear-queue"
 	confirmDeleteTrack = "delete-track"
 )
 
@@ -649,4 +649,3 @@ func (m *Model) executeConfirmedAction() (tea.Model, tea.Cmd) {
 
 	return m, nil
 }
-

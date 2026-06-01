@@ -41,41 +41,41 @@ var (
 
 var (
 	panelBorder = lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(colorBorder)
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(colorBorder)
 
 	panelBorderFocused = lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(colorBorderFoc)
+				Border(lipgloss.RoundedBorder()).
+				BorderForeground(colorBorderFoc)
 
 	// Settings page uses same border style for consistency
 	panelBorderSettings = lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(colorBorder).
-		Padding(0, 2, 0, 2)
+				Border(lipgloss.RoundedBorder()).
+				BorderForeground(colorBorder).
+				Padding(0, 2, 0, 2)
 
 	// Confirmation dialog border — double line for modal weight
 	styleConfirmBorder = lipgloss.NewStyle().
-		Border(lipgloss.DoubleBorder()).
-		BorderForeground(colorAccent3).
-		Padding(1, 3, 1, 3).
-		Background(colorBg)
+				Border(lipgloss.DoubleBorder()).
+				BorderForeground(colorAccent3).
+				Padding(1, 3, 1, 3).
+				Background(colorBg)
 )
 
 // ─── Header ─────────────────────────────────────────────────────────
 
 var (
 	styleHeader = lipgloss.NewStyle().
-		Foreground(colorHeader).
-		Bold(true).
-		PaddingLeft(1)
+			Foreground(colorHeader).
+			Bold(true).
+			PaddingLeft(1)
 
 	styleLogo = lipgloss.NewStyle().
-		Foreground(colorAccent).
-		Bold(true)
+			Foreground(colorAccent).
+			Bold(true)
 
 	styleVersion = lipgloss.NewStyle().
-		Foreground(colorTextDim)
+			Foreground(colorTextDim)
 )
 
 // ─── Separator / Horizontal Rule ────────────────────────────────────
@@ -83,13 +83,13 @@ var (
 var (
 	// Heavy separator line — used to divide major layout sections
 	styleSeparatorHeavy = lipgloss.NewStyle().
-		Foreground(colorBorder).
-		PaddingLeft(1).
-		PaddingRight(1)
+				Foreground(colorBorder).
+				PaddingLeft(1).
+				PaddingRight(1)
 
 	// Light separator — used between control groups
 	styleSeparatorLight = lipgloss.NewStyle().
-		Foreground(colorTextDim)
+				Foreground(colorTextDim)
 )
 
 func renderSeparator(char string, width int) string {
@@ -102,30 +102,30 @@ func renderSeparator(char string, width int) string {
 
 var (
 	styleListItem = lipgloss.NewStyle().
-		Foreground(colorText).
-		PaddingLeft(1)
+			Foreground(colorText).
+			PaddingLeft(1)
 
 	styleListItemSelected = lipgloss.NewStyle().
-		Foreground(colorTitle).
-		Background(colorBgHover).
-		PaddingLeft(1).
-		Bold(true)
+				Foreground(colorTitle).
+				Background(colorBgHover).
+				PaddingLeft(1).
+				Bold(true)
 
 	styleListItemPlaying = lipgloss.NewStyle().
-		Foreground(colorPlaying).
-		PaddingLeft(1).
-		Bold(true)
+				Foreground(colorPlaying).
+				PaddingLeft(1).
+				Bold(true)
 
 	styleListNum = lipgloss.NewStyle().
-		Foreground(colorTextDim).
-		Width(3)
+			Foreground(colorTextDim).
+			Width(3)
 
 	styleListDuration = lipgloss.NewStyle().
-		Foreground(colorTextDim).
-		Align(lipgloss.Right)
+				Foreground(colorTextDim).
+				Align(lipgloss.Right)
 
 	styleListArtist = lipgloss.NewStyle().
-		Foreground(colorTextMid)
+			Foreground(colorTextMid)
 )
 
 // ─── Player Bar ─────────────────────────────────────────────────────
@@ -133,183 +133,183 @@ var (
 var (
 	// Playing state — mint double border for a neon-glow terminal feel
 	stylePlayerBox = lipgloss.NewStyle().
-		Border(lipgloss.DoubleBorder()).
-		BorderForeground(colorPlaying).
-		Padding(0, 2, 0, 2)
+			Border(lipgloss.DoubleBorder()).
+			BorderForeground(colorPlaying).
+			Padding(0, 2, 0, 2)
 
 	// Stopped state — dim single border
 	stylePlayerBoxStopped = lipgloss.NewStyle().
-		Border(lipgloss.DoubleBorder()).
-		BorderForeground(colorTextDim).
-		Padding(0, 2, 0, 2)
+				Border(lipgloss.DoubleBorder()).
+				BorderForeground(colorTextDim).
+				Padding(0, 2, 0, 2)
 
 	styleNowTitle = lipgloss.NewStyle().
-		Foreground(colorTitle).
-		Bold(true)
+			Foreground(colorTitle).
+			Bold(true)
 
 	styleNowArtist = lipgloss.NewStyle().
-		Foreground(colorTextMid)
+			Foreground(colorTextMid)
 
 	styleNowIndicator = lipgloss.NewStyle().
-		Foreground(colorPlaying)
+				Foreground(colorPlaying)
 
 	styleTime = lipgloss.NewStyle().
-		Foreground(colorTextDim)
+			Foreground(colorTextDim)
 
 	stylePlayerCtrl = lipgloss.NewStyle().
-		Foreground(colorText).
-		PaddingLeft(1)
+			Foreground(colorText).
+			PaddingLeft(1)
 
 	styleCtrlBtn = lipgloss.NewStyle().
-		Foreground(colorTextMid).
-		Bold(true)
+			Foreground(colorTextMid).
+			Bold(true)
 
 	styleCtrlBtnActive = lipgloss.NewStyle().
-		Foreground(colorAccent2).
-		Bold(true)
+				Foreground(colorAccent2).
+				Bold(true)
 
 	styleCtrlBtnPlaying = lipgloss.NewStyle().
-		Foreground(colorAccent).
-		Bold(true)
+				Foreground(colorAccent).
+				Bold(true)
 
 	// Mode indicators
 	styleModeActive = lipgloss.NewStyle().
-		Foreground(colorAccent2).
-		Bold(true)
+			Foreground(colorAccent2).
+			Bold(true)
 
 	styleModeInactive = lipgloss.NewStyle().
-		Foreground(colorTextDim)
+				Foreground(colorTextDim)
 
 	// Volume bar
 	styleVolumeLabel = lipgloss.NewStyle().
-		Foreground(colorTextDim)
+				Foreground(colorTextDim)
 
 	// Separator for controls
 	styleCtrlSep = lipgloss.NewStyle().
-		Foreground(colorTextDim)
+			Foreground(colorTextDim)
 )
 
 // ─── Download Bar ───────────────────────────────────────────────────
 
 var (
 	styleDownloadLabel = lipgloss.NewStyle().
-		Foreground(colorDownload).
-		Bold(true)
+				Foreground(colorDownload).
+				Bold(true)
 
 	styleDownloadTitle = lipgloss.NewStyle().
-		Foreground(colorText)
+				Foreground(colorText)
 
 	styleDoneLabel = lipgloss.NewStyle().
-		Foreground(colorDone).
-		Bold(true)
+			Foreground(colorDone).
+			Bold(true)
 
 	styleErrorLabel = lipgloss.NewStyle().
-		Foreground(colorError).
-		Bold(true)
+			Foreground(colorError).
+			Bold(true)
 )
 
 // ─── Panel Titles ───────────────────────────────────────────────────
 
 var (
 	stylePanelTitle = lipgloss.NewStyle().
-		Foreground(colorAccent).
-		Bold(true).
-		PaddingLeft(1).
-		PaddingRight(1)
+			Foreground(colorAccent).
+			Bold(true).
+			PaddingLeft(1).
+			PaddingRight(1)
 
 	styleSearchInput = lipgloss.NewStyle().
-		Foreground(colorText).
-		Background(colorBgHover).
-		PaddingLeft(1).
-		PaddingRight(1)
+				Foreground(colorText).
+				Background(colorBgHover).
+				PaddingLeft(1).
+				PaddingRight(1)
 )
 
 // ─── Page Navigation Tabs ───────────────────────────────────────────
 
 var (
 	styleNavTab = lipgloss.NewStyle().
-		Foreground(colorTextDim).
-		PaddingLeft(1).
-		PaddingRight(1)
+			Foreground(colorTextDim).
+			PaddingLeft(1).
+			PaddingRight(1)
 
 	styleNavTabActive = lipgloss.NewStyle().
-		Foreground(colorAccent2).
-		Bold(true).
-		PaddingLeft(1).
-		PaddingRight(1)
+				Foreground(colorAccent2).
+				Bold(true).
+				PaddingLeft(1).
+				PaddingRight(1)
 )
 
 // ─── Settings ───────────────────────────────────────────────────────
 
 var (
 	styleSettingsLabel = lipgloss.NewStyle().
-		Foreground(colorAccent).
-		Bold(true).
-		PaddingLeft(1)
+				Foreground(colorAccent).
+				Bold(true).
+				PaddingLeft(1)
 
 	styleSettingsValue = lipgloss.NewStyle().
-		Foreground(colorText).
-		PaddingLeft(1)
+				Foreground(colorText).
+				PaddingLeft(1)
 
 	styleSettingsDesc = lipgloss.NewStyle().
-		Foreground(colorTextDim).
-		Italic(true).
-		PaddingLeft(3)
+				Foreground(colorTextDim).
+				Italic(true).
+				PaddingLeft(3)
 
 	styleSettingsCursor = lipgloss.NewStyle().
-		Foreground(colorBgHover).
-		Background(colorAccent).
-		PaddingLeft(1).
-		PaddingRight(1)
+				Foreground(colorBgHover).
+				Background(colorAccent).
+				PaddingLeft(1).
+				PaddingRight(1)
 
 	styleSettingsBoolOn = lipgloss.NewStyle().
-		Foreground(colorAccent2).
-		Bold(true)
+				Foreground(colorAccent2).
+				Bold(true)
 
 	styleSettingsBoolOff = lipgloss.NewStyle().
-		Foreground(colorTextDim)
+				Foreground(colorTextDim)
 )
 
 // ─── Confirmation Dialog ────────────────────────────────────────────
 
 var (
 	styleConfirmTitle = lipgloss.NewStyle().
-		Foreground(colorAccent3).
-		Bold(true)
+				Foreground(colorAccent3).
+				Bold(true)
 
 	styleConfirmText = lipgloss.NewStyle().
-		Foreground(colorText).
-		PaddingLeft(0)
+				Foreground(colorText).
+				PaddingLeft(0)
 
 	styleConfirmHint = lipgloss.NewStyle().
-		Foreground(colorTextDim).
-		Italic(true)
+				Foreground(colorTextDim).
+				Italic(true)
 )
 
 // ─── Help Bar ───────────────────────────────────────────────────────
 
 var (
 	styleHelp = lipgloss.NewStyle().
-		Foreground(colorTextDim).
-		PaddingLeft(1)
+			Foreground(colorTextDim).
+			PaddingLeft(1)
 
 	styleHelpKey = lipgloss.NewStyle().
-		Foreground(colorAccent2)
+			Foreground(colorAccent2)
 
 	styleHelpSep = lipgloss.NewStyle().
-		Foreground(colorTextDim)
+			Foreground(colorTextDim)
 )
 
 // ─── Status ─────────────────────────────────────────────────────────
 
 var (
 	styleStatus = lipgloss.NewStyle().
-		Foreground(colorAccent2).
-		PaddingLeft(1)
+			Foreground(colorAccent2).
+			PaddingLeft(1)
 
 	styleStatusErr = lipgloss.NewStyle().
-		Foreground(colorError).
-		PaddingLeft(1)
+			Foreground(colorError).
+			PaddingLeft(1)
 )
 
 // ─── Progress / Volume Bars ─────────────────────────────────────────

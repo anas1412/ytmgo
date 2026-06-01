@@ -17,47 +17,47 @@ import (
 var (
 	// App background
 	styleApp = lipgloss.NewStyle().
-	Background(colorBg)
+			Background(colorBg)
 
 	// Search input wrapper - inline style (no border, stays on 1 line)
 	styleSearchBox = lipgloss.NewStyle().
-		Foreground(colorText).
-		Background(colorBgHover).
-		Padding(0, 1).
-		Width(28).
-		Height(1)
+			Foreground(colorText).
+			Background(colorBgHover).
+			Padding(0, 1).
+			Width(28).
+			Height(1)
 
 	styleSearchBoxFocused = lipgloss.NewStyle().
-		Foreground(colorAccent2).
-		Background(colorBgHover).
-		Padding(0, 1).
-		Width(28).
-		Height(1)
+				Foreground(colorAccent2).
+				Background(colorBgHover).
+				Padding(0, 1).
+				Width(28).
+				Height(1)
 
 	// Panel empty state
 	styleEmpty = lipgloss.NewStyle().
-	Foreground(colorTextDim).
-	PaddingLeft(2).
-	PaddingTop(1).
-	Italic(true)
+			Foreground(colorTextDim).
+			PaddingLeft(2).
+			PaddingTop(1).
+			Italic(true)
 
 	// Header search label
 	styleSearchLabel = lipgloss.NewStyle().
-	Foreground(colorTextMid).
-	PaddingLeft(1)
+				Foreground(colorTextMid).
+				PaddingLeft(1)
 )
 
 // ─── textinput styling (referenced from model.go) ──────────────────
 
 var (
 	textinputStyle = lipgloss.NewStyle().
-	Foreground(colorText).
-	Background(colorBgHover)
+			Foreground(colorText).
+			Background(colorBgHover)
 
 	textinputPlaceholder = lipgloss.NewStyle().
-	Foreground(colorTextDim).
-	Background(colorBgHover).
-	Italic(true)
+				Foreground(colorTextDim).
+				Background(colorBgHover).
+				Italic(true)
 )
 
 // ─── View ──────────────────────────────────────────────────────────
@@ -223,13 +223,13 @@ func (m Model) renderPanels() string {
 	// Search panel content
 	searchContent := m.renderSearchResults(panelWidth, panelHeight-2)
 	leftPanel := lipgloss.JoinVertical(lipgloss.Top,
-					   searchTitle,
-				    searchContent,
+		searchTitle,
+		searchContent,
 	)
 	leftPanel = leftBorder.
-	Width(panelWidth).
-	Height(panelHeight).
-	Render(leftPanel)
+		Width(panelWidth).
+		Height(panelHeight).
+		Render(leftPanel)
 
 	// Queue panel title (with count)
 	var queueTitle string
@@ -247,13 +247,13 @@ func (m Model) renderPanels() string {
 	// Queue panel content
 	queueContent := m.renderQueue(panelWidth, panelHeight-2)
 	rightPanel := lipgloss.JoinVertical(lipgloss.Top,
-					    queueTitleStyled,
-				     queueContent,
+		queueTitleStyled,
+		queueContent,
 	)
 	rightPanel = rightBorder.
-	Width(panelWidth).
-	Height(panelHeight).
-	Render(rightPanel)
+		Width(panelWidth).
+		Height(panelHeight).
+		Render(rightPanel)
 
 	// Calculate precise spaces to spread across the horizontal plane
 	leftover := m.width - lipgloss.Width(leftPanel) - lipgloss.Width(rightPanel)
@@ -307,7 +307,7 @@ func (m Model) renderSearchResults(width, height int) string {
 	if remaining > 0 {
 		scrollbar := fmt.Sprintf("  ↓ %d more  [cursor %d/%d]", remaining, m.searchCursor+1, len(m.results))
 		lines = append(lines,
-			       lipgloss.NewStyle().Foreground(colorTextDim).Italic(true).PaddingLeft(1).Render(scrollbar),
+			lipgloss.NewStyle().Foreground(colorTextDim).Italic(true).PaddingLeft(1).Render(scrollbar),
 		)
 	}
 
@@ -318,13 +318,13 @@ func (m Model) renderLibrary(width, height int) string {
 	tracks := m.filteredLibrary()
 	if len(tracks) == 0 {
 		if m.searchInput.Value() != "" {
+			return styleEmpty.Width(width - 2).Height(height).Render(
+				"No tracks match \"" + m.searchInput.Value() + "\"",
+			)
+		}
 		return styleEmpty.Width(width - 2).Height(height).Render(
-			"No tracks match \"" + m.searchInput.Value() + "\"",
+			"No downloaded tracks yet",
 		)
-	}
-	return styleEmpty.Width(width - 2).Height(height).Render(
-		"No downloaded tracks yet",
-	)
 	}
 
 	var lines []string
@@ -444,7 +444,7 @@ func (m Model) renderQueue(width, height int) string {
 	if len(tracks) > end {
 		scrollbar := fmt.Sprintf("  ↓ %d more  [cursor %d/%d]", len(tracks)-end, m.queueCursor+1, len(tracks))
 		lines = append(lines,
-			       lipgloss.NewStyle().Foreground(colorTextDim).Italic(true).PaddingLeft(1).Render(scrollbar),
+			lipgloss.NewStyle().Foreground(colorTextDim).Italic(true).PaddingLeft(1).Render(scrollbar),
 		)
 	}
 
@@ -893,12 +893,12 @@ func (m Model) renderControls() string {
 
 	var repeatLabel string
 	switch {
-		case m.queue.IsRepeat():
-			repeatLabel = styleModeActive.Render("🔁 ONE")
-		case m.queue.IsRepeatAll():
-			repeatLabel = styleModeActive.Render("🔁 ALL")
-		default:
-			repeatLabel = styleModeInactive.Render("🔁 OFF")
+	case m.queue.IsRepeat():
+		repeatLabel = styleModeActive.Render("🔁 ONE")
+	case m.queue.IsRepeatAll():
+		repeatLabel = styleModeActive.Render("🔁 ALL")
+	default:
+		repeatLabel = styleModeInactive.Render("🔁 OFF")
 	}
 
 	sep := styleCtrlSep.Render(" │ ")
@@ -969,11 +969,11 @@ func (m Model) helpView() string {
 	}
 
 	box := lipgloss.NewStyle().
-	Border(lipgloss.DoubleBorder()).
-	BorderForeground(colorAccent).
-	Padding(1, 2, 1, 2).
-	Width(helpWidth).
-	Background(colorBg)
+		Border(lipgloss.DoubleBorder()).
+		BorderForeground(colorAccent).
+		Padding(1, 2, 1, 2).
+		Width(helpWidth).
+		Background(colorBg)
 
 	rendered := box.Render(helpContent)
 
@@ -1009,8 +1009,8 @@ func (m Model) buildHelpContent() string {
 			keys := strings.Join(kb.Keys(), ", ")
 			desc := kb.Help().Desc
 			b.WriteString(fmt.Sprintf("  %-18s  %s\n",
-						  styleHelpKey.Render(keys),
-						  styleHelp.Render(desc),
+				styleHelpKey.Render(keys),
+				styleHelp.Render(desc),
 			))
 		}
 		b.WriteString("\n")

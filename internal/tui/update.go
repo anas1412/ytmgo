@@ -123,17 +123,17 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
-	// ── Recommendations (YouTube home feed) ──────────────────────
-		case RecommendationsMsg:
-			m.showingRecommendations = msg.Error == nil
-			if msg.Error != nil {
-				m.err = msg.Error
-				m.statusMessage = "Recommendations unavailable: " + msg.Error.Error()
-			} else {
-				m.results = msg.Results
-				m.searchCursor = 0
-				m.searchOffset = 0
-				if len(msg.Results) > 0 {
+		// ── Recommendations (YouTube home feed) ──────────────────────
+	case RecommendationsMsg:
+		m.showingRecommendations = msg.Error == nil
+		if msg.Error != nil {
+			m.err = msg.Error
+			m.statusMessage = "Recommendations unavailable: " + msg.Error.Error()
+		} else {
+			m.results = msg.Results
+			m.searchCursor = 0
+			m.searchOffset = 0
+			if len(msg.Results) > 0 {
 				m.statusMessage = fmt.Sprintf("%d recommendations", len(msg.Results))
 			} else {
 				m.statusMessage = "No recommendations available"
@@ -542,13 +542,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.settingsEditField = false
 					m.settingsEditInput.Blur()
 					switch m.settingsCursor {
-				case 4: // Download Dir
-					m.settings.DownloadDir = newVal
-				case 5: // Cookie Browser
-					m.settings.CookieBrowser = newVal
-				case 6: // User-Agent
-					m.settings.UserAgent = newVal
-				}
+					case 4: // Download Dir
+						m.settings.DownloadDir = newVal
+					case 5: // Cookie Browser
+						m.settings.CookieBrowser = newVal
+					case 6: // User-Agent
+						m.settings.UserAgent = newVal
+					}
 					return m, tea.Batch(saveSettingsCmd(m.settings))
 				}
 				switch m.settingsCursor {
@@ -560,8 +560,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					return m, tea.Batch(saveSettingsCmd(m.settings))
 				case 2, 3: // Volume / Search Limit (numbers — Enter does nothing, use +/-)
 					return m, nil
-			case 4, 5, 6: // Download Dir / Cookie Browser / User-Agent (strings)
-				m.startSettingsEdit()
+				case 4, 5, 6: // Download Dir / Cookie Browser / User-Agent (strings)
+					m.startSettingsEdit()
 					return m, nil
 				}
 				return m, nil
@@ -881,7 +881,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.queue.ToggleRepeat() // → repeat: true
 				m.statusMessage = "Repeat: ONE"
 			} else if m.queue.IsRepeat() {
-				m.queue.ToggleRepeat()   // repeat: false
+				m.queue.ToggleRepeat()    // repeat: false
 				m.queue.ToggleRepeatAll() // repeatAll: true
 				m.statusMessage = "Repeat: ALL"
 			} else {
@@ -1063,5 +1063,3 @@ func (m Model) handleClick(x, y int) Model {
 
 	return m
 }
-
-
