@@ -2,7 +2,7 @@
 # install.sh — one-line installer for ytmgo
 #
 # Usage:
-#   curl -fsSL https://raw.githubusercontent.com/anas1412/ytmgo-tui/main/install.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/anas1412/ytmgo/main/install.sh | bash
 #
 # Environment overrides (set before the pipe):
 #   YTMGO_VERSION=v0.2.0     # pin a specific version (default: latest)
