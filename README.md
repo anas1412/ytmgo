@@ -40,32 +40,7 @@ go build -o ytmgo .
 
 ## Demo
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│ ♫ ytmgo v0.1  [search: daft punk___]  1 Stream  2 Library 3 │
-├──────────────────────────┬──────────────────────────────────┤
-│  SEARCH RESULTS          │  QUEUE  [3]                      │
-│                          │                                  │
-│  ▶ 1. Get Lucky          │  ▶ 1. Get Lucky                  │
-│    Daft Punk             │    Daft Punk                     │
-│                          │                                  │
-│  2. Instant Crush        │  2. Instant Crush                │
-│    Daft Punk             │    Daft Punk                     │
-│                          │                                  │
-│  3. One More Time        │  3. Around the World             │
-│    Daft Punk             │    Daft Punk                     │
-│                          │                                  │
-│  ↓ 5 more                │                                  │
-├──────────────────────────┴──────────────────────────────────┤
-│  ⬇ Downloading: "Instant Crush"  ████████████  67%          │
-╔═════════════════════════════════════════════════════════════╗
-║  ▶  Get Lucky — Daft Punk                 3:45 / 4:20       ║
-║  ███████████████████████████████████████░░░░░░░  3:45/4:20  ║
-║  ⏮  ⏸  ⏵    │    ██████████    80%    │    🔁 SHFL   🔁 ONE   ║
-╚═════════════════════════════════════════════════════════════╝
-● Playing "Get Lucky" from Daft Punk
-tab cycle focus  •  enter play/add  •  space play/pause  •  s shuffle  •  r repeat  •  x download  •  R recs  •  ? help  •  q quit
-```
+![ytmgo TUI screenshot](ytmgo.png)
 
 ---
 
