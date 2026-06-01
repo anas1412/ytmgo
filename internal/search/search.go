@@ -3,13 +3,12 @@ package search
 import (
 	"encoding/json"
 	"fmt"
-	"os"
 	"os/exec"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
 	"ytmgo/internal/queue"
+	"ytmgo/internal/ytdlp"
 )
 
 // Result is a search result
@@ -33,7 +32,7 @@ func (r Result) ToTrack() queue.Track {
 }
 
 // Search performs a YouTube search using yt-dlp and returns up to `limit` results
-func Search(query string, limit int) ([]Result, error) {
+func Search(query string, limit int, cookieBrowser, userAgent string) ([]Result, error) {
 	// yt-dlp "ytsearch5:query" --dump-json --no-download --flat-playlist --quiet
 	searchQuery := fmt.Sprintf("ytsearch%d:%s", limit, query)
 	args := []string{searchQuery,
@@ -43,8 +42,11 @@ func Search(query string, limit int) ([]Result, error) {
 		"--quiet",
 		"--no-warnings",
 	}
-	if ca := cookiesFromBrowserArg(); ca != "" {
+	if ca := ytdlp.CookiesArg(cookieBrowser); ca != "" {
 		args = append(args, ca)
+	}
+	if ua := ytdlp.UserAgentArg(userAgent); ua != "" {
+		args = append(args, ua)
 	}
 	cmd := exec.Command("yt-dlp", args...)
 	out, err := cmd.Output()
@@ -59,7 +61,7 @@ func Search(query string, limit int) ([]Result, error) {
 // FetchRecommendations fetches music recommendations from YouTube search.
 // Cookies provide personalization. Results are filtered to individual songs
 // (under 10 minutes) — no mixes, compilations, or playlists.
-func FetchRecommendations(limit int) ([]Result, error) {
+func FetchRecommendations(limit int, cookieBrowser, userAgent string) ([]Result, error) {
 	// Use ytsearch (YouTube search) instead of the home page so we get
 	// music-categorized results with uploader metadata. Then filter out
 	// compilations/mixes by duration (< 10 min = individual song).
@@ -74,8 +76,11 @@ func FetchRecommendations(limit int) ([]Result, error) {
 		"--quiet",
 		"--no-warnings",
 	}
-	if ca := cookiesFromBrowserArg(); ca != "" {
+	if ca := ytdlp.CookiesArg(cookieBrowser); ca != "" {
 		args = append(args, ca)
+	}
+	if ua := ytdlp.UserAgentArg(userAgent); ua != "" {
+		args = append(args, ua)
 	}
 	cmd := exec.Command("yt-dlp", args...)
 	out, err := cmd.Output()
@@ -87,7 +92,7 @@ func FetchRecommendations(limit int) ([]Result, error) {
 
 // StreamRecommendations runs yt-dlp and sends all parsed results to `ch`.
 // Results arrive in one batch (ytsearch returns everything at once).
-func StreamRecommendations(limit int, ch chan<- Result, done <-chan struct{}) {
+func StreamRecommendations(limit int, ch chan<- Result, done <-chan struct{}, cookieBrowser, userAgent string) {
 	defer close(ch)
 
 	query := fmt.Sprintf("ytsearch%d:music", limit)
@@ -101,8 +106,11 @@ func StreamRecommendations(limit int, ch chan<- Result, done <-chan struct{}) {
 		"--quiet",
 		"--no-warnings",
 	}
-	if ca := cookiesFromBrowserArg(); ca != "" {
+	if ca := ytdlp.CookiesArg(cookieBrowser); ca != "" {
 		args = append(args, ca)
+	}
+	if ua := ytdlp.UserAgentArg(userAgent); ua != "" {
+		args = append(args, ua)
 	}
 
 	cmd := exec.Command("yt-dlp", args...)
@@ -206,26 +214,6 @@ func formatDuration(secs int) string {
 		return fmt.Sprintf("%d:%02d:%02d", h, m, s)
 	}
 	return fmt.Sprintf("%d:%02d", m, s)
-}
-
-// cookiesFromBrowserArg returns a --cookies-from-browser flag for yt-dlp
-// if a supported browser config is found, or empty string otherwise.
-func cookiesFromBrowserArg() string {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return ""
-	}
-	candidates := []string{
-		filepath.Join(home, ".config", "BraveSoftware", "Brave-Origin-Nightly"),
-		filepath.Join(home, ".config", "BraveSoftware", "Brave-Browser-Nightly"),
-		filepath.Join(home, ".config", "BraveSoftware", "Brave-Browser"),
-	}
-	for _, p := range candidates {
-		if fi, err := os.Stat(p); err == nil && fi.IsDir() {
-			return "--cookies-from-browser=brave:" + p
-		}
-	}
-	return ""
 }
 
 func parseDuration(s string) int {

@@ -2,7 +2,6 @@
 
 A terminal-based YouTube Music client written in Go. Search YouTube, download audio, manage a play queue, and play music — all from the keyboard, inside your terminal.
 
-![Screenshot placeholder](https://img.shields.io/badge/status-active-brightgreen)
 ![Go Version](https://img.shields.io/badge/go-1.22+-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
@@ -14,7 +13,7 @@ A terminal-based YouTube Music client written in Go. Search YouTube, download au
 - **Audio Download** — Download tracks as MP3s with real-time progress
 - **Play Queue** — Full queue management: reorder, shuffle, repeat (one / all)
 - **Audio Playback** — Plays through `mpv` with seek, volume, and progress tracking
-- **Slick TUI** — 5-panel layout with keyboard-driven navigation (Bubble Tea)
+- **Keyboard-driven TUI** — Tab-focused layout with vim navigation, no mouse needed
 - **Concurrency-safe** — Mutex-guarded queue, single-playback lock, serial download pipeline
 
 ---
@@ -23,20 +22,29 @@ A terminal-based YouTube Music client written in Go. Search YouTube, download au
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│  ♪ YTMUSIC          [Search: _______________]         [/]  │
+│  ♫ ytmgo v0.1  [search: daft punk_____]  1 Stream  2 Libr… │
 ├──────────────────────────┬──────────────────────────────────┤
-│  SEARCH RESULTS          │  QUEUE                           │
-│                          │  ► 1. Song name                  │
-│  1. Artist - Title       │    2. Song name                  │
-│  2. Artist - Title       │    3. Song name                  │
-│  ...                     │                                  │
+│  SEARCH RESULTS          │  QUEUE  [3]                      │
+│                          │                                  │
+│  ▶ 1. Get Lucky          │  ▶ 1. Get Lucky                  │
+│     Daft Punk            │     Daft Punk                    │
+│                          │                                  │
+│    2. Instant Crush      │    2. Instant Crush              │
+│    Daft Punk             │    Daft Punk                     │
+│                          │                                  │
+│    3. One More Time      │    3. Around the World           │
+│    Daft Punk             │    Daft Punk                     │
+│                          │                                  │
+│  ↓ 5 more  [cursor 1/8] │                                  │
 ├──────────────────────────┴──────────────────────────────────┤
-│  ⬇ Downloading: "Song"  [████░░░░░░]  47%                   │
-├─────────────────────────────────────────────────────────────┤
-│  Now Playing: Song — Artist                                 │
-│  ══════════════════════░░░░░  2:14 / 4:32                   │
-│  [prev]  [play/pause]  [next]   VOL: ████░  SHUFFLE REPEAT │
-└─────────────────────────────────────────────────────────────┘
+│  ⬇ Downloading: "Instant Crush"  ████████░░░░  47%          │
+╔═════════════════════════════════════════════════════════════╗
+║  ▶  Get Lucky — Daft Punk                3:45 / 4:20      ║
+║  ████████████████████░░░░░░░░░░░░░░░░░░  3:45/4:20        ║
+║  ⏮  ⏸  ⏭   │   ████████░░ 80%   │   🔀 SHFL   🔁 ONE   ║
+╚═════════════════════════════════════════════════════════════╝
+  ● Playing "Get Lucky" from Daft Punk
+  tab cycle focus  •  enter play/add  •  space play/pause  •  s shuffle  •  r repeat  •  x download  •  R recs  •  ? help  •  q quit
 ```
 
 ---
@@ -46,7 +54,7 @@ A terminal-based YouTube Music client written in Go. Search YouTube, download au
 - **Go** 1.22+
 - **mpv** — audio playback backend
 - **yt-dlp** — YouTube search and audio downloading
-- **Brave Browser** *(optional)* — for cookie extraction to access age-restricted content
+- **Brave** / **Firefox** / **Chrome** *(optional)* — for cookie extraction to access age-restricted content; configurable in Settings
 
 ### Install system dependencies
 
@@ -87,9 +95,11 @@ Or use the pre-built binary included in the repository.
 | 1 | Press `Tab` to focus the search input |
 | 2 | Type a query and press `Enter` |
 | 3 | Browse results in the left panel (`↑↓` / `jk`) |
-| 4 | Press `Enter` on a result to add to queue + download |
+| 4 | Press `Enter` on a result to add to queue + start download |
 | 5 | `Tab` to the queue panel, select a track, press `Enter` to play |
 | 6 | Control playback with keys (see below) |
+
+Tab cycles focus through: search input → result list → queue panel → settings — and the focused panel's border glows violet.
 
 ### Keybindings
 
@@ -109,6 +119,9 @@ Or use the pre-built binary included in the repository.
 | `D` | Clear entire queue |
 | `s` | Toggle shuffle |
 | `r` | Cycle repeat: OFF → ONE → ALL |
+| `x` | Download selected track immediately |
+| `R` | Refresh recommendations |
+| `1` / `2` / `3` | Switch page: Stream / Library / Settings |
 | `Ctrl+↑` / `Ctrl+↓` | Move item up/down in queue |
 | `?` | Toggle help overlay |
 | `q` / `Ctrl+C` | Quit |
@@ -124,7 +137,7 @@ ytmgo/
 │   ├── tui/                     # Terminal UI (Bubble Tea)
 │   │   ├── model.go             # Application model and commands
 │   │   ├── update.go            # Message handling and state updates
-│   │   ├── view.go              # Rendering / layout
+│   │   ├── view.go              # Rendering / layout (7 sections)
 │   │   ├── styles.go            # Color palette and styles
 │   │   └── keys.go              # Key bindings
 │   ├── player/                  # mpv audio playback control
@@ -133,8 +146,12 @@ ytmgo/
 │   │   └── queue.go             # Queue with shuffle, repeat, reorder
 │   ├── search/                  # YouTube search via yt-dlp
 │   │   └── search.go            # Search + result parsing
-│   └── downloader/              # Audio download via yt-dlp
-│       └── downloader.go        # Serial download with progress
+│   ├── downloader/              # Audio download via yt-dlp
+│   │   └── downloader.go        # Serial download with progress
+│   ├── ytdlp/                   # Shared yt-dlp argument helpers
+│   │   └── args.go              # CookiesArg, UserAgentArg builders
+│   └── settings/                # User config persistence
+│       └── settings.go          # Settings model (7 fields)
 ├── downloads/                   # Downloaded MP3 files
 ├── go.mod / go.sum              # Go module dependencies
 └── plan.md                      # Architecture design notes
@@ -147,8 +164,10 @@ main
   └── internal/tui
         ├── internal/player      (mpv playback)
         ├── internal/queue       (track queue)
-        ├── internal/search      (yt-dlp search)
-        └── internal/downloader  (yt-dlp download)
+        ├── internal/search      (yt-dlp search + cookie/UA)
+        ├── internal/downloader  (yt-dlp download + cookie/UA)
+        ├── internal/ytdlp       (shared arg builders)
+        └── internal/settings    (persistent config)
 ```
 
 ---
@@ -160,7 +179,10 @@ main
 - **Concurrency-safe Queue** — Mutex-guarded queue with shuffle, repeat-one, and repeat-all modes
 - **mpv IPC Polling** — Real-time progress updates via Unix socket every 500ms
 - **State Machine** — Player cycles through `Stopped → Playing → Paused → Playing → Stopped`
-- **5-Panel Layout** — Header, search results, queue, download bar, player/controls bar
+- **7-Section Layout** — Header (logo + search + page tabs), two side-by-side panels, download bar, double-border player bar, status line, help bar
+- **Tab-cycle Focus** — Search input, result list, queue panel each get violet border glow when active
+- **Shared yt-dlp Args** — `internal/ytdlp/args.go` provides `CookiesArg` and `UserAgentArg` helpers for consistent yt-dlp argument building across search and downloader
+- **Configurable Settings** — Persistent settings (7 items): stream mode, auto-download, default volume, search limit, download directory, cookie browser, user-agent; editable in-app via page 3
 
 ---
 

@@ -110,6 +110,10 @@ type Model struct {
 	showHelp    bool
 	quitting    bool
 
+	// ── Confirmation (for destructive actions) ──
+	confirmAction string // "" = none, "clear-queue", "delete-track"
+	confirmData   string // context for the confirm message (e.g. track title)
+
 	// ── Search ──
 	searchInput           textinput.Model
 	searchFocused         bool
@@ -149,6 +153,7 @@ type Model struct {
 	// ── Settings ──
 	settings          *settings.Settings
 	settingsCursor    int
+	settingsOffset    int
 	settingsEditField bool
 	settingsEditInput textinput.Model
 
@@ -201,9 +206,9 @@ func InitialModel() Model {
 // ─── Commands ────────────────────────────────────────────────────────
 
 // searchCmd fires a yt-dlp search in a goroutine and sends results back.
-func searchCmd(query string, limit int) tea.Cmd {
+func searchCmd(query string, limit int, cookieBrowser, userAgent string) tea.Cmd {
 	return func() tea.Msg {
-		results, err := search.Search(query, limit)
+		results, err := search.Search(query, limit, cookieBrowser, userAgent)
 		if err != nil {
 			return SearchResultsMsg{Error: err}
 		}
@@ -215,9 +220,9 @@ func searchCmd(query string, limit int) tea.Cmd {
 }
 
 // fetchRecommendationsCmd fires a request for YouTube home page recommendations.
-func fetchRecommendationsCmd() tea.Cmd {
+func fetchRecommendationsCmd(cookieBrowser, userAgent string) tea.Cmd {
 	return func() tea.Msg {
-		results, err := search.FetchRecommendations(40)
+		results, err := search.FetchRecommendations(40, cookieBrowser, userAgent)
 		if err != nil {
 			return RecommendationsMsg{Error: err}
 		}
@@ -232,11 +237,11 @@ func fetchRecommendationsCmd() tea.Cmd {
 // RecStreamMsg carries the channel and cancel function so the model can
 // store them for subsequent reads and cancellation (e.g. when R is
 // pressed again).
-func startRecStreamCmd() tea.Cmd {
+func startRecStreamCmd(cookieBrowser, userAgent string) tea.Cmd {
 	return func() tea.Msg {
 		ch := make(chan search.Result, 10)
 		ctx, cancel := context.WithCancel(context.Background())
-		go search.StreamRecommendations(20, ch, ctx.Done())
+		go search.StreamRecommendations(20, ch, ctx.Done(), cookieBrowser, userAgent)
 
 		// Block until the first result arrives or the stream ends.
 		r, ok := <-ch
@@ -337,7 +342,7 @@ func downloadDir() string {
 // ensureDownloader creates the downloader if it doesn't exist yet.
 func (m *Model) ensureDownloader() {
 	if m.downloader == nil {
-		m.downloader = downloader.New(downloadDir())
+		m.downloader = downloader.New(downloadDir(), m.settings.CookieBrowser, m.settings.UserAgent)
 	}
 }
 
@@ -345,10 +350,18 @@ func (m *Model) ensureDownloader() {
 // The layout is: header(1) + panels(h) + player(5) + nav(1) + status(1) + help(1) + slack(1).
 
 func (m Model) panelHeight() int {
-	h := m.height - 13
+	// Fixed overhead for non-panel elements in the layout:
+	//   header(1) + player(5) + help(1) + border/slack(3) = 10
+	//   +1 for status line when active
+	//   +2 for download bar when active
+	overhead := 10
 	if m.err != nil || m.statusMessage != "" {
-		h = m.height - 14
+		overhead++
 	}
+	if m.downloading || m.downloadDone || m.downloadErr != nil {
+		overhead += 2
+	}
+	h := m.height - overhead
 	if h < 5 {
 		h = 5
 	}
@@ -443,6 +456,39 @@ func (m *Model) clampQueueOffset() {
 	}
 }
 
+// settingsVisibleItems returns how many settings items fit in the visible area.
+func (m Model) settingsVisibleItems() int {
+	// Layout: header(1) + player(5) + help(1) + border(2) + slack = ~10 lines overhead
+	// Each settings item is 4 lines (label, value, desc, blank)
+	// Leave 1 line for the help text at the bottom of the list
+	avail := m.height - 10
+	if m.err != nil || m.statusMessage != "" {
+		avail--
+	}
+	if avail < 4 {
+		return 1
+	}
+	return (avail - 1) / 4
+}
+
+// clampSettingsOffset adjusts settingsOffset so the cursor is visible.
+func (m *Model) clampSettingsOffset() {
+	vis := m.settingsVisibleItems()
+	maxItem := 7 // 8 items indexed 0-7
+	if m.settingsCursor > maxItem {
+		m.settingsCursor = maxItem
+	}
+	if m.settingsCursor < 0 {
+		m.settingsCursor = 0
+	}
+	if m.settingsCursor < m.settingsOffset {
+		m.settingsOffset = m.settingsCursor
+	}
+	if m.settingsCursor >= m.settingsOffset+vis {
+		m.settingsOffset = m.settingsCursor - vis + 1
+	}
+}
+
 // switchPage transitions to a new page and resets page-local state.
 func (m *Model) switchPage(page Page) {
 	m.activePage = page
@@ -468,6 +514,7 @@ func (m *Model) switchPage(page Page) {
 		m.searchInput.Blur()
 		m.activePanel = PanelSearch
 		m.settingsCursor = 0
+		m.settingsOffset = 0
 		m.settingsEditField = false
 	}
 }
@@ -481,6 +528,8 @@ func (m *Model) startSettingsEdit() {
 		current = m.settings.DownloadDir
 	case 5:
 		current = m.settings.CookieBrowser
+	case 6:
+		current = m.settings.UserAgent
 	}
 	m.settingsEditInput.SetValue(current)
 	m.settingsEditInput.Focus()
@@ -525,5 +574,79 @@ func downloadCmd(d *downloader.Downloader) tea.Cmd {
 			Error:    evt.Err,
 		}
 	}
+}
+
+// ─── Confirmation State ─────────────────────────────────────────────
+
+// confirmAction values
+const (
+	confirmNone       = ""
+	confirmClearQueue = "clear-queue"
+	confirmDeleteTrack = "delete-track"
+)
+
+// isConfirming returns true when a destructive action is awaiting confirmation.
+func (m Model) isConfirming() bool {
+	return m.confirmAction != confirmNone
+}
+
+// startConfirm sets the confirmation state for a destructive action.
+func (m *Model) startConfirm(action, data string) {
+	m.confirmAction = action
+	m.confirmData = data
+}
+
+// clearConfirm resets the confirmation state.
+func (m *Model) clearConfirm() {
+	m.confirmAction = confirmNone
+	m.confirmData = ""
+}
+
+// executeConfirmedAction runs the confirmed destructive action and returns
+// the resulting model and command. Called after the user pressed the key a second time.
+func (m *Model) executeConfirmedAction() (tea.Model, tea.Cmd) {
+	action := m.confirmAction
+	m.clearConfirm()
+
+	switch action {
+	case confirmClearQueue:
+		m.queue.Clear()
+		m.queueCursor = 0
+		m.playerState = player.StateStopped
+		m.position = 0
+		m.duration = 0
+		if m.player != nil {
+			m.player.Stop()
+		}
+		m.statusMessage = "Queue cleared"
+		return m, nil
+
+	case confirmDeleteTrack:
+		tracks := m.filteredLibrary()
+		if m.libraryCursor >= 0 && m.libraryCursor < len(tracks) {
+			t := tracks[m.libraryCursor]
+			if t.FilePath != "" {
+				if err := os.Remove(t.FilePath); err != nil {
+					m.statusMessage = "Failed to delete: " + err.Error()
+					return m, nil
+				}
+			}
+			idx := -1
+			for i, lt := range m.library {
+				if lt.ID == t.ID {
+					idx = i
+					break
+				}
+			}
+			if idx >= 0 {
+				m.library = append(m.library[:idx], m.library[idx+1:]...)
+			}
+			m.clampLibraryOffset()
+			m.statusMessage = "Deleted: " + t.Title
+		}
+		return m, nil
+	}
+
+	return m, nil
 }
 

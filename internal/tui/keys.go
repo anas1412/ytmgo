@@ -24,7 +24,6 @@ type KeyMap struct {
 	MoveUp       key.Binding
 	MoveDown     key.Binding
 	Download     key.Binding
-	Library      key.Binding
 	Recs         key.Binding
 	PageStream   key.Binding // 1
 	PageLibrary  key.Binding // 2
@@ -114,10 +113,6 @@ var Keys = KeyMap{
 		key.WithKeys("x"),
 		key.WithHelp("x", "download track"),
 	),
-	Library: key.NewBinding(
-		key.WithKeys("L"),
-		key.WithHelp("L", "library"),
-	),
 	Recs: key.NewBinding(
 		key.WithKeys("R"),
 		key.WithHelp("R", "recommendations"),
@@ -146,9 +141,10 @@ func (k KeyMap) ShortHelp() []key.Binding {
 		k.FocusNext,
 		k.Enter,
 		k.PlayPause,
-		k.PageStream,
-		k.PageLibrary,
-		k.PageSettings,
+		k.Shuffle,
+		k.Repeat,
+		k.Download,
+		k.Recs,
 		k.Help,
 		k.Quit,
 	}
@@ -187,7 +183,6 @@ func (k KeyMap) FullHelp() [][]key.Binding {
 			k.PageStream,
 			k.PageLibrary,
 			k.PageSettings,
-			k.Library,
 			k.Recs,
 		},
 		{

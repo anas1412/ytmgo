@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"ytmgo/internal/ytdlp"
 )
 
 // Status of a download job
@@ -47,21 +48,25 @@ type ProgressEvent struct {
 
 // Downloader serializes downloads so only one runs at a time
 type Downloader struct {
-	mu       sync.Mutex
-	jobs     []*Job
-	jobCh    chan *Job
-	progress chan ProgressEvent
-	cancel   chan struct{}
-	wg       sync.WaitGroup
+	mu            sync.Mutex
+	jobs          []*Job
+	jobCh         chan *Job
+	progress      chan ProgressEvent
+	cancel        chan struct{}
+	wg            sync.WaitGroup
+	cookieBrowser string
+	userAgent     string
 }
 
 var progressRe = regexp.MustCompile(`\[download\]\s+([\d.]+)%`)
 
-func New(outDir string) *Downloader {
+func New(outDir, cookieBrowser, userAgent string) *Downloader {
 	d := &Downloader{
-		jobCh:    make(chan *Job, 100),
-		progress: make(chan ProgressEvent, 200),
-		cancel:   make(chan struct{}),
+		jobCh:         make(chan *Job, 100),
+		progress:      make(chan ProgressEvent, 200),
+		cancel:        make(chan struct{}),
+		cookieBrowser: cookieBrowser,
+		userAgent:     userAgent,
 	}
 	go d.worker(outDir)
 	return d
@@ -152,8 +157,11 @@ func (d *Downloader) runJob(job *Job, outDir string) {
 		"--no-playlist",
 		"--no-warnings",
 	}
-	if ca := cookiesFromBrowserArg(); ca != "" {
+	if ca := ytdlp.CookiesArg(d.cookieBrowser); ca != "" {
 		args = append(args, ca)
+	}
+	if ua := ytdlp.UserAgentArg(d.userAgent); ua != "" {
+		args = append(args, ua)
 	}
 	args = append(args, job.URL)
 	cmd := exec.Command("yt-dlp", args...)
@@ -237,26 +245,6 @@ func (d *Downloader) runJob(job *Job, outDir string) {
 		Status:   StatusDone,
 		FilePath: job.FilePath,
 	}
-}
-
-// cookiesFromBrowserArg returns a --cookies-from-browser flag for yt-dlp
-// if a supported browser config is found, or empty string otherwise.
-func cookiesFromBrowserArg() string {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return ""
-	}
-	candidates := []string{
-		filepath.Join(home, ".config", "BraveSoftware", "Brave-Origin-Nightly"),
-		filepath.Join(home, ".config", "BraveSoftware", "Brave-Browser-Nightly"),
-		filepath.Join(home, ".config", "BraveSoftware", "Brave-Browser"),
-	}
-	for _, p := range candidates {
-		if fi, err := os.Stat(p); err == nil && fi.IsDir() {
-			return "--cookies-from-browser=brave:" + p
-		}
-	}
-	return ""
 }
 
 func sanitizeFilename(s string) string {

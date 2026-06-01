@@ -71,7 +71,7 @@ body::after{content:'';position:fixed;inset:0;background:repeating-linear-gradie
 .terminal-dot{width:12px;height:12px;border-radius:50%}
 .terminal-dot--red{background:#ff5f57}.terminal-dot--yellow{background:#febc2e}.terminal-dot--green{background:#28c840}
 .terminal-title{flex:1;text-align:center;font-family:var(--font-mono);font-size:.75rem;color:var(--text-dim);letter-spacing:.5px}
-.terminal-body{padding:24px;font-family:var(--font-mono);font-size:.82rem;line-height:1.8;min-height:420px;position:relative;overflow:hidden}
+.terminal-body{padding:24px;font-family:var(--font-mono);font-size:.82rem;line-height:1.8;min-height:580px;position:relative;overflow:hidden}
 .t-line{opacity:0;animation:typeIn .3s ease-out forwards;white-space:nowrap}
 .t-header{color:var(--accent);font-weight:600}
 .t-mint{color:var(--mint)}.t-pink{color:var(--pink)}.t-orange{color:var(--orange)}
@@ -165,7 +165,7 @@ kbd{font-family:var(--font-mono);font-size:.75rem;background:var(--bg-panel);bor
     <a href="#install">Install</a>
     <a href="#keys">Keybindings</a>
     <a href="#arch">Architecture</a>
-    <a href="https://github.com" class="nav-cta"><span>&#9733; Star on GitHub</span></a>
+    <a href="https://github.com/anas1412/ytmgo" class="nav-cta"><span>&#9733; Star on GitHub</span></a>
   </div>
 </nav>
 
@@ -177,7 +177,7 @@ kbd{font-family:var(--font-mono);font-size:.75rem;background:var(--bg-panel);bor
   <p class="hero-sub">Search YouTube, download audio, manage your queue, and play music &mdash; all from the keyboard, inside your terminal. No browser. No bloat. Just vibes.</p>
   <div class="hero-actions">
     <button class="btn-primary" onclick="document.getElementById('install').scrollIntoView({behavior:'smooth'})"><span>&#9656; Get Started</span></button>
-    <button class="btn-secondary" onclick="window.open('https://github.com','_blank')"><span>View Source</span></button>
+    <button class="btn-secondary" onclick="window.open('https://github.com/anas1412/ytmgo','_blank')"><span>View Source</span></button>
   </div>
   <div class="terminal-wrapper">
     <div class="terminal">
@@ -215,7 +215,7 @@ kbd{font-family:var(--font-mono);font-size:.75rem;background:var(--bg-panel);bor
       <h2 class="section-title">Up and running<br>in 30 seconds.</h2>
       <p class="section-desc">Install dependencies, build, and go. It's that simple.</p>
       <div class="install-steps">
-        <div class="install-step"><div class="step-num">1</div><div class="step-content"><h4>Install dependencies</h4><p>You need mpv for playback and yt-dlp for search/download.</p></div></div>
+        <div class="install-step"><div class="step-num">1</div><div class="step-content"><h4>Install dependencies</h4><p>You need mpv for playback and yt-dlp for search/download. Optionally install Brave/Firefox/Chrome for cookie extraction.</p></div></div>
         <div class="install-step"><div class="step-num">2</div><div class="step-content"><h4>Build the binary</h4><p>One command compiles everything into a single binary.</p></div></div>
         <div class="install-step"><div class="step-num">3</div><div class="step-content"><h4>Run it</h4><p>Launch ytmgo and start listening. That's it.</p></div></div>
       </div>
@@ -227,7 +227,7 @@ kbd{font-family:var(--font-mono);font-size:.75rem;background:var(--bg-panel);bor
       <span class="code-comment"># macOS</span><br>
       <span class="code-cmd">brew install</span> <span class="code-string">mpv yt-dlp</span><br><br>
       <span class="code-comment"># Clone & build</span><br>
-      <span class="code-cmd">git clone</span> <span class="code-string">https://github.com/ytmgo/ytmgo.git</span><br>
+      <span class="code-cmd">git clone</span> <span class="code-string">https://github.com/anas1412/ytmgo.git</span><br>
       <span class="code-cmd">cd</span> <span class="code-string">ytmgo</span><br>
       <span class="code-cmd">go build</span> <span class="code-flag">-o</span> <span class="code-string">ytmgo .</span><br><br>
       <span class="code-comment"># Run</span><br>
@@ -243,7 +243,7 @@ kbd{font-family:var(--font-mono);font-size:.75rem;background:var(--bg-panel);bor
     <p class="section-desc">No mouse needed. Full keyboard control over search, queue, and playback.</p>
   </div>
   <div class="keys-grid reveal">
-    <div class="key-row"><div class="key-combo"><kbd>Tab</kbd></div><div class="key-action">Cycle focus between panels</div></div>
+    <div class="key-row"><div class="key-combo"><kbd>Tab</kbd></div><div class="key-action">Cycle focus: search &rarr; results &rarr; queue &rarr; search</div></div>
     <div class="key-row"><div class="key-combo"><kbd>&uarr;</kbd><kbd>&darr;</kbd></div><div class="key-action">Navigate lists</div></div>
     <div class="key-row"><div class="key-combo"><kbd>j</kbd><kbd>k</kbd></div><div class="key-action">Vim-style navigation</div></div>
     <div class="key-row"><div class="key-combo"><kbd>Enter</kbd></div><div class="key-action">Search: add to queue / Queue: play</div></div>
@@ -254,8 +254,12 @@ kbd{font-family:var(--font-mono);font-size:.75rem;background:var(--bg-panel);bor
     <div class="key-row"><div class="key-combo"><kbd>l</kbd><kbd>Ctrl+F</kbd></div><div class="key-action">Seek forward 5s</div></div>
     <div class="key-row"><div class="key-combo"><kbd>+</kbd><kbd>-</kbd></div><div class="key-action">Volume up / down</div></div>
     <div class="key-row"><div class="key-combo"><kbd>d</kbd><kbd>Del</kbd></div><div class="key-action">Remove from queue</div></div>
+    <div class="key-row"><div class="key-combo"><kbd>D</kbd></div><div class="key-action">Clear entire queue</div></div>
     <div class="key-row"><div class="key-combo"><kbd>s</kbd></div><div class="key-action">Toggle shuffle</div></div>
     <div class="key-row"><div class="key-combo"><kbd>r</kbd></div><div class="key-action">Cycle repeat: OFF &rarr; ONE &rarr; ALL</div></div>
+    <div class="key-row"><div class="key-combo"><kbd>x</kbd></div><div class="key-action">Download selected track</div></div>
+    <div class="key-row"><div class="key-combo"><kbd>R</kbd></div><div class="key-action">Refresh recommendations</div></div>
+    <div class="key-row"><div class="key-combo"><kbd>1</kbd><kbd>2</kbd><kbd>3</kbd></div><div class="key-action">Switch page: Stream / Library / Settings</div></div>
     <div class="key-row"><div class="key-combo"><kbd>Ctrl+&uarr;</kbd><kbd>Ctrl+&darr;</kbd></div><div class="key-action">Move item in queue</div></div>
     <div class="key-row"><div class="key-combo"><kbd>?</kbd></div><div class="key-action">Toggle help overlay</div></div>
     <div class="key-row"><div class="key-combo"><kbd>q</kbd><kbd>Ctrl+C</kbd></div><div class="key-action">Quit</div></div>
@@ -273,6 +277,10 @@ kbd{font-family:var(--font-mono);font-size:.75rem;background:var(--bg-panel);bor
     <div class="arch-card"><span class="arch-icon">&#8981;</span><div class="arch-name">yt-dlp</div><div class="arch-desc">YouTube search and audio downloading engine</div></div>
     <div class="arch-card"><span class="arch-icon">&#9881;</span><div class="arch-name">Bubble Tea</div><div class="arch-desc">Elm-architecture TUI framework for Go</div></div>
     <div class="arch-card"><span class="arch-icon">&#9889;</span><div class="arch-name">Lipgloss</div><div class="arch-desc">Declarative terminal styling with color palettes</div></div>
+    <div class="arch-card" style="display:none"></div>
+    <div class="arch-card"><span class="arch-icon">&#9881;</span><div class="arch-name">ytdlp</div><div class="arch-desc">Shared arg helpers for cookie &amp; user-agent across search/download</div></div>
+    <div class="arch-card"><span class="arch-icon">&#9881;</span><div class="arch-name">Settings</div><div class="arch-desc">Persistent config with 7 editable fields, stored on disk</div></div>
+    <div class="arch-card" style="display:none"></div>
   </div>
 </section>
 
@@ -282,7 +290,7 @@ kbd{font-family:var(--font-mono);font-size:.75rem;background:var(--bg-panel);bor
     <p class="cta-desc">Join the growing community of terminal-native music listeners. Open source, MIT licensed, built with Go.</p>
     <div class="cta-actions">
       <button class="btn-primary" onclick="document.getElementById('install').scrollIntoView({behavior:'smooth'})"><span>&#9656; Install ytmgo</span></button>
-      <button class="btn-secondary" onclick="window.open('https://github.com','_blank')"><span>View on GitHub</span></button>
+      <button class="btn-secondary" onclick="window.open('https://github.com/anas1412/ytmgo','_blank')"><span>View on GitHub</span></button>
     </div>
   </div>
 </section>
@@ -290,8 +298,8 @@ kbd{font-family:var(--font-mono);font-size:.75rem;background:var(--bg-panel);bor
 <footer class="footer">
   <div class="footer-left"><span>ytmgo</span> &mdash; built with Go + Bubble Tea</div>
   <div class="footer-links">
-    <a href="https://github.com">GitHub</a>
-    <a href="https://github.com">MIT License</a>
+    <a href="https://github.com/anas1412/ytmgo">GitHub</a>
+    <a href="https://github.com/anas1412/ytmgo">MIT License</a>
   </div>
 </footer>
 
@@ -299,21 +307,29 @@ kbd{font-family:var(--font-mono);font-size:.75rem;background:var(--bg-panel);bor
 // Terminal animation
 const termLines = [
   '<span class="t-header">┌─────────────────────────────────────────────────────────────┐</span>',
-  '<span class="t-header">│</span>  <span class="t-accent" style="font-weight:700">&#9834; YTMUSIC</span>          <span class="t-dim">[Search:</span> <span class="t-mint">daft punk</span><span class="t-dim">______]</span>         <span class="t-dim">[/]</span>  <span class="t-header">│</span>',
+  '<span class="t-header">│</span>  <span class="t-mint" style="font-weight:700">&#9835; ytmgo v0.1</span>  <span class="t-dim">[search:</span> <span class="t-mint">daft punk</span><span class="t-dim">___]</span>  <span class="t-mid">1 Stream</span>  <span class="t-accent" style="font-weight:600">2 Library</span>  <span class="t-mid">3 Settings</span>  <span class="t-header">│</span>',
   '<span class="t-header">├──────────────────────────┬──────────────────────────────────┤</span>',
-  '<span class="t-header">│</span>  <span class="t-accent" style="font-weight:600">SEARCH RESULTS</span>          <span class="t-header">│</span>  <span class="t-accent" style="font-weight:600">QUEUE</span>                           <span class="t-header">│</span>',
+  '<span class="t-header">│</span>  <span class="t-accent" style="font-weight:600">SEARCH RESULTS</span>          <span class="t-header">│</span>  <span class="t-accent" style="font-weight:600">QUEUE  [3]</span>                     <span class="t-header">│</span>',
   '<span class="t-header">│</span>                          <span class="t-header">│</span>                                  <span class="t-header">│</span>',
-  '<span class="t-header">│</span>  <span class="t-white">1. Daft Punk - Around the World</span>  <span class="t-header">│</span>  <span class="t-mint">&#9654;</span> <span class="t-mint" style="font-weight:600">1. Get Lucky</span>                <span class="t-header">│</span>',
-  '<span class="t-header">│</span>  <span class="t-mid">2. Daft Punk - One More Time</span>     <span class="t-header">│</span>    <span class="t-mid">2. Instant Crush</span>              <span class="t-header">│</span>',
-  '<span class="t-header">│</span>  <span class="t-mid">3. Daft Punk - Get Lucky</span>         <span class="t-header">│</span>    <span class="t-mid">3. Around the World</span>           <span class="t-header">│</span>',
-  '<span class="t-header">│</span>  <span class="t-mid">4. Daft Punk - Instant Crush</span>     <span class="t-header">│</span>                                  <span class="t-header">│</span>',
+  '<span class="t-header">│</span>  <span class="t-mint">&#9654; 1. Get Lucky</span>         <span class="t-header">│</span>  <span class="t-mint">&#9654; 1. Get Lucky</span>                  <span class="t-header">│</span>',
+  '<span class="t-header">│</span>  <span class="t-mid">    Daft Punk</span>            <span class="t-header">│</span>  <span class="t-mid">    Daft Punk</span>                    <span class="t-header">│</span>',
+  '<span class="t-header">│</span>                          <span class="t-header">│</span>                                  <span class="t-header">│</span>',
+  '<span class="t-header">│</span>  <span class="t-mid">  2. Instant Crush</span>       <span class="t-header">│</span>  <span class="t-mid">  2. Instant Crush</span>               <span class="t-header">│</span>',
+  '<span class="t-header">│</span>  <span class="t-mid">    Daft Punk</span>            <span class="t-header">│</span>  <span class="t-mid">    Daft Punk</span>                    <span class="t-header">│</span>',
+  '<span class="t-header">│</span>                          <span class="t-header">│</span>                                  <span class="t-header">│</span>',
+  '<span class="t-header">│</span>  <span class="t-mid">  3. One More Time</span>       <span class="t-header">│</span>  <span class="t-mid">  3. Around the World</span>            <span class="t-header">│</span>',
+  '<span class="t-header">│</span>  <span class="t-mid">    Daft Punk</span>            <span class="t-header">│</span>  <span class="t-mid">    Daft Punk</span>                    <span class="t-header">│</span>',
+  '<span class="t-header">│</span>                          <span class="t-header">│</span>                                  <span class="t-header">│</span>',
+  '<span class="t-header">│</span>  <span class="t-dim" style="font-style:italic">  &#8595; 5 more</span>            <span class="t-header">│</span>                                  <span class="t-header">│</span>',
   '<span class="t-header">├──────────────────────────┴──────────────────────────────────┤</span>',
-  '<span class="t-header">│</span>  <span class="t-orange" style="font-weight:600">&#11015; Downloading:</span> <span class="t-white">"Instant Crush"</span>  <span class="t-progress-fill">&#9608;&#9608;&#9608;&#9608;&#9608;&#9608;&#9608;&#9608;</span><span class="t-progress-empty">&#9608;&#9608;&#9608;&#9608;&#9608;&#9608;&#9608;&#9608;&#9608;&#9608;</span>  <span class="t-mid">47%</span>  <span class="t-header">│</span>',
-  '<span class="t-header">├─────────────────────────────────────────────────────────────┤</span>',
-  '<span class="t-header">│</span>  <span class="t-mint" style="font-weight:600">Now Playing:</span> <span class="t-white" style="font-weight:500">Get Lucky</span> <span class="t-dim">&mdash;</span> <span class="t-mid">Daft Punk ft. Pharrell Williams</span>     <span class="t-header">│</span>',
-  '<span class="t-header">│</span>  <span class="t-accent">&#9644;&#9644;&#9644;&#9644;&#9644;&#9644;&#9644;&#9644;&#9644;&#9644;&#9644;&#9644;&#9644;&#9644;&#9644;&#9644;&#9644;&#9644;&#9644;&#9644;</span><span class="t-dim">&#9644;&#9644;&#9644;&#9644;&#9644;&#9644;&#9644;&#9644;&#9644;&#9644;&#9644;&#9644;&#9644;&#9644;&#9644;&#9644;&#9644;&#9644;&#9644;&#9644;&#9644;&#9644;&#9644;&#9644;&#9644;</span>  <span class="t-dim">2:14 / 4:32</span>       <span class="t-header">│</span>',
-  '<span class="t-header">│</span>  <span class="t-dim">[prev]</span>  <span class="t-ctrl-active" style="font-weight:700">[&#9646;&#9646; pause]</span>  <span class="t-dim">[next]</span>   <span class="t-dim">VOL:</span> <span class="t-vol-fill">&#9608;&#9608;&#9608;&#9608;</span><span class="t-vol-empty">&#9608;&#9608;</span>  <span class="t-dim">SHUFFLE</span> <span class="t-ctrl-active">REPEAT</span>  <span class="t-header">│</span>',
-  '<span class="t-header">└─────────────────────────────────────────────────────────────┘</span>',
+  '<span class="t-header">│</span>  <span class="t-orange" style="font-weight:600">&#11015; Downloading:</span> <span class="t-white">"Instant Crush"</span>  <span class="t-progress-fill">&#9608;&#9608;&#9608;&#9608;&#9608;&#9608;&#9608;&#9608;</span><span class="t-progress-empty">&#9608;&#9608;&#9608;&#9608;</span>  <span class="t-mid">67%</span>  <span class="t-header">│</span>',
+  '<span class="t-header" style="color:#06d6a0">╔═════════════════════════════════════════════════════════════╗</span>',
+  '<span class="t-header" style="color:#06d6a0">║</span>  <span class="t-mint" style="font-weight:700">&#9654;</span>  <span class="t-white" style="font-weight:500">Get Lucky &mdash; Daft Punk</span>              <span class="t-dim">3:45 / 4:20</span>  <span class="t-header" style="color:#06d6a0">║</span>',
+  '<span class="t-header" style="color:#06d6a0">║</span>  <span class="t-progress-fill">&#9608;&#9608;&#9608;&#9608;&#9608;&#9608;&#9608;&#9608;&#9608;&#9608;&#9608;&#9608;&#9608;&#9608;&#9608;&#9608;&#9608;&#9608;&#9608;&#9608;</span><span class="t-progress-empty">&#9608;&#9608;&#9608;&#9608;&#9608;&#9608;&#9608;&#9608;&#9608;&#9608;&#9608;&#9608;&#9608;&#9608;&#9608;</span>  <span class="t-dim">3:45/4:20</span>       <span class="t-header" style="color:#06d6a0">║</span>',
+  '<span class="t-header" style="color:#06d6a0">║</span>  <span class="t-dim">&#9206;</span>  <span class="t-mint">&#9208;</span>  <span class="t-dim">&#9205;</span>   <span class="t-dim">&#9474;</span>   <span class="t-vol-fill">&#9608;&#9608;&#9608;&#9608;&#9608;&#9608;&#9608;&#9608;</span><span class="t-vol-empty">&#9608;&#9608;</span> <span class="t-dim">80%</span>   <span class="t-dim">&#9474;</span>   <span class="t-ctrl-active">&#128257; SHFL</span>   <span class="t-accent">&#128257; ONE</span>  <span class="t-header" style="color:#06d6a0">║</span>',
+  '<span class="t-header" style="color:#06d6a0">╚═════════════════════════════════════════════════════════════╝</span>',
+  '<span class="t-accent">&#9679;</span> <span class="t-mid">Playing "Get Lucky" from Daft Punk</span>',
+  '<span class="t-dim">tab cycle focus</span>  <span class="t-dim">&#8226;</span>  <span class="t-ctrl-active">enter play/add</span>  <span class="t-dim">&#8226;</span>  <span class="t-mint">space play/pause</span>  <span class="t-dim">&#8226;</span>  <span class="t-dim">s shuffle</span>  <span class="t-dim">&#8226;</span>  <span class="t-dim">r repeat</span>  <span class="t-dim">&#8226;</span>  <span class="t-dim">x download</span>  <span class="t-dim">&#8226;</span>  <span class="t-dim">R recs</span>  <span class="t-dim">&#8226;</span>  <span class="t-dim">? help</span>  <span class="t-dim">&#8226;</span>  <span class="t-dim">q quit</span>',
 ];
 
 const termBody = document.getElementById('terminal-body');

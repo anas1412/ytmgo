@@ -19,22 +19,20 @@ var (
 	styleApp = lipgloss.NewStyle().
 	Background(colorBg)
 
-	// Search input wrapper - configured with explicit dimensions to prevent collapsing
+	// Search input wrapper - inline style (no border, stays on 1 line)
 	styleSearchBox = lipgloss.NewStyle().
-	Border(lipgloss.RoundedBorder()).
-	BorderForeground(colorBorder).
-	Padding(0, 1).
-	Width(30).
-	Height(1).
-	Background(colorBgHover)
+		Foreground(colorText).
+		Background(colorBgHover).
+		Padding(0, 1).
+		Width(28).
+		Height(1)
 
 	styleSearchBoxFocused = lipgloss.NewStyle().
-	Border(lipgloss.RoundedBorder()).
-	BorderForeground(colorAccent).
-	Padding(0, 1).
-	Width(30).
-	Height(1).
-	Background(colorBgHover)
+		Foreground(colorAccent2).
+		Background(colorBgHover).
+		Padding(0, 1).
+		Width(28).
+		Height(1)
 
 	// Panel empty state
 	styleEmpty = lipgloss.NewStyle().
@@ -42,59 +40,6 @@ var (
 	PaddingLeft(2).
 	PaddingTop(1).
 	Italic(true)
-
-	// Status / error bar
-	styleStatus = lipgloss.NewStyle().
-	Foreground(colorAccent2).
-	PaddingLeft(1)
-
-	styleStatusErr = lipgloss.NewStyle().
-	Foreground(colorError).
-	PaddingLeft(1)
-
-	// Player bar container
-	stylePlayerBox = lipgloss.NewStyle().
-	Border(lipgloss.RoundedBorder()).
-	BorderForeground(colorBorder).
-	Padding(0, 2, 0, 2)
-
-	stylePlayerBoxFocused = lipgloss.NewStyle().
-	Border(lipgloss.RoundedBorder()).
-	BorderForeground(colorBorderFoc).
-	Padding(0, 2, 0, 2)
-
-	// Download bar container
-	styleDownloadBox = lipgloss.NewStyle().
-	Border(lipgloss.RoundedBorder()).
-	BorderForeground(colorBorder).
-	Padding(0, 2, 0, 2)
-
-	// Control button styles - refined to be clean, flat text buttons
-	styleCtrlBtn = lipgloss.NewStyle().
-	Foreground(colorTextMid).
-	Bold(true)
-
-	styleCtrlBtnActive = lipgloss.NewStyle().
-	Foreground(colorAccent2).
-	Bold(true)
-
-	styleCtrlBtnPlaying = lipgloss.NewStyle().
-	Foreground(colorAccent).
-	Bold(true)
-
-	// Progress bar text style
-	styleProgressTime = lipgloss.NewStyle().
-	Foreground(colorTextDim).
-	Width(10).
-	Align(lipgloss.Right)
-
-	// Mode indicators
-	styleModeActive = lipgloss.NewStyle().
-	Foreground(colorAccent2).
-	Bold(true)
-
-	styleModeInactive = lipgloss.NewStyle().
-	Foreground(colorTextDim)
 
 	// Header search label
 	styleSearchLabel = lipgloss.NewStyle().
@@ -128,54 +73,40 @@ func (m Model) View() string {
 		return m.helpView()
 	}
 
+	// If confirming a destructive action, show confirmation overlay
+	if m.isConfirming() {
+		return m.renderConfirmOverlay()
+	}
+
 	switch m.activePage {
 	case PageStream:
-		return m.renderStreamPage()
+		return m.renderPage()
 	case PageLibrary:
-		return m.renderLibraryPage()
+		return m.renderPage()
 	case PageSettings:
 		return m.renderSettingsPage()
 	default:
-		return m.renderStreamPage()
+		return m.renderPage()
 	}
 }
 
-// renderStreamPage renders the main streaming/search/queue/player layout.
-func (m Model) renderStreamPage() string {
+// renderPage renders the base page layout (shared by Stream and Library).
+func (m Model) renderPage() string {
 	header := m.renderHeader()
 	panels := m.renderPanels()
+	dlBar := m.renderDownloadBar()
 	player := m.renderPlayerBar()
-	nav := m.renderNavBar()
 	help := m.renderHelpBar()
 	status := m.renderStatus()
 
+	// Build the layout with optional sections
 	var elements []string
 	elements = append(elements, header)
 	elements = append(elements, panels)
-	elements = append(elements, player)
-	elements = append(elements, nav)
-	if status != "" {
-		elements = append(elements, status)
+	if dlBar != "" {
+		elements = append(elements, dlBar)
 	}
-	elements = append(elements, help)
-
-	return lipgloss.JoinVertical(lipgloss.Left, elements...)
-}
-
-// renderLibraryPage renders the library/downloads layout.
-func (m Model) renderLibraryPage() string {
-	header := m.renderHeader()
-	panels := m.renderPanels()
-	player := m.renderPlayerBar()
-	nav := m.renderNavBar()
-	help := m.renderHelpBar()
-	status := m.renderStatus()
-
-	var elements []string
-	elements = append(elements, header)
-	elements = append(elements, panels)
 	elements = append(elements, player)
-	elements = append(elements, nav)
 	if status != "" {
 		elements = append(elements, status)
 	}
@@ -189,15 +120,23 @@ func (m Model) renderSettingsPage() string {
 	header := m.renderHeader()
 	body := m.renderSettingsList()
 	player := m.renderPlayerBar()
-	nav := m.renderNavBar()
 	help := m.renderHelpBar()
 	status := m.renderStatus()
+
+	// Wrap settings in a bordered container for visual consistency
+	// Border adds 2 chars (left + right), padding adds 4 (2 each side)
+	// Inner content area = panelW - 6, so set panelW = width - 6 + 2 = width - 4
+	// to account for border width setting being total width
+	panelW := m.width - 4
+	if panelW < 40 {
+		panelW = 40
+	}
+	body = panelBorderSettings.Width(panelW).Render(body)
 
 	var elements []string
 	elements = append(elements, header)
 	elements = append(elements, body)
 	elements = append(elements, player)
-	elements = append(elements, nav)
 	if status != "" {
 		elements = append(elements, status)
 	}
@@ -222,46 +161,29 @@ func (m Model) renderHeader() string {
 		searchView = styleSearchBox.Render(m.searchInput.View())
 	}
 
-	// Right side: focus hint
-	searchHint := styleSearchLabel.Render("[Tab] focus search")
-	if m.isSearching {
-		searchHint = styleSearchLabel.Render("⏳ searching…")
+	// Build page tabs (right side)
+	tabs := []string{"1 Stream", "2 Library", "3 Settings"}
+	var renderedTabs []string
+	for i, tab := range tabs {
+		if int(m.activePage) == i {
+			renderedTabs = append(renderedTabs, styleNavTabActive.Render(tab))
+		} else {
+			renderedTabs = append(renderedTabs, styleNavTab.Render(tab))
+		}
 	}
+	tabsStr := strings.Join(renderedTabs, " ")
 
-	// Vertically center content inside the header to keep elements aligned with the search bar
 	left := lipgloss.JoinHorizontal(lipgloss.Center, title, "   ", searchView)
-	right := searchHint
 
-	gap := m.width - lipgloss.Width(left) - lipgloss.Width(right) - 2
+	gap := m.width - lipgloss.Width(left) - lipgloss.Width(tabsStr) - 2
 	if gap < 1 {
 		gap = 1
 	}
 	spacer := strings.Repeat(" ", gap)
 
 	return styleHeader.Render(
-		lipgloss.JoinHorizontal(lipgloss.Center, left, spacer, right),
+		lipgloss.JoinHorizontal(lipgloss.Center, left, spacer, tabsStr),
 	)
-}
-
-// ─── Page Navigation Bar ──────────────────────────────────────────
-
-func (m Model) renderNavBar() string {
-	tabs := []string{"1 Stream", "2 Library", "3 Settings"}
-	var rendered []string
-	for i, tab := range tabs {
-		if int(m.activePage) == i {
-			rendered = append(rendered, styleNavTabActive.Render(tab))
-		} else {
-			rendered = append(rendered, styleNavTab.Render(tab))
-		}
-	}
-	bar := strings.Join(rendered, " ")
-	// Pad right to fill width
-	gap := m.width - lipgloss.Width(bar) - 2
-	if gap < 0 {
-		gap = 0
-	}
-	return styleHelp.Render(bar + strings.Repeat(" ", gap))
 }
 
 // ─── Panels (Search Results | Queue) ───────────────────────────────
@@ -278,9 +200,7 @@ func (m Model) renderPanels() string {
 
 	leftBorder := panelBorder
 	rightBorder := panelBorder
-	// Only highlight the panel border when actually navigating it,
-	// not when the search input is focused for typing.
-	if m.activePanel == PanelSearch && !m.searchFocused {
+	if m.activePanel == PanelSearch {
 		leftBorder = panelBorderFocused
 	}
 	if m.activePanel == PanelQueue {
@@ -353,17 +273,17 @@ func (m Model) renderSearchResults(width, height int) string {
 	}
 	if m.isSearching {
 		return styleEmpty.Width(width - 2).Height(height).Render(
-			"⏳ Searching…",
+			"⏳  Searching…",
 		)
 	}
 	if len(m.results) == 0 {
 		if m.showingRecommendations {
 			return styleEmpty.Width(width - 2).Height(height).Render(
-				"Loading recommendations…",
+				"⏳  Loading recommendations…",
 			)
 		}
 		return styleEmpty.Width(width - 2).Height(height).Render(
-			"No results.\nSearch for something above.",
+			"No results",
 		)
 	}
 
@@ -398,13 +318,13 @@ func (m Model) renderLibrary(width, height int) string {
 	tracks := m.filteredLibrary()
 	if len(tracks) == 0 {
 		if m.searchInput.Value() != "" {
-			return styleEmpty.Width(width - 2).Height(height).Render(
-				"No tracks match \"" + m.searchInput.Value() + "\".",
-			)
-		}
 		return styleEmpty.Width(width - 2).Height(height).Render(
-			"No downloaded tracks yet.\nSearch, add to queue, and download.",
+			"No tracks match \"" + m.searchInput.Value() + "\"",
 		)
+	}
+	return styleEmpty.Width(width - 2).Height(height).Render(
+		"No downloaded tracks yet",
+	)
 	}
 
 	var lines []string
@@ -502,7 +422,7 @@ func (m Model) renderQueue(width, height int) string {
 	tracks := m.queue.Tracks()
 	if len(tracks) == 0 {
 		return styleEmpty.Width(width - 2).Height(height).Render(
-			"Queue is empty.\nSearch & add songs to play.",
+			"Queue is empty",
 		)
 	}
 
@@ -573,13 +493,9 @@ func renderListItemBlock(line, info string, isSelected, isPlaying bool, width in
 	var infoStyle lipgloss.Style
 
 	if isSelected {
-		bgStyle = lipgloss.NewStyle().Background(colorBgHover).Width(width)
-		if isPlaying {
-			titleStyle = lipgloss.NewStyle().Foreground(colorPlaying).Bold(true)
-		} else {
-			titleStyle = lipgloss.NewStyle().Foreground(colorTitle).Bold(true)
-		}
-		infoStyle = lipgloss.NewStyle().Foreground(colorTextMid)
+		bgStyle = lipgloss.NewStyle().Background(colorAccent).Width(width)
+		titleStyle = lipgloss.NewStyle().Foreground(colorTitle).Bold(true)
+		infoStyle = lipgloss.NewStyle().Foreground(colorBgHover)
 	} else {
 		bgStyle = lipgloss.NewStyle().Width(width)
 		if isPlaying {
@@ -598,13 +514,13 @@ func renderListItemBlock(line, info string, isSelected, isPlaying bool, width in
 func (m Model) renderDownloadQueue(width, height int) string {
 	if m.downloader == nil {
 		return styleEmpty.Width(width - 2).Height(height).Render(
-			"No downloads.\nPress x on a queued track\nto download for offline.",
+			"No downloads",
 		)
 	}
 	jobs := m.downloader.Jobs()
 	if len(jobs) == 0 {
 		return styleEmpty.Width(width - 2).Height(height).Render(
-			"No downloads.\nPress x on a queued track\nto download for offline.",
+			"No downloads",
 		)
 	}
 
@@ -688,15 +604,25 @@ func (m Model) renderSettingsList() string {
 	}{
 		{"Stream Mode", boolStr(m.settings.StreamMode), "Play via URL instead of forcing download"},
 		{"Auto-Download", boolStr(m.settings.AutoDownload), "Auto-download queued tracks for offline"},
-		{"Default Volume", fmt.Sprintf("%d", m.settings.DefaultVolume), "0-100"},
-		{"Search Limit", fmt.Sprintf("%d", m.settings.SearchLimit), "Results per search"},
-		{"Download Dir", m.settings.DownloadDir, "Path for downloaded files"},
-		{"Cookie Browser", m.settings.CookieBrowser, "Browser for YouTube cookies"},
+		{"Default Volume", fmt.Sprintf("%d", m.settings.DefaultVolume), "0-100  (+/- adjust)"},
+		{"Search Limit", fmt.Sprintf("%d", m.settings.SearchLimit), "Results per search  (+/- adjust)"},
+		{"Download Dir", truncate(m.settings.DownloadDir, 40), "Path for downloaded files"},
+		{"Cookie Browser", truncate(m.settings.CookieBrowser, 20), "Browser for YouTube cookies"},
+		{"User-Agent", truncate(m.settings.UserAgent, 30), "Custom UA for yt-dlp (empty = default)"},
 	}
 
-	for i, item := range settingsItems {
+	// Scroll window: only render items within [offset, offset+visible)
+	vis := m.settingsVisibleItems()
+	offset := m.settingsOffset
+	end := offset + vis
+	if end > len(settingsItems) {
+		end = len(settingsItems)
+	}
+
+	for i, item := range settingsItems[offset:end] {
+		idx := offset + i
 		cursor := "  "
-		if i == m.settingsCursor && !m.settingsEditField {
+		if idx == m.settingsCursor && !m.settingsEditField {
 			cursor = "▶ "
 		}
 
@@ -705,7 +631,7 @@ func (m Model) renderSettingsList() string {
 		desc := styleSettingsDesc.Render(item.desc)
 
 		// When editing a string field, show the input
-		if m.settingsEditField && i == m.settingsCursor {
+		if m.settingsEditField && idx == m.settingsCursor {
 			value = styleSettingsValue.Render(m.settingsEditInput.View())
 		}
 
@@ -715,8 +641,15 @@ func (m Model) renderSettingsList() string {
 		lines = append(lines, "")
 	}
 
+	// Scroll indicator
+	if end < len(settingsItems) {
+		lines = append(lines, styleSettingsDesc.Render("  ↓ more items below"))
+	} else if offset > 0 {
+		lines = append(lines, styleSettingsDesc.Render("  ↑ more items above"))
+	}
+
 	// Help text at bottom
-	lines = append(lines, styleSettingsDesc.Render("↑↓ navigate · Enter toggle/edit · Esc back"))
+	lines = append(lines, styleSettingsDesc.Render("↑↓ navigate · Enter toggle/edit · Esc cancel edit · 1/2/3 switch page"))
 
 	return strings.Join(lines, "\n")
 }
@@ -742,39 +675,147 @@ func truncate(s string, maxLen int) string {
 
 var styleTextDim = lipgloss.NewStyle().Foreground(colorTextDim)
 
+// ─── Download Bar ──────────────────────────────────────────────────
+
+// renderDownloadBar shows active download progress above the player bar.
+// Returns empty string if no download is in progress.
+func (m Model) renderDownloadBar() string {
+	if !m.downloading && !m.downloadDone && m.downloadErr == nil {
+		return ""
+	}
+
+	var line string
+	barWidth := m.width - 30
+	if barWidth < 10 {
+		barWidth = 10
+	}
+
+	switch {
+	case m.downloadErr != nil:
+		line = fmt.Sprintf(" %s %s  ✗ %v",
+			styleErrorLabel.Render("⬇"),
+			truncate(m.downloadTitle, 30),
+			m.downloadErr,
+		)
+	case m.downloadDone:
+		line = fmt.Sprintf(" %s %s  ✓ done",
+			styleDoneLabel.Render("⬇"),
+			truncate(m.downloadTitle, 30),
+		)
+	default:
+		bar := renderProgressBar(m.downloadPct, barWidth)
+		line = fmt.Sprintf(" %s %s  %s  %.0f%%",
+			styleDownloadLabel.Render("⬇"),
+			truncate(m.downloadTitle, 30),
+			bar,
+			m.downloadPct,
+		)
+	}
+
+	// Render with a separator line above
+	sep := renderSeparator("═", m.width-2)
+	return sep + "\n" + line
+}
+
+// ─── Confirmation Overlay ──────────────────────────────────────────
+
+func (m Model) renderConfirmOverlay() string {
+	// Render the base page first
+	baseContent := m.renderPage()
+
+	// Build confirmation dialog content
+	var b strings.Builder
+	b.WriteString(styleConfirmTitle.Render("⚠  CONFIRM"))
+	b.WriteString("\n\n")
+
+	switch m.confirmAction {
+	case confirmClearQueue:
+		b.WriteString(styleConfirmText.Render("Clear the entire queue?"))
+		b.WriteString("\n")
+		b.WriteString(styleConfirmText.Render("This cannot be undone."))
+	case confirmDeleteTrack:
+		title := m.confirmData
+		if title == "" {
+			title = "this track"
+		}
+		b.WriteString(styleConfirmText.Render("Delete \"" + title + "\" from disk?"))
+		b.WriteString("\n")
+		b.WriteString(styleConfirmText.Render("This permanently removes the file."))
+	}
+
+	b.WriteString("\n\n")
+	b.WriteString(styleConfirmHint.Render("Press the same key again to confirm · Esc to cancel"))
+
+	dialogWidth := 50
+	if m.width-8 < dialogWidth {
+		dialogWidth = m.width - 8
+	}
+	dialog := styleConfirmBorder.
+		Width(dialogWidth).
+		Render(b.String())
+
+	// Center the dialog over the base content
+	lines := strings.Split(baseContent, "\n")
+	dialogLines := strings.Split(dialog, "\n")
+
+	// Find center position
+	centerY := len(lines)/2 - len(dialogLines)/2
+	if centerY < 0 {
+		centerY = 0
+	}
+
+	// Insert dialog at center
+	var result []string
+	for i := 0; i < len(lines); i++ {
+		if i >= centerY && i-centerY < len(dialogLines) {
+			dialogLine := dialogLines[i-centerY]
+			// Center horizontally
+			pad := (m.width - lipgloss.Width(dialogLine) - 2) / 2
+			if pad < 0 {
+				pad = 0
+			}
+			result = append(result, strings.Repeat(" ", pad)+dialogLine)
+		} else {
+			result = append(result, lines[i])
+		}
+	}
+
+	return strings.Join(result, "\n")
+}
+
 // ─── Player Bar ────────────────────────────────────────────────────
 
 func (m Model) renderPlayerBar() string {
-	var nowPlaying string
-	var progress string
-	var controls string
+	var nowPlaying, progress, controls string
+	innerW := m.width - 10 // box width(m.width-4) - doubleBorder(2) - padding(4) = content width
 
 	nowPlayingIdx := m.queue.CurrentIndex()
 	tracks := m.queue.Tracks()
 
 	if m.queue.Len() == 0 || nowPlayingIdx < 0 || nowPlayingIdx >= len(tracks) {
-		nowPlaying = styleNowPlaying.Render("⏹  Stopped")
-		bar := renderProgressBar(0, m.width-26)
-		progress = fmt.Sprintf("%s  %s / %s",
-				       bar,
-			 styleTime.Render("0:00"),
-				       styleTime.Render("0:00"),
+		// ── Stopped / idle ──────────────────────────────────────
+		msg := "Ready — search and add tracks"
+		if m.queue.Len() > 0 {
+			msg = "Track ended — queue is empty"
+		}
+		nowPlaying = lipgloss.JoinHorizontal(lipgloss.Left,
+			styleTime.Render("⏹"),
+			"  ",
+			styleTime.Render(msg),
 		)
+
+		progress = renderProgressBar(0, innerW)
+
 		controls = m.renderControls()
 	} else {
+		// ── Playing track ───────────────────────────────────────
 		t := tracks[nowPlayingIdx]
 
 		trackLabel := t.Title + " — " + t.Artist
-		maxLabelWidth := m.width - 12
-		if len(trackLabel) > maxLabelWidth && maxLabelWidth > 5 {
-			trackLabel = trackLabel[:maxLabelWidth-1] + "…"
+		maxLabel := innerW - 16 // leave room for "▶ " + time + gaps
+		if len(trackLabel) > maxLabel && maxLabel > 5 {
+			trackLabel = trackLabel[:maxLabel-1] + "…"
 		}
-
-		nowPlaying = lipgloss.JoinHorizontal(lipgloss.Left,
-						     styleNowPlaying.Render("🎝"),
-						     " ",
-				       styleNowTitle.Render(trackLabel),
-		)
 
 		currentStr := formatDuration(int(m.position))
 		totalStr := t.Duration
@@ -783,33 +824,48 @@ func (m Model) renderPlayerBar() string {
 		}
 		timeInfo := fmt.Sprintf("%s / %s", currentStr, totalStr)
 
-		barWidth := m.width - lipgloss.Width(timeInfo) - 10
+		leftPart := lipgloss.JoinHorizontal(lipgloss.Left,
+			styleNowIndicator.Render("▶"),
+			"  ",
+			styleNowTitle.Render(trackLabel),
+		)
+		rightPart := styleTime.Render(timeInfo)
+		gap := innerW - lipgloss.Width(leftPart) - lipgloss.Width(rightPart)
+		if gap < 1 {
+			gap = 1
+		}
+		nowPlaying = lipgloss.JoinHorizontal(lipgloss.Left,
+			leftPart,
+			strings.Repeat(" ", gap),
+			rightPart,
+		)
+
+		barWidth := innerW - lipgloss.Width(rightPart) - 3
 		if barWidth < 10 {
 			barWidth = 10
 		}
 		bar := renderProgressBar(m.percentage(), barWidth)
-
 		progress = lipgloss.JoinHorizontal(lipgloss.Left,
-						   bar,
-				     "  ",
-				     styleTime.Render(timeInfo),
+			bar,
+			"  ",
+			rightPart,
 		)
 
 		controls = m.renderControls()
 	}
 
 	content := lipgloss.JoinVertical(lipgloss.Left,
-					 nowPlaying,
-				  progress,
-				  controls,
+		nowPlaying,
+		progress,
+		controls,
 	)
 
 	boxStyle := stylePlayerBox
-	if m.activePanel != PanelSearch && m.activePanel != PanelQueue {
-		boxStyle = stylePlayerBoxFocused
+	if m.playerState != player.StatePlaying {
+		boxStyle = stylePlayerBoxStopped
 	}
 
-	return boxStyle.Width(m.width - 6).Render(content)
+	return boxStyle.Width(m.width - 4).Render(content)
 }
 
 func (m Model) renderControls() string {
@@ -826,7 +882,7 @@ func (m Model) renderControls() string {
 	nextBtn := styleCtrlBtn.Render("⏭")
 
 	volBar := renderVolumeBar(m.volume, 10)
-	volLabel := fmt.Sprintf("VOL %s", volBar)
+	volLabel := volBar + fmt.Sprintf(" %d%%", m.volume)
 
 	var shuffleLabel string
 	if m.queue.IsShuffle() {
@@ -845,30 +901,34 @@ func (m Model) renderControls() string {
 			repeatLabel = styleModeInactive.Render("🔁 OFF")
 	}
 
-	left := lipgloss.JoinHorizontal(lipgloss.Left, prevBtn, "   ", playBtn, "   ", nextBtn)
+	sep := styleCtrlSep.Render(" │ ")
+
+	left := lipgloss.JoinHorizontal(lipgloss.Left, prevBtn, "  ", playBtn, "  ", nextBtn)
 	middle := stylePlayerCtrl.Render(volLabel)
-	right := lipgloss.JoinHorizontal(lipgloss.Left, shuffleLabel, "    ", repeatLabel)
+	right := lipgloss.JoinHorizontal(lipgloss.Left, shuffleLabel, "  ", repeatLabel)
 
 	leftWidth := lipgloss.Width(left)
 	middleWidth := lipgloss.Width(middle)
 	rightWidth := lipgloss.Width(right)
 
-	totalInnerWidth := m.width - 6
+	totalInnerWidth := m.width - 10
 
-	// Added a strict 2-character safety margin to completely prevent line wrap issues on odd widths
-	gap := (totalInnerWidth - leftWidth - middleWidth - rightWidth) / 2
-	gap = gap - 1
+	gap := (totalInnerWidth - leftWidth - middleWidth - rightWidth - 6) / 3
 	if gap < 1 {
 		gap = 1
 	}
 	spacer := strings.Repeat(" ", gap)
 
 	return lipgloss.JoinHorizontal(lipgloss.Left,
-				       left,
-				spacer,
-				middle,
-				spacer,
-				right,
+		left,
+		spacer,
+		sep,
+		spacer,
+		middle,
+		spacer,
+		sep,
+		spacer,
+		right,
 	)
 }
 
@@ -878,7 +938,7 @@ func (m Model) renderHelpBar() string {
 	bindings := Keys.ShortHelp()
 	var parts []string
 	for _, b := range bindings {
-		key := styleHelpKey.Render(b.Keys()[0])
+		key := styleHelpKey.Render(b.Help().Key)
 		desc := styleHelp.Render(b.Help().Desc)
 		parts = append(parts, fmt.Sprintf("%s %s", key, desc))
 	}

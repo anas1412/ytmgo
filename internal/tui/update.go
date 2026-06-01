@@ -2,7 +2,6 @@ package tui
 
 import (
 	"fmt"
-	"os"
 
 	"ytmgo/internal/player"
 	"ytmgo/internal/queue"
@@ -14,7 +13,7 @@ import (
 // and fetches personalized YouTube recommendations.
 func (m Model) Init() tea.Cmd {
 	m.results = nil // will be filled incrementally via streaming
-	return tea.Batch(tickCmd(), startRecStreamCmd(), scanLibraryCmd())
+	return tea.Batch(tickCmd(), startRecStreamCmd(m.settings.CookieBrowser, m.settings.UserAgent), scanLibraryCmd())
 }
 
 // Update satisfies tea.Model. It handles all messages without making
@@ -289,6 +288,37 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
+		// When confirming a destructive action, only the same key or Esc works
+		// (navigation keys 1/2/3 cancel the confirmation and pass through)
+		if m.isConfirming() {
+			key := msg.String()
+			// Check if the pressed key confirms the pending action
+			confirmed := false
+			switch m.confirmAction {
+			case confirmClearQueue:
+				confirmed = key == "D"
+			case confirmDeleteTrack:
+				confirmed = key == "d" || key == "delete"
+			}
+
+			switch {
+			case confirmed:
+				return m.executeConfirmedAction()
+			case key == "esc":
+				m.clearConfirm()
+				m.statusMessage = "Cancelled"
+				return m, nil
+			case key == "1" || key == "2" || key == "3":
+				// Cancel confirmation and let navigation key fall through
+				m.clearConfirm()
+			default:
+				// Any other key also cancels
+				m.clearConfirm()
+				m.statusMessage = "Cancelled"
+				return m, nil
+			}
+		}
+
 		// When search is focused, route input to textinput (except tab/esc/enter)
 		if m.searchFocused {
 			switch msg.String() {
@@ -318,7 +348,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.isSearching = true
 					m.searchCursor = 0
 					m.err = nil
-					return m, searchCmd(query, m.settings.SearchLimit)
+					return m, searchCmd(query, m.settings.SearchLimit, m.settings.CookieBrowser, m.settings.UserAgent)
 				}
 				return m, nil
 			case "tab":
@@ -437,9 +467,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.settingsEditField = false
 				m.settingsEditInput.Blur()
 			} else if m.activePage == PageSettings {
-				// Exit Settings → go to Stream
-				m.switchPage(PageStream)
-				m.statusMessage = ""
+				// On Settings page outside edit mode: just deselect (no page exit)
+				// Use 1/2/3 to switch pages instead.
+				m.statusMessage = "Use 1/2/3 to switch pages"
 			}
 			return m, nil
 
@@ -449,6 +479,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.activePage == PageSettings && !m.settingsEditField {
 				if m.settingsCursor > 0 {
 					m.settingsCursor--
+					m.clampSettingsOffset()
 				}
 				return m, nil
 			}
@@ -475,8 +506,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "down", "j":
 			// Settings page: navigate settings list
 			if m.activePage == PageSettings && !m.settingsEditField {
-				if m.settingsCursor < 6 { // 7 items indexed 0-6
+				if m.settingsCursor < 7 { // 8 items indexed 0-7
 					m.settingsCursor++
+					m.clampSettingsOffset()
 				}
 				return m, nil
 			}
@@ -510,11 +542,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.settingsEditField = false
 					m.settingsEditInput.Blur()
 					switch m.settingsCursor {
-					case 4: // Download Dir
-						m.settings.DownloadDir = newVal
-					case 5: // Cookie Browser
-						m.settings.CookieBrowser = newVal
-					}
+				case 4: // Download Dir
+					m.settings.DownloadDir = newVal
+				case 5: // Cookie Browser
+					m.settings.CookieBrowser = newVal
+				case 6: // User-Agent
+					m.settings.UserAgent = newVal
+				}
 					return m, tea.Batch(saveSettingsCmd(m.settings))
 				}
 				switch m.settingsCursor {
@@ -526,8 +560,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					return m, tea.Batch(saveSettingsCmd(m.settings))
 				case 2, 3: // Volume / Search Limit (numbers — Enter does nothing, use +/-)
 					return m, nil
-				case 4, 5: // Download Dir / Cookie Browser (strings)
-					m.startSettingsEdit()
+			case 4, 5, 6: // Download Dir / Cookie Browser / User-Agent (strings)
+				m.startSettingsEdit()
 					return m, nil
 				}
 				return m, nil
@@ -670,11 +704,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 
 		case "L":
-			// Switch to Library page (or back to Stream if already on Library)
-			if m.activePage == PageLibrary {
-				m.switchPage(PageStream)
-				m.statusMessage = ""
-			} else {
+			// L now behaves the same as "2" (always go to Library, consistent behavior)
+			if m.activePage != PageLibrary {
 				m.switchPage(PageLibrary)
 				msg := fmt.Sprintf("Library: %d tracks  (type to filter)", len(m.library))
 				if len(m.library) == 0 {
@@ -700,7 +731,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.searchCursor = 0
 			m.searchOffset = 0
 			m.statusMessage = "Loading recommendations…"
-			return m, startRecStreamCmd()
+			return m, startRecStreamCmd(m.settings.CookieBrowser, m.settings.UserAgent)
 
 		case "h", "ctrl+b":
 			m.position = max(m.position-5, 0)
@@ -802,37 +833,29 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				return m, nil
 			}
-			// Library page: delete a downloaded track from disk
+			// Library page: delete a downloaded track from disk (requires confirmation)
 			if m.activePage == PageLibrary && m.activePanel == PanelSearch && !m.searchFocused {
 				tracks := m.filteredLibrary()
 				if m.libraryCursor >= 0 && m.libraryCursor < len(tracks) {
 					t := tracks[m.libraryCursor]
-					// Remove from disk
-					if t.FilePath != "" {
-						if err := os.Remove(t.FilePath); err != nil {
-							m.statusMessage = "Failed to delete: " + err.Error()
-							return m, nil
-						}
-					}
-					// Remove from the library slice
-					idx := -1
-					for i, lt := range m.library {
-						if lt.ID == t.ID {
-							idx = i
-							break
-						}
-					}
-					if idx >= 0 {
-						m.library = append(m.library[:idx], m.library[idx+1:]...)
-					}
-					m.clampLibraryOffset()
-					m.statusMessage = "Deleted: " + t.Title
+					m.startConfirm(confirmDeleteTrack, t.Title)
+					m.statusMessage = "Press d again to delete \"" + t.Title + "\" from disk"
 				}
 				return m, nil
 			}
 			return m, nil
 
 		case "D":
+			if m.queue.Len() == 0 {
+				return m, nil
+			}
+			if !m.isConfirming() {
+				m.startConfirm(confirmClearQueue, "")
+				m.statusMessage = "Press D again to clear the entire queue"
+				return m, nil
+			}
+			// Already confirmed — execute
+			m.clearConfirm()
 			m.queue.Clear()
 			m.queueCursor = 0
 			m.playerState = player.StateStopped
