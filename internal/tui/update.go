@@ -2,8 +2,9 @@ package tui
 
 import (
 	"fmt"
-"ytmgo/internal/player"
+	"os"
 
+	"ytmgo/internal/player"
 	"ytmgo/internal/queue"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -40,7 +41,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.Button == tea.MouseButtonWheelUp {
 			switch m.activePanel {
 			case PanelSearch:
-				if m.showingLibrary {
+				if m.activePage == PageLibrary {
 					if m.libraryCursor > 0 {
 						m.libraryCursor--
 						m.clampLibraryOffset()
@@ -60,7 +61,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.Button == tea.MouseButtonWheelDown {
 			switch m.activePanel {
 			case PanelSearch:
-				if m.showingLibrary {
+				if m.activePage == PageLibrary {
 					maxIdx := len(m.filteredLibrary()) - 1
 					if m.libraryCursor < maxIdx {
 						m.libraryCursor++
@@ -149,6 +150,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
+	// ── Settings saved ────────────────────────────────────────────
+	case SettingsSavedMsg:
+		if msg.Error != nil {
+			m.err = msg.Error
+			m.statusMessage = "Failed to save settings: " + msg.Error.Error()
+		} else {
+			m.statusMessage = "Settings saved"
+		}
+		return m, nil
+
 	// ── Download progress ────────────────────────────────────────
 	case DownloadProgressMsg:
 		m.downloadPct = msg.Progress
@@ -214,7 +225,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	// ── Song ended naturally (mpv exited / track finished) ───────
 	case SongEndedMsg:
-		// Try auto-advancing through queued tracks until we find one that's downloaded
+		// Auto-advance: play by URL if streamable, by FilePath if downloaded.
+		// Tracks with no URL and not downloaded are skipped.
 		for {
 			t, ok := m.queue.Next()
 			if !ok {
@@ -223,19 +235,28 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 			m.queueCursor = m.queue.CurrentIndex()
-			if t.Downloaded && t.FilePath != "" {
-				m.playerState = player.StatePlaying
-				m.duration = float64(t.DurationSec)
-				m.position = 0
-				m.statusMessage = "Now playing: " + t.Title
-				if err := m.player.Play(t.FilePath); err != nil {
-					m.err = err
-					m.playerState = player.StateStopped
-					return m, nil
-				}
-				return m, tea.Batch(positionCmd(m.player), endedCmd(m.player))
+
+			playURL := ""
+			switch {
+			case t.Downloaded && t.FilePath != "":
+				playURL = t.FilePath
+			case t.URL != "":
+				playURL = t.URL
+			default:
+				continue // skip — nothing to play
 			}
-			// Skip undownloaded tracks, keep looking
+
+			m.playerState = player.StatePlaying
+			m.duration = float64(t.DurationSec)
+			m.position = 0
+			m.statusMessage = "Now playing: " + t.Title
+			m.ensurePlayer()
+			if err := m.player.Play(playURL); err != nil {
+				m.err = err
+				m.playerState = player.StateStopped
+				return m, nil
+			}
+			return m, tea.Batch(positionCmd(m.player), endedCmd(m.player))
 		}
 
 	// ── Periodic tick (progress bar animation) ───────────────────
@@ -281,13 +302,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.searchInput.Blur()
 				m.activePanel = PanelSearch
 				query := m.searchInput.Value()
-				if m.showingLibrary {
-					// In library view, Enter just exits the search field (filtering already happened live)
+				if m.activePage == PageLibrary {
+					// On Library page, Enter just exits the search field (filtering already happened live)
 					return m, nil
 				}
 				if query != "" {
 					m.showingRecommendations = false
-					m.showingLibrary = false
 					// Cancel any running recommendation stream.
 					if m.recStreamCancel != nil {
 						m.recStreamCancel()
@@ -298,7 +318,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.isSearching = true
 					m.searchCursor = 0
 					m.err = nil
-					return m, searchCmd(query, 10)
+					return m, searchCmd(query, m.settings.SearchLimit)
 				}
 				return m, nil
 			case "tab":
@@ -311,14 +331,53 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			var cmd tea.Cmd
 			m.searchInput, cmd = m.searchInput.Update(msg)
 			// When typing in library mode, clamp cursor to filtered results
-			if m.showingLibrary {
+			if m.activePage == PageLibrary {
 				m.clampLibraryOffset()
 			}
 			return m, cmd
 		}
 
+		// When editing a string field on the Settings page, route to input
+		if m.settingsEditField {
+			switch msg.String() {
+			case "esc":
+				m.settingsEditField = false
+				m.settingsEditInput.Blur()
+				return m, nil
+			case "enter":
+				// Handled in the Enter case below — let it fall through
+			default:
+				var cmd tea.Cmd
+				m.settingsEditInput, cmd = m.settingsEditInput.Update(msg)
+				return m, cmd
+			}
+		}
+
 		// ── Global keybindings ───────────────────────────────
 		switch msg.String() {
+		case "1":
+			if m.activePage != PageStream {
+				m.switchPage(PageStream)
+				m.statusMessage = ""
+			}
+			return m, nil
+		case "2":
+			if m.activePage != PageLibrary {
+				m.switchPage(PageLibrary)
+				msg := fmt.Sprintf("Library: %d tracks  (type to filter)", len(m.library))
+				if len(m.library) == 0 {
+					msg = "No downloaded tracks"
+				}
+				m.statusMessage = msg
+			}
+			return m, nil
+		case "3":
+			if m.activePage != PageSettings {
+				m.switchPage(PageSettings)
+				m.statusMessage = ""
+			}
+			return m, nil
+
 		case "q", "ctrl+c":
 			m.quitting = true
 			m.Shutdown()
@@ -329,27 +388,74 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 
 		case "tab":
-			// 3-state cycle: search input → search results → queue → search input
-			if m.activePanel == PanelSearch {
-				// Search results → Queue
-				m.activePanel = PanelQueue
-			} else {
-				// Queue → Search input
-				m.activePanel = PanelSearch
-				m.searchFocused = true
-				m.searchInput.Focus()
+			switch m.activePage {
+			case PageSettings:
+				// Settings page: tab moves cursor down
+				m.settingsCursor++
+				if m.settingsCursor > 6 {
+					m.settingsCursor = 0
+				}
+			case PageLibrary:
+				// Library page: search input ↔ library list
+				if m.searchFocused {
+					// Search input → library list
+					m.searchFocused = false
+					m.searchInput.Blur()
+					m.activePanel = PanelSearch
+				} else if m.activePanel == PanelSearch {
+					// Library list → download queue (using PanelQueue as right panel)
+					m.activePanel = PanelQueue
+				} else {
+					// Download queue → search input
+					m.activePanel = PanelSearch
+					m.searchFocused = true
+					m.searchInput.Focus()
+				}
+			default: // PageStream
+				// 3-state cycle: search input → search results → queue → search input
+				if m.searchFocused {
+					// Search input → search results
+					m.searchFocused = false
+					m.searchInput.Blur()
+					m.activePanel = PanelSearch
+				} else if m.activePanel == PanelSearch {
+					// Search results → Queue
+					m.activePanel = PanelQueue
+				} else {
+					// Queue → Search input
+					m.activePanel = PanelSearch
+					m.searchFocused = true
+					m.searchInput.Focus()
+				}
 			}
 			return m, nil
 
 		case "esc":
 			m.showHelp = false
+			if m.activePage == PageSettings && m.settingsEditField {
+				// Cancel inline editing on Settings page
+				m.settingsEditField = false
+				m.settingsEditInput.Blur()
+			} else if m.activePage == PageSettings {
+				// Exit Settings → go to Stream
+				m.switchPage(PageStream)
+				m.statusMessage = ""
+			}
 			return m, nil
 
 		// ── Panel navigation ─────────────────────────────────
 		case "up", "k":
+			// Settings page: navigate settings list
+			if m.activePage == PageSettings && !m.settingsEditField {
+				if m.settingsCursor > 0 {
+					m.settingsCursor--
+				}
+				return m, nil
+			}
+			// Panel navigation
 			switch m.activePanel {
 			case PanelSearch:
-				if m.showingLibrary {
+				if m.activePage == PageLibrary {
 					if m.libraryCursor > 0 {
 						m.libraryCursor--
 						m.clampLibraryOffset()
@@ -367,9 +473,17 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 
 		case "down", "j":
+			// Settings page: navigate settings list
+			if m.activePage == PageSettings && !m.settingsEditField {
+				if m.settingsCursor < 6 { // 7 items indexed 0-6
+					m.settingsCursor++
+				}
+				return m, nil
+			}
+			// Panel navigation
 			switch m.activePanel {
 			case PanelSearch:
-				if m.showingLibrary {
+				if m.activePage == PageLibrary {
 					maxIdx := len(m.filteredLibrary()) - 1
 					if m.libraryCursor < maxIdx {
 						m.libraryCursor++
@@ -388,9 +502,41 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 
 		case "enter":
-			switch m.activePanel {
-			case PanelSearch:
-				if m.showingLibrary {
+			// ── Settings page: toggle/edit setting ────────────────
+			if m.activePage == PageSettings {
+				if m.settingsEditField {
+					// Finish editing string field
+					newVal := m.settingsEditInput.Value()
+					m.settingsEditField = false
+					m.settingsEditInput.Blur()
+					switch m.settingsCursor {
+					case 4: // Download Dir
+						m.settings.DownloadDir = newVal
+					case 5: // Cookie Browser
+						m.settings.CookieBrowser = newVal
+					}
+					return m, tea.Batch(saveSettingsCmd(m.settings))
+				}
+				switch m.settingsCursor {
+				case 0: // Stream Mode (boolean)
+					m.settings.StreamMode = !m.settings.StreamMode
+					return m, tea.Batch(saveSettingsCmd(m.settings))
+				case 1: // Auto-Download (boolean)
+					m.settings.AutoDownload = !m.settings.AutoDownload
+					return m, tea.Batch(saveSettingsCmd(m.settings))
+				case 2, 3: // Volume / Search Limit (numbers — Enter does nothing, use +/-)
+					return m, nil
+				case 4, 5: // Download Dir / Cookie Browser (strings)
+					m.startSettingsEdit()
+					return m, nil
+				}
+				return m, nil
+			}
+
+			// ── Other pages (Stream / Library) ────────────────────
+			switch m.activePage {
+			case PageLibrary:
+				if m.activePanel == PanelSearch && !m.searchFocused {
 					// Library mode: play a downloaded track directly (use filtered list)
 					tracks := m.filteredLibrary()
 					if len(tracks) > 0 && m.libraryCursor >= 0 && m.libraryCursor < len(tracks) {
@@ -412,57 +558,56 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					}
 					return m, nil
 				}
-				if len(m.results) > 0 && m.searchCursor >= 0 && m.searchCursor < len(m.results) {
-					r := m.results[m.searchCursor]
-					t := searchResultToTrack(r)
-					m.queue.Add(t)
-					m.statusMessage = "Added to queue: " + t.Title
-					// Enqueue download for the added track
-					m.ensureDownloader()
-					m.downloader.Enqueue(t.ID, t.Title, r.URL, downloadDir())
-					m.downloading = true
-					m.downloadTitle = t.Title
-					m.downloadPct = 0
-					m.downloadDone = false
-					m.downloadErr = nil
-					return m, downloadCmd(m.downloader)
+				// On Library page download queue panel: play selected completed download
+				if m.activePanel == PanelQueue && !m.searchFocused {
+					m.playSelectedQueueItem()
+					return m, nil
 				}
-			case PanelQueue:
-				if m.queue.Len() > 0 {
-					// Clamp cursor in case it was corrupted (e.g. by a click on an empty queue)
-					if m.queueCursor < 0 {
-						m.queueCursor = 0
-					} else if m.queueCursor >= m.queue.Len() {
+				return m, nil
+
+			default:
+				// ── Stream page (default) ──────────────────────────
+				switch m.activePanel {
+				case PanelSearch:
+					if len(m.results) > 0 && m.searchCursor >= 0 && m.searchCursor < len(m.results) {
+						r := m.results[m.searchCursor]
+						t := searchResultToTrack(r)
+						m.queue.Add(t)
+						m.queue.SetCurrentIndex(m.queue.Len() - 1)
 						m.queueCursor = m.queue.Len() - 1
-					}
-					t := m.queue.Tracks()[m.queueCursor]
-					m.queue.SetCurrentIndex(m.queueCursor)
 
-					if t.Downloaded && t.FilePath != "" {
-						// Track is ready — play it
-						m.playerState = player.StatePlaying
-						m.duration = float64(t.DurationSec)
-						m.position = 0
-						m.statusMessage = "Now playing: " + t.Title
-						m.ensurePlayer()
-						if err := m.player.Play(t.FilePath); err != nil {
-							m.err = err
-							m.playerState = player.StateStopped
-							return m, nil
+						// Check auto-download setting
+						if m.settings.StreamMode {
+							// Stream via URL — play immediately
+							m.playerState = player.StatePlaying
+							m.duration = float64(t.DurationSec)
+							m.position = 0
+							m.statusMessage = "Now playing: " + t.Title
+							m.ensurePlayer()
+							if err := m.player.Play(t.URL); err != nil {
+								m.err = err
+								m.playerState = player.StateStopped
+								return m, nil
+							}
+							return m, tea.Batch(positionCmd(m.player), endedCmd(m.player))
 						}
-						return m, tea.Batch(positionCmd(m.player), endedCmd(m.player))
+						// Legacy mode: enqueue download
+						m.statusMessage = "Added to queue: " + t.Title
+						m.ensureDownloader()
+						m.downloader.Enqueue(t.ID, t.Title, r.URL, downloadDir())
+						m.downloading = true
+						m.downloadTitle = t.Title
+						m.downloadPct = 0
+						m.downloadDone = false
+						m.downloadErr = nil
+						return m, downloadCmd(m.downloader)
 					}
 
-					// Track not yet downloaded
-					m.playerState = player.StateStopped
-					if m.downloading {
-						m.statusMessage = "Still downloading: " + t.Title
-					} else {
-						m.statusMessage = "Not downloaded yet: " + t.Title
-					}
+				case PanelQueue:
+					m.playSelectedQueueItem()
 				}
+				return m, nil
 			}
-			return m, nil
 
 		case " ":
 			if m.player != nil {
@@ -485,25 +630,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if _, ok := m.queue.Next(); !ok {
 				return m, nil
 			}
-			next := m.queue.CurrentIndex()
-			m.queueCursor = next
-			t := m.queue.Tracks()[next]
-			// Play only if file is downloaded
-			if t.Downloaded && t.FilePath != "" {
-				m.playerState = player.StatePlaying
-				m.duration = float64(t.DurationSec)
-				m.position = 0
-				m.statusMessage = "Now playing: " + t.Title
-				m.ensurePlayer()
-				if err := m.player.Play(t.FilePath); err != nil {
-					m.err = err
-					m.playerState = player.StateStopped
-				} else {
-					return m, tea.Batch(positionCmd(m.player), endedCmd(m.player))
-				}
+			m.queueCursor = m.queue.CurrentIndex()
+			m.playSelectedQueueItem()
+			if m.playerState == player.StatePlaying {
+				return m, tea.Batch(positionCmd(m.player), endedCmd(m.player))
 			}
-			m.playerState = player.StateStopped
-			m.statusMessage = "Not downloaded: " + t.Title
 			return m, nil
 
 		case "p", "left":
@@ -524,24 +655,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if _, ok := m.queue.Prev(); !ok {
 				return m, nil
 			}
-			prev := m.queue.CurrentIndex()
-			m.queueCursor = prev
-			t := m.queue.Tracks()[prev]
-			if t.Downloaded && t.FilePath != "" {
-				m.playerState = player.StatePlaying
-				m.duration = float64(t.DurationSec)
-				m.position = 0
-				m.statusMessage = "Now playing: " + t.Title
-				m.ensurePlayer()
-				if err := m.player.Play(t.FilePath); err != nil {
-					m.err = err
-					m.playerState = player.StateStopped
-				} else {
-					return m, tea.Batch(positionCmd(m.player), endedCmd(m.player))
-				}
+			m.queueCursor = m.queue.CurrentIndex()
+			m.playSelectedQueueItem()
+			if m.playerState == player.StatePlaying {
+				return m, tea.Batch(positionCmd(m.player), endedCmd(m.player))
 			}
-			m.playerState = player.StateStopped
-			m.statusMessage = "Not downloaded: " + t.Title
 			return m, nil
 
 		case "l", "ctrl+f":
@@ -552,24 +670,25 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 
 		case "L":
-			// Toggle library view
-			m.showingLibrary = !m.showingLibrary
-			if m.showingLibrary {
-				m.showingRecommendations = false
-				m.libraryCursor = 0
-				m.libraryOffset = 0
-				n := len(m.library)
-				if n > 0 {
-					m.statusMessage = fmt.Sprintf("Library: %d tracks  (type to filter)", n)
-				} else {
-					m.statusMessage = "No downloaded tracks"
-				}
-			} else {
+			// Switch to Library page (or back to Stream if already on Library)
+			if m.activePage == PageLibrary {
+				m.switchPage(PageStream)
 				m.statusMessage = ""
+			} else {
+				m.switchPage(PageLibrary)
+				msg := fmt.Sprintf("Library: %d tracks  (type to filter)", len(m.library))
+				if len(m.library) == 0 {
+					msg = "No downloaded tracks"
+				}
+				m.statusMessage = msg
 			}
 			return m, nil
 
 		case "R":
+			// If not on Stream page, switch there first.
+			if m.activePage != PageStream {
+				m.switchPage(PageStream)
+			}
 			// Cancel any existing recommendation stream and start fresh.
 			if m.recStreamCancel != nil {
 				m.recStreamCancel()
@@ -577,7 +696,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.recStreamCh = nil
 			}
 			m.showingRecommendations = true
-			m.showingLibrary = false
 			m.results = nil
 			m.searchCursor = 0
 			m.searchOffset = 0
@@ -592,6 +710,23 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 
 		case "+", "=":
+			// Settings page: adjust number settings
+			if m.activePage == PageSettings && !m.settingsEditField {
+				switch m.settingsCursor {
+				case 2: // Default Volume
+					if m.settings.DefaultVolume < 100 {
+						m.settings.DefaultVolume = min(m.settings.DefaultVolume+5, 100)
+						if m.player != nil {
+							m.player.SetVolume(m.settings.DefaultVolume)
+						}
+						m.volume = m.settings.DefaultVolume
+					}
+				case 3: // Search Limit
+					m.settings.SearchLimit = min(m.settings.SearchLimit+5, 100)
+				}
+				return m, tea.Batch(saveSettingsCmd(m.settings))
+			}
+			// Global: volume up
 			m.volume = min(m.volume+5, 100)
 			if m.player != nil {
 				m.player.SetVolume(m.volume)
@@ -599,14 +734,54 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 
 		case "-", "_":
+			// Settings page: adjust number settings
+			if m.activePage == PageSettings && !m.settingsEditField {
+				switch m.settingsCursor {
+				case 2: // Default Volume
+					if m.settings.DefaultVolume > 0 {
+						m.settings.DefaultVolume = max(m.settings.DefaultVolume-5, 0)
+						if m.player != nil {
+							m.player.SetVolume(m.settings.DefaultVolume)
+						}
+						m.volume = m.settings.DefaultVolume
+					}
+				case 3: // Search Limit
+					m.settings.SearchLimit = max(m.settings.SearchLimit-5, 5)
+				}
+				return m, tea.Batch(saveSettingsCmd(m.settings))
+			}
+			// Global: volume down
 			m.volume = max(m.volume-5, 0)
 			if m.player != nil {
 				m.player.SetVolume(m.volume)
 			}
 			return m, nil
 
+		case "x":
+			// Download a queued track for offline use
+			if m.activePage == PageStream && m.activePanel == PanelQueue && m.queue.Len() > 0 {
+				if m.queueCursor < 0 || m.queueCursor >= m.queue.Len() {
+					return m, nil
+				}
+				t := m.queue.Tracks()[m.queueCursor]
+				if t.Downloaded {
+					m.statusMessage = "Already downloaded: " + t.Title
+					return m, nil
+				}
+				if t.URL == "" {
+					m.statusMessage = "No URL available for: " + t.Title
+					return m, nil
+				}
+				m.ensureDownloader()
+				m.downloader.Enqueue(t.ID, t.Title, t.URL, downloadDir())
+				m.downloading = true
+				m.downloadTitle = t.Title
+				m.statusMessage = "Download queued: " + t.Title
+			}
+			return m, nil
+
 		case "d", "delete":
-			if m.activePanel == PanelQueue && m.queue.Len() > 0 {
+			if m.activePage == PageStream && m.activePanel == PanelQueue && m.queue.Len() > 0 {
 				idx := m.queueCursor
 				removed := m.queue.Remove(idx)
 				if removed && m.queue.Len() == 0 {
@@ -625,6 +800,35 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						m.player.Stop()
 					}
 				}
+				return m, nil
+			}
+			// Library page: delete a downloaded track from disk
+			if m.activePage == PageLibrary && m.activePanel == PanelSearch && !m.searchFocused {
+				tracks := m.filteredLibrary()
+				if m.libraryCursor >= 0 && m.libraryCursor < len(tracks) {
+					t := tracks[m.libraryCursor]
+					// Remove from disk
+					if t.FilePath != "" {
+						if err := os.Remove(t.FilePath); err != nil {
+							m.statusMessage = "Failed to delete: " + err.Error()
+							return m, nil
+						}
+					}
+					// Remove from the library slice
+					idx := -1
+					for i, lt := range m.library {
+						if lt.ID == t.ID {
+							idx = i
+							break
+						}
+					}
+					if idx >= 0 {
+						m.library = append(m.library[:idx], m.library[idx+1:]...)
+					}
+					m.clampLibraryOffset()
+					m.statusMessage = "Deleted: " + t.Title
+				}
+				return m, nil
 			}
 			return m, nil
 
@@ -664,14 +868,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 
 		case "ctrl+up":
-			if m.activePanel == PanelQueue && m.queueCursor > 0 {
+			if m.activePage == PageStream && m.activePanel == PanelQueue && m.queueCursor > 0 {
 				m.queue.MoveUp(m.queueCursor)
 				m.queueCursor--
 			}
 			return m, nil
 
 		case "ctrl+down":
-			if m.activePanel == PanelQueue && m.queueCursor < m.queue.Len()-1 {
+			if m.activePage == PageStream && m.activePanel == PanelQueue && m.queueCursor < m.queue.Len()-1 {
 				m.queue.MoveDown(m.queueCursor)
 				m.queueCursor++
 			}
@@ -682,29 +886,72 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+// playSelectedQueueItem plays the currently selected queue item,
+// supporting both downloaded (local file) and streamed (URL) playback.
+func (m *Model) playSelectedQueueItem() {
+	if m.queue.Len() == 0 {
+		return
+	}
+	// Clamp cursor
+	if m.queueCursor < 0 {
+		m.queueCursor = 0
+	} else if m.queueCursor >= m.queue.Len() {
+		m.queueCursor = m.queue.Len() - 1
+	}
+
+	t := m.queue.Tracks()[m.queueCursor]
+	m.queue.SetCurrentIndex(m.queueCursor)
+
+	playURL := ""
+	switch {
+	case t.Downloaded && t.FilePath != "":
+		playURL = t.FilePath
+	case t.URL != "":
+		playURL = t.URL
+	default:
+		m.playerState = player.StateStopped
+		m.statusMessage = "Cannot play '" + t.Title + "': no file or URL"
+		return
+	}
+
+	m.playerState = player.StatePlaying
+	m.duration = float64(t.DurationSec)
+	m.position = 0
+	m.statusMessage = "Now playing: " + t.Title
+	m.ensurePlayer()
+	if err := m.player.Play(playURL); err != nil {
+		m.err = err
+		m.playerState = player.StateStopped
+	}
+}
+
 // ─── Mouse click handling ──────────────────────────────────────────
 //
-// Layout reference (must stay in sync with view.go / renderPanels):
+// Layout reference for Stream & Library pages (must stay in sync with view.go):
 //
 //   y=0            header
-//   y=1..N         panels (height = screenH - header - download - player - help - statuses)
-//   y=N+1..N+4     download bar (border + content + border + gap)
-//   y=N+5..N+9     player bar (4 lines: now-playing + progress + controls + pad)
-//   y=N+10         status line (optional)
-//   y=N+11         help bar
+//   y=1..N         panels (panelHeight)
+//   y=N+1..N+5     player bar (4-5 lines: now-playing + progress + controls + borders)
+//   y=N+6          nav bar (1 line)
+//   y=N+7          status line (optional)
+//   y=N+8          help bar
 //
 // All section heights are approximate because borders add variable padding.
 // Click positions are best-effort, not pixel-perfect.
 
 const (
-	clickHeaderLines    = 1
-	clickPanelStartY    = 1
-	clickDownloadHeight = 4
-	clickPlayerHeight   = 4
+	clickHeaderLines  = 1
+	clickPanelStartY  = 1
+	clickPlayerHeight = 5 // player bar is taller now (no download bar above it)
 )
 
 // handleClick maps a mouse click at (x, y) to the relevant UI action.
 func (m Model) handleClick(x, y int) Model {
+	// Settings page has no clickable panels
+	if m.activePage == PageSettings {
+		return m
+	}
+
 	// ── Header (y=0) → focus search input ──
 	if y == 0 {
 		m.searchFocused = true
@@ -734,7 +981,7 @@ func (m Model) handleClick(x, y int) Model {
 			// Left panel: search results / library
 			m.activePanel = PanelSearch
 			idx := (y - clickItemOffsetY) / clickLinesPerItem
-			if m.showingLibrary {
+			if m.activePage == PageLibrary {
 				tracks := m.filteredLibrary()
 				idx += m.libraryOffset
 				switch {
@@ -773,7 +1020,7 @@ func (m Model) handleClick(x, y int) Model {
 	}
 
 	// ── Player controls (bottom region) — rough play/pause toggle ──
-	playerStartY := panelsEnd + clickDownloadHeight
+	playerStartY := panelsEnd // no download bar before player
 	playerEndY := playerStartY + clickPlayerHeight
 	if y >= playerStartY && y <= playerEndY && m.width > 0 {
 		if x < m.width/3 {

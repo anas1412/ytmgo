@@ -23,10 +23,13 @@ type KeyMap struct {
 	ClearQueue   key.Binding
 	MoveUp       key.Binding
 	MoveDown     key.Binding
-	Download      key.Binding
-	Library       key.Binding
-	Recs          key.Binding
-	Escape        key.Binding
+	Download     key.Binding
+	Library      key.Binding
+	Recs         key.Binding
+	PageStream   key.Binding // 1
+	PageLibrary  key.Binding // 2
+	PageSettings key.Binding // 3
+	Escape       key.Binding
 }
 
 // Keys is the canonical keymap singleton.
@@ -113,11 +116,23 @@ var Keys = KeyMap{
 	),
 	Library: key.NewBinding(
 		key.WithKeys("L"),
-		key.WithHelp("L", "library toggle"),
+		key.WithHelp("L", "library"),
 	),
 	Recs: key.NewBinding(
 		key.WithKeys("R"),
 		key.WithHelp("R", "recommendations"),
+	),
+	PageStream: key.NewBinding(
+		key.WithKeys("1"),
+		key.WithHelp("1", "stream page"),
+	),
+	PageLibrary: key.NewBinding(
+		key.WithKeys("2"),
+		key.WithHelp("2", "library page"),
+	),
+	PageSettings: key.NewBinding(
+		key.WithKeys("3"),
+		key.WithHelp("3", "settings page"),
 	),
 	Escape: key.NewBinding(
 		key.WithKeys("esc"),
@@ -131,8 +146,9 @@ func (k KeyMap) ShortHelp() []key.Binding {
 		k.FocusNext,
 		k.Enter,
 		k.PlayPause,
-		k.Library,
-		k.Recs,
+		k.PageStream,
+		k.PageLibrary,
+		k.PageSettings,
 		k.Help,
 		k.Quit,
 	}
@@ -168,9 +184,14 @@ func (k KeyMap) FullHelp() [][]key.Binding {
 			k.Download,
 		},
 		{
-			k.Help,
+			k.PageStream,
+			k.PageLibrary,
+			k.PageSettings,
 			k.Library,
 			k.Recs,
+		},
+		{
+			k.Help,
 			k.Escape,
 			k.Quit,
 		},

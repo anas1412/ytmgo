@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"ytmgo/internal/downloader"
 	"ytmgo/internal/player"
 	"ytmgo/internal/queue"
 	"ytmgo/internal/search"
@@ -127,19 +128,76 @@ func (m Model) View() string {
 		return m.helpView()
 	}
 
+	switch m.activePage {
+	case PageStream:
+		return m.renderStreamPage()
+	case PageLibrary:
+		return m.renderLibraryPage()
+	case PageSettings:
+		return m.renderSettingsPage()
+	default:
+		return m.renderStreamPage()
+	}
+}
+
+// renderStreamPage renders the main streaming/search/queue/player layout.
+func (m Model) renderStreamPage() string {
 	header := m.renderHeader()
 	panels := m.renderPanels()
-	download := m.renderDownloadBar()
 	player := m.renderPlayerBar()
+	nav := m.renderNavBar()
 	help := m.renderHelpBar()
 	status := m.renderStatus()
 
-	// Use lipgloss.JoinVertical to reliably layout components without inflating vertical line heights
 	var elements []string
 	elements = append(elements, header)
 	elements = append(elements, panels)
-	elements = append(elements, download)
 	elements = append(elements, player)
+	elements = append(elements, nav)
+	if status != "" {
+		elements = append(elements, status)
+	}
+	elements = append(elements, help)
+
+	return lipgloss.JoinVertical(lipgloss.Left, elements...)
+}
+
+// renderLibraryPage renders the library/downloads layout.
+func (m Model) renderLibraryPage() string {
+	header := m.renderHeader()
+	panels := m.renderPanels()
+	player := m.renderPlayerBar()
+	nav := m.renderNavBar()
+	help := m.renderHelpBar()
+	status := m.renderStatus()
+
+	var elements []string
+	elements = append(elements, header)
+	elements = append(elements, panels)
+	elements = append(elements, player)
+	elements = append(elements, nav)
+	if status != "" {
+		elements = append(elements, status)
+	}
+	elements = append(elements, help)
+
+	return lipgloss.JoinVertical(lipgloss.Left, elements...)
+}
+
+// renderSettingsPage renders the settings layout.
+func (m Model) renderSettingsPage() string {
+	header := m.renderHeader()
+	body := m.renderSettingsList()
+	player := m.renderPlayerBar()
+	nav := m.renderNavBar()
+	help := m.renderHelpBar()
+	status := m.renderStatus()
+
+	var elements []string
+	elements = append(elements, header)
+	elements = append(elements, body)
+	elements = append(elements, player)
+	elements = append(elements, nav)
 	if status != "" {
 		elements = append(elements, status)
 	}
@@ -185,6 +243,27 @@ func (m Model) renderHeader() string {
 	)
 }
 
+// ─── Page Navigation Bar ──────────────────────────────────────────
+
+func (m Model) renderNavBar() string {
+	tabs := []string{"1 Stream", "2 Library", "3 Settings"}
+	var rendered []string
+	for i, tab := range tabs {
+		if int(m.activePage) == i {
+			rendered = append(rendered, styleNavTabActive.Render(tab))
+		} else {
+			rendered = append(rendered, styleNavTab.Render(tab))
+		}
+	}
+	bar := strings.Join(rendered, " ")
+	// Pad right to fill width
+	gap := m.width - lipgloss.Width(bar) - 2
+	if gap < 0 {
+		gap = 0
+	}
+	return styleHelp.Render(bar + strings.Repeat(" ", gap))
+}
+
 // ─── Panels (Search Results | Queue) ───────────────────────────────
 
 func (m Model) renderPanels() string {
@@ -210,7 +289,7 @@ func (m Model) renderPanels() string {
 
 	// Search panel title
 	panelLabel := "SEARCH RESULTS"
-	if m.showingLibrary {
+	if m.activePage == PageLibrary {
 		panelLabel = "LIBRARY"
 		q := m.searchInput.Value()
 		if q != "" {
@@ -233,7 +312,16 @@ func (m Model) renderPanels() string {
 	Render(leftPanel)
 
 	// Queue panel title (with count)
-	queueTitle := fmt.Sprintf("QUEUE  [%d]", m.queue.Len())
+	var queueTitle string
+	if m.activePage == PageLibrary {
+		dlCount := 0
+		if m.downloader != nil {
+			dlCount = len(m.downloader.Jobs())
+		}
+		queueTitle = fmt.Sprintf("DOWNLOADS  [%d]", dlCount)
+	} else {
+		queueTitle = fmt.Sprintf("QUEUE  [%d]", m.queue.Len())
+	}
 	queueTitleStyled := stylePanelTitle.Render(queueTitle)
 
 	// Queue panel content
@@ -260,7 +348,7 @@ func (m Model) renderPanels() string {
 // ─── Search Results List ───────────────────────────────────────────
 
 func (m Model) renderSearchResults(width, height int) string {
-	if m.showingLibrary {
+	if m.activePage == PageLibrary {
 		return m.renderLibrary(width, height)
 	}
 	if m.isSearching {
@@ -407,6 +495,10 @@ func (m Model) formatResultRow(idx int, r search.Result, width int, isSelected b
 // ─── Queue List ────────────────────────────────────────────────────
 
 func (m Model) renderQueue(width, height int) string {
+	if m.activePage == PageLibrary {
+		return m.renderDownloadQueue(width, height)
+	}
+
 	tracks := m.queue.Tracks()
 	if len(tracks) == 0 {
 		return styleEmpty.Width(width - 2).Height(height).Render(
@@ -501,33 +593,154 @@ func renderListItemBlock(line, info string, isSelected, isPlaying bool, width in
 	return bgStyle.Render(titleStyle.Render(line) + "\n" + infoStyle.Render(info))
 }
 
-// ─── Download Bar ──────────────────────────────────────────────────
+// ─── Download Queue (right panel on Library page) ─────────────────
 
-func (m Model) renderDownloadBar() string {
-	var content string
-
-	if m.downloading {
-		maxBarWidth := m.width - 45
-		if maxBarWidth < 10 {
-			maxBarWidth = 10
-		}
-		bar := renderProgressBar(m.downloadPct, maxBarWidth)
-		content = fmt.Sprintf("%s %s  %s  %.0f%%",
-				      styleDownloadLabel.Render("⬇"),
-				      styleDownloadTitle.Render(m.downloadTitle),
-				      bar,
-			m.downloadPct,
+func (m Model) renderDownloadQueue(width, height int) string {
+	if m.downloader == nil {
+		return styleEmpty.Width(width - 2).Height(height).Render(
+			"No downloads.\nPress x on a queued track\nto download for offline.",
 		)
-	} else if m.downloadDone {
-		content = styleDoneLabel.Render("✓  " + m.downloadTitle + " downloaded")
-	} else if m.downloadErr != nil {
-		content = styleErrorLabel.Render("✗  Download failed: " + m.downloadErr.Error())
-	} else {
-		content = styleDownloadLabel.Render("⬇  No active downloads")
+	}
+	jobs := m.downloader.Jobs()
+	if len(jobs) == 0 {
+		return styleEmpty.Width(width - 2).Height(height).Render(
+			"No downloads.\nPress x on a queued track\nto download for offline.",
+		)
 	}
 
-	return styleDownloadBox.Width(m.width - 6).Render(content)
+	var sections []string
+
+	// Active downloads
+	for _, j := range jobs {
+		if j.Status != downloader.StatusDownloading {
+			continue
+		}
+		bar := renderProgressBar(j.Progress, max(10, width-20))
+		line := fmt.Sprintf("⬇ %s  %s  %.0f%%",
+			truncate(j.Title, max(1, width-25)),
+			bar,
+			j.Progress,
+		)
+		sections = append(sections, styleDownloadLabel.Render(line))
+	}
+
+	// Pending
+	pendingHeader := false
+	for _, j := range jobs {
+		if j.Status != downloader.StatusPending {
+			continue
+		}
+		if !pendingHeader {
+			sections = append(sections, stylePanelTitle.Render("Pending"))
+			pendingHeader = true
+		}
+		line := fmt.Sprintf("  ⏳ %s", truncate(j.Title, max(1, width-10)))
+		sections = append(sections, styleTextDim.Render(line))
+	}
+
+	// Completed
+	doneHeader := false
+	for _, j := range jobs {
+		if j.Status != downloader.StatusDone && j.Status != downloader.StatusSkipped {
+			continue
+		}
+		if !doneHeader {
+			sections = append(sections, stylePanelTitle.Render("Completed"))
+			doneHeader = true
+		}
+		line := fmt.Sprintf("  ✓ %s", truncate(j.Title, max(1, width-10)))
+		sections = append(sections, styleDoneLabel.Render(line))
+	}
+
+	// Failed
+	failHeader := false
+	for _, j := range jobs {
+		if j.Status != downloader.StatusFailed {
+			continue
+		}
+		if !failHeader {
+			sections = append(sections, stylePanelTitle.Render("Failed"))
+			failHeader = true
+		}
+		errStr := ""
+		if j.Err != nil {
+			errStr = j.Err.Error()
+		}
+		line := fmt.Sprintf("  ✗ %s", truncate(j.Title, max(1, width-10)))
+		if errStr != "" {
+			line += " — " + truncate(errStr, max(1, width-20))
+		}
+		sections = append(sections, styleErrorLabel.Render(line))
+	}
+
+	return strings.Join(sections, "\n")
 }
+
+// ─── Settings List ────────────────────────────────────────────────
+
+func (m Model) renderSettingsList() string {
+	var lines []string
+
+	settingsItems := []struct {
+		label string
+		value string
+		desc  string
+	}{
+		{"Stream Mode", boolStr(m.settings.StreamMode), "Play via URL instead of forcing download"},
+		{"Auto-Download", boolStr(m.settings.AutoDownload), "Auto-download queued tracks for offline"},
+		{"Default Volume", fmt.Sprintf("%d", m.settings.DefaultVolume), "0-100"},
+		{"Search Limit", fmt.Sprintf("%d", m.settings.SearchLimit), "Results per search"},
+		{"Download Dir", m.settings.DownloadDir, "Path for downloaded files"},
+		{"Cookie Browser", m.settings.CookieBrowser, "Browser for YouTube cookies"},
+	}
+
+	for i, item := range settingsItems {
+		cursor := "  "
+		if i == m.settingsCursor && !m.settingsEditField {
+			cursor = "▶ "
+		}
+
+		label := styleSettingsLabel.Render(cursor + item.label)
+		value := styleSettingsValue.Render(item.value)
+		desc := styleSettingsDesc.Render(item.desc)
+
+		// When editing a string field, show the input
+		if m.settingsEditField && i == m.settingsCursor {
+			value = styleSettingsValue.Render(m.settingsEditInput.View())
+		}
+
+		lines = append(lines, label)
+		lines = append(lines, "  "+value)
+		lines = append(lines, desc)
+		lines = append(lines, "")
+	}
+
+	// Help text at bottom
+	lines = append(lines, styleSettingsDesc.Render("↑↓ navigate · Enter toggle/edit · Esc back"))
+
+	return strings.Join(lines, "\n")
+}
+
+// ─── Helpers ───────────────────────────────────────────────────────
+
+func boolStr(v bool) string {
+	if v {
+		return styleSettingsBoolOn.Render("● ON")
+	}
+	return styleSettingsBoolOff.Render("○ OFF")
+}
+
+func truncate(s string, maxLen int) string {
+	if maxLen < 1 {
+		return ""
+	}
+	if len(s) <= maxLen {
+		return s
+	}
+	return s[:maxLen-1] + "…"
+}
+
+var styleTextDim = lipgloss.NewStyle().Foreground(colorTextDim)
 
 // ─── Player Bar ────────────────────────────────────────────────────
 

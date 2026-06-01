@@ -144,6 +144,50 @@ var (
 	PaddingRight(1)
 )
 
+// Page navigation tabs
+var (
+	styleNavTab = lipgloss.NewStyle().
+		Foreground(colorTextDim).
+		PaddingLeft(1).
+		PaddingRight(1)
+
+	styleNavTabActive = lipgloss.NewStyle().
+		Foreground(colorAccent2).
+		Bold(true).
+		PaddingLeft(1).
+		PaddingRight(1)
+)
+
+// Settings styles
+var (
+	styleSettingsLabel = lipgloss.NewStyle().
+		Foreground(colorAccent).
+		Bold(true).
+		PaddingLeft(1)
+
+	styleSettingsValue = lipgloss.NewStyle().
+		Foreground(colorText).
+		PaddingLeft(1)
+
+	styleSettingsDesc = lipgloss.NewStyle().
+		Foreground(colorTextDim).
+		Italic(true).
+		PaddingLeft(3)
+
+	styleSettingsCursor = lipgloss.NewStyle().
+		Foreground(colorBgHover).
+		Background(colorAccent).
+		PaddingLeft(1).
+		PaddingRight(1)
+
+	styleSettingsBoolOn = lipgloss.NewStyle().
+		Foreground(colorAccent2).
+		Bold(true)
+
+	styleSettingsBoolOff = lipgloss.NewStyle().
+		Foreground(colorTextDim)
+)
+
 // Help bar
 var (
 	styleHelp = lipgloss.NewStyle().
