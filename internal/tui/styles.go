@@ -30,10 +30,8 @@ var (
 	colorHeader    = lipgloss.Color("#7c3aed")
 	colorBarFill   = lipgloss.Color("#7c3aed")
 	colorBarEmpty  = lipgloss.Color("#2a2a3e")
-	// Progress bar gradient characters — denser fills for visual weight
+	// Progress bar characters
 	barCharFull  = "█"
-	barCharMid   = "▓"
-	barCharLight = "▒"
 	barCharEmpty = "░"
 )
 
@@ -337,9 +335,7 @@ var (
 
 // ─── Progress / Volume Bars ─────────────────────────────────────────
 
-// renderProgressBar draws a proportional bar with gradient character density.
-// Uses a 3-level gradient (█ ▓ ▒) for the filled portion to add depth,
-// and ░ for the unfilled portion.
+// renderProgressBar draws a proportional bar using solid fill blocks.
 func renderProgressBar(pct float64, width int) string {
 	if width <= 0 {
 		return ""
@@ -351,24 +347,9 @@ func renderProgressBar(pct float64, width int) string {
 
 	var bar strings.Builder
 	for i := 0; i < width; i++ {
-		switch {
-		case i < filled:
-			// Gradient from dense to light as bar fills
-			ratio := float64(i) / float64(width)
-			var ch string
-			switch {
-			case ratio > 0.7:
-				ch = barCharLight
-			case ratio > 0.3:
-				ch = barCharMid
-			default:
-				ch = barCharFull
-			}
-			bar.WriteString(lipgloss.NewStyle().Foreground(colorBarFill).Render(ch))
-		case i == filled && filled > 0 && filled < width:
-			// Partial block at the boundary
-			bar.WriteString(lipgloss.NewStyle().Foreground(colorBarEmpty).Render("▒"))
-		default:
+		if i < filled {
+			bar.WriteString(lipgloss.NewStyle().Foreground(colorBarFill).Render(barCharFull))
+		} else {
 			bar.WriteString(lipgloss.NewStyle().Foreground(colorBarEmpty).Render(barCharEmpty))
 		}
 	}
