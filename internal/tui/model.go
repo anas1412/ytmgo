@@ -1,7 +1,6 @@
 package tui
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -67,20 +66,10 @@ type (
 		Error   error
 	}
 
-	// RecommendationsMsg carries the YouTube home page recommendations.
+	// RecommendationsMsg carries the list of recommended tracks.
 	RecommendationsMsg struct {
 		Results []search.Result
 		Error   error
-	}
-
-	// RecStreamMsg carries one incremental result from the streaming
-	// recommendation fetcher. Result is nil when the stream has ended.
-	// Ch is the stream channel (included every msg so the handler never
-	// loses it). Cancel is only set on the first message.
-	RecStreamMsg struct {
-		Result *search.Result
-		Ch     chan search.Result
-		Cancel context.CancelFunc
 	}
 
 	// LibraryScanMsg carries the list of downloaded tracks found on disk.
@@ -124,8 +113,6 @@ type Model struct {
 	results                []search.Result
 	isSearching            bool
 	showingRecommendations bool
-	recStreamCh            chan search.Result
-	recStreamCancel        context.CancelFunc
 
 	// ── Library (local downloaded files) ──
 	library       []queue.Track
@@ -145,12 +132,7 @@ type Model struct {
 	volume      int
 
 	// ── Downloads ──
-	downloader    *downloader.Downloader
-	downloading   bool
-	downloadTitle string
-	downloadPct   float64
-	downloadDone  bool
-	downloadErr   error
+	downloader *downloader.Downloader
 
 	// ── Settings ──
 	settings          *settings.Settings
@@ -162,6 +144,10 @@ type Model struct {
 	// ── Status ──
 	statusMessage string
 	err           error
+
+	// ── Idle tip rotation (status bar shows tips when nothing else is happening) ──
+	tipIndex  int
+	tickCount int
 }
 
 // ─── Initial model ──────────────────────────────────────────────────
@@ -232,37 +218,6 @@ func fetchRecommendationsCmd(cookieBrowser, userAgent string) tea.Cmd {
 			results = []search.Result{}
 		}
 		return RecommendationsMsg{Results: results}
-	}
-}
-
-// startRecStreamCmd spins up a new recommendation stream. The first
-// RecStreamMsg carries the channel and cancel function so the model can
-// store them for subsequent reads and cancellation (e.g. when R is
-// pressed again).
-func startRecStreamCmd(cookieBrowser, userAgent string) tea.Cmd {
-	return func() tea.Msg {
-		ch := make(chan search.Result, 10)
-		ctx, cancel := context.WithCancel(context.Background())
-		go search.StreamRecommendations(20, ch, ctx.Done(), cookieBrowser, userAgent)
-
-		// Block until the first result arrives or the stream ends.
-		r, ok := <-ch
-		if !ok {
-			return RecStreamMsg{Ch: ch, Cancel: cancel, Result: nil}
-		}
-		return RecStreamMsg{Ch: ch, Cancel: cancel, Result: &r}
-	}
-}
-
-// readNextRecCmd returns a tea.Cmd that reads one result from the
-// recommendation stream channel and returns it as a RecStreamMsg.
-func readNextRecCmd(ch chan search.Result) tea.Cmd {
-	return func() tea.Msg {
-		r, ok := <-ch
-		if !ok {
-			return RecStreamMsg{Ch: ch, Result: nil}
-		}
-		return RecStreamMsg{Ch: ch, Result: &r}
 	}
 }
 
@@ -339,7 +294,63 @@ func tickCmd() tea.Cmd {
 
 const progressTickInterval = time.Second / 2
 
-// ─── Helpers ────────────────────────────────────────────────────────
+// idleTips are short hints shown in the status bar when nothing else is happening.
+// Mix of keyboard shortcuts, feature discoverability, and personality. Rotates
+// every tipRotateEvery ticks (8 seconds at 500ms tick).
+var idleTips = []string{
+	// Keyboard / shortcuts
+	"Press `?` for all keyboard shortcuts",
+	"`Tab` cycles focus · `o` opens the download folder",
+	"Press `R` for fresh recommendations",
+	"Press `D` twice to clear the entire queue",
+	"`1` `2` `3` jump between Stream · Library · Settings",
+	"`↑↓` or `j`/`k` to navigate lists",
+	"`space` toggles play / pause",
+	"`ctrl+↑` / `ctrl+↓` to reorder the queue",
+	"`s` toggles shuffle · `r` cycles repeat",
+
+	// Features
+	"Stream mode plays without downloading — toggle in Settings",
+	"Press `x` on any track to download it for offline use",
+	"Queue + Downloads are always visible on the right →",
+	"Already have MP3s? Point Download Dir at them in Settings",
+	"Set Default Volume in Settings so every track starts at your level",
+	"Use a cookie browser in Settings for age-restricted tracks",
+
+	// State-aware (formatted each tick)
+	"__SESSIONS__", // placeholder — replaced at render time with session stats
+}
+
+// idleTipRotateEvery is how many 500ms ticks between tip rotations.
+// 16 ticks = 8 seconds.
+const idleTipRotateEvery = 16
+
+// currentTip returns the tip to show right now. Placeholders are resolved
+// against current model state (queue length, downloads tracked, etc.).
+func (m Model) currentTip() string {
+	tip := idleTips[m.tipIndex%len(idleTips)]
+	if tip == "__SESSIONS__" {
+		queue := m.queue.Len()
+		dlCount := 0
+		if m.downloader != nil {
+			dlCount = len(m.downloader.Jobs())
+		}
+		if queue == 0 && dlCount == 0 {
+			return "Tip: search for an artist to get started"
+		}
+		return fmt.Sprintf("Session: %d in queue · %d downloads tracked", queue, dlCount)
+	}
+	return tip
+}
+
+// advanceTip moves to the next tip in the rotation. Returns the new index.
+func (m *Model) advanceTip() {
+	m.tipIndex++
+	if m.tipIndex >= len(idleTips) {
+		m.tipIndex = 0
+	}
+	m.tickCount = 0
+}
 
 // searchResultToTrack converts a search result to a queue track.
 func searchResultToTrack(r search.Result) queue.Track {
@@ -421,19 +432,17 @@ func (m *Model) ensureDownloader() {
 }
 
 // panelHeight returns how many terminal lines the panel area occupies.
-// The layout is: header(1) + panels(h) + player(5) + nav(1) + status(1) + help(1) + slack(1).
+// Total layout: header(1) + panels(h) + player(5) + status(1) + help(1).
+// lipgloss Height(N) renders N+2 lines (border adds 2), so panels(h) actually
+// consumes h+2 lines. To keep the total exactly m.height, we subtract 2.
 
 func (m Model) panelHeight() int {
-	// Fixed overhead for non-panel elements in the layout:
-	//   header(1) + player(5) + help(1) + border/slack(3) = 10
-	//   +1 for status line when active
-	//   +2 for download bar when active
-	overhead := 10
+	// Fixed overhead: header(1) + player(5) + help(1) = 7
+	// Status adds 1 when active (now always 1 since idle tip is always shown)
+	// +2 to account for the panel's border rows that lipgloss adds on top of Height(N)
+	overhead := 9
 	if m.err != nil || m.statusMessage != "" {
 		overhead++
-	}
-	if m.downloading || m.downloadDone || m.downloadErr != nil {
-		overhead += 2
 	}
 	h := m.height - overhead
 	if h < 5 {
@@ -611,9 +620,6 @@ func (m *Model) startSettingsEdit() {
 
 // Shutdown cleans up background processes. Call on program exit.
 func (m Model) Shutdown() {
-	if m.recStreamCancel != nil {
-		m.recStreamCancel()
-	}
 	if m.player != nil {
 		m.player.Stop()
 	}

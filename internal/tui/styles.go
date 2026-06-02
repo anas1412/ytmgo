@@ -311,6 +311,12 @@ var (
 			Foreground(colorAccent2).
 			PaddingLeft(1)
 
+	// Idle tip: dimmer than action status so the eye can tell them apart.
+	styleStatusIdle = lipgloss.NewStyle().
+			Foreground(colorTextDim).
+			PaddingLeft(1).
+			Italic(true)
+
 	styleStatusErr = lipgloss.NewStyle().
 			Foreground(colorError).
 			PaddingLeft(1)

@@ -150,6 +150,7 @@ func (k KeyMap) ShortHelp() []key.Binding {
 		k.Repeat,
 		k.Download,
 		k.Recs,
+		k.Open,
 		k.Help,
 		k.Quit,
 	}

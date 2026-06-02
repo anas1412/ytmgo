@@ -95,7 +95,6 @@ func (m Model) View() string {
 func (m Model) renderPage() string {
 	header := m.renderHeader()
 	panels := m.renderPanels()
-	dlBar := m.renderDownloadBar()
 	player := m.renderPlayerBar()
 	help := m.renderHelpBar()
 	status := m.renderStatus()
@@ -104,9 +103,6 @@ func (m Model) renderPage() string {
 	var elements []string
 	elements = append(elements, header)
 	elements = append(elements, panels)
-	if dlBar != "" {
-		elements = append(elements, dlBar)
-	}
 	elements = append(elements, player)
 	if status != "" {
 		elements = append(elements, status)
@@ -187,7 +183,13 @@ func (m Model) renderHeader() string {
 	)
 }
 
-// ─── Panels (Search Results | Queue) ───────────────────────────────
+// ─── Panels (Search Results | Queue + Downloads) ───────────────────
+//
+// Layout: left panel (search results or library) is full height.
+// Right column is split into two stacked sub-panels:
+//   - top    = QUEUE  (always)
+//   - bottom = DOWNLOADS (always)
+// Both sub-panels are always rendered on both Stream and Library tabs.
 
 func (m Model) renderPanels() string {
 	// Dynamically calculate column widths to perfectly span the layout width
@@ -221,40 +223,75 @@ func (m Model) renderPanels() string {
 	}
 	searchTitle := stylePanelTitle.Render(panelLabel)
 
-	// Search panel content
-	searchContent := m.renderSearchResults(panelWidth, panelHeight-2)
+	// Search panel content.
+	// lipgloss Height(N) on a bordered style renders N+2 total lines (N content
+	// + top + bottom border). The content we pass in is: title (1) +
+	// renderSearchResults(panelWidth, contentH). So total rendered = (1 +
+	// contentH) + 2 = contentH + 3. We want total = panelHeight, so
+	// contentH = panelHeight - 3.
+	searchContent := m.renderSearchResults(panelWidth, panelHeight-3)
 	leftPanel := lipgloss.JoinVertical(lipgloss.Top,
 		searchTitle,
 		searchContent,
 	)
 	leftPanel = leftBorder.
 		Width(panelWidth).
-		Height(panelHeight).
+		Height(panelHeight - 2).
 		Render(leftPanel)
 
-	// Queue panel title (with count)
-	var queueTitle string
-	if m.activePage == PageLibrary {
-		dlCount := 0
-		if m.downloader != nil {
-			dlCount = len(m.downloader.Jobs())
-		}
-		queueTitle = fmt.Sprintf("DOWNLOADS  [%d]", dlCount)
-	} else {
-		queueTitle = fmt.Sprintf("QUEUE  [%d]", m.queue.Len())
+	// Split right panel into queue (top) and downloads (bottom).
+	// Each sub-panel renders as: border-top (1) + title (1) + content (N) + border-bottom (1)
+	// = N + 3 total lines. Two sub-panels: 2N + 6 total. We want total = panelHeight,
+	// so N + M = panelHeight - 6 (split roughly 50/50).
+	const minSubContent = 4
+	totalSubContentH := panelHeight - 6
+	if totalSubContentH < minSubContent*2 {
+		totalSubContentH = minSubContent * 2
 	}
-	queueTitleStyled := stylePanelTitle.Render(queueTitle)
+	queueContentH := totalSubContentH / 2
+	downloadsContentH := totalSubContentH - queueContentH
+	if queueContentH < minSubContent {
+		queueContentH = minSubContent
+		downloadsContentH = totalSubContentH - queueContentH
+	}
+	if downloadsContentH < minSubContent {
+		downloadsContentH = minSubContent
+		queueContentH = totalSubContentH - downloadsContentH
+	}
 
-	// Queue panel content
-	queueContent := m.renderQueue(panelWidth, panelHeight-2)
-	rightPanel := lipgloss.JoinVertical(lipgloss.Top,
+	// Queue sub-panel (top of right column)
+	queueTitle := fmt.Sprintf("QUEUE  [%d]", m.queue.Len())
+	queueTitleStyled := stylePanelTitle.Render(queueTitle)
+	queueContent := m.renderQueue(panelWidth-2, queueContentH)
+	queuePanel := lipgloss.JoinVertical(lipgloss.Top,
 		queueTitleStyled,
 		queueContent,
 	)
-	rightPanel = rightBorder.
+	queuePanel = rightBorder.
 		Width(panelWidth).
-		Height(panelHeight).
-		Render(rightPanel)
+		Height(queueContentH).
+		Render(queuePanel)
+
+	// Downloads sub-panel (bottom of right column)
+	dlCount := 0
+	if m.downloader != nil {
+		dlCount = len(m.downloader.Jobs())
+	}
+	downloadsTitle := fmt.Sprintf("DOWNLOADS  [%d]", dlCount)
+	downloadsTitleStyled := stylePanelTitle.Render(downloadsTitle)
+	downloadsContent := m.renderDownloadQueue(panelWidth-2, downloadsContentH)
+	downloadsPanel := lipgloss.JoinVertical(lipgloss.Top,
+		downloadsTitleStyled,
+		downloadsContent,
+	)
+	// Bottom sub-panel uses unfocused border (queue owns the focus)
+	downloadsPanel = panelBorder.
+		Width(panelWidth).
+		Height(downloadsContentH).
+		Render(downloadsPanel)
+
+	// Stack the two sub-panels vertically inside the right column
+	rightPanel := lipgloss.JoinVertical(lipgloss.Top, queuePanel, downloadsPanel)
 
 	// Calculate precise spaces to spread across the horizontal plane
 	leftover := m.width - lipgloss.Width(leftPanel) - lipgloss.Width(rightPanel)
@@ -416,10 +453,6 @@ func (m Model) formatResultRow(idx int, r search.Result, width int, isSelected b
 // ─── Queue List ────────────────────────────────────────────────────
 
 func (m Model) renderQueue(width, height int) string {
-	if m.activePage == PageLibrary {
-		return m.renderDownloadQueue(width, height)
-	}
-
 	tracks := m.queue.Tracks()
 	if len(tracks) == 0 {
 		return styleEmpty.Width(width - 2).Height(height).Render(
@@ -683,48 +716,6 @@ func truncate(s string, maxLen int) string {
 
 var styleTextDim = lipgloss.NewStyle().Foreground(colorTextDim)
 
-// ─── Download Bar ──────────────────────────────────────────────────
-
-// renderDownloadBar shows active download progress above the player bar.
-// Returns empty string if no download is in progress.
-func (m Model) renderDownloadBar() string {
-	if !m.downloading && !m.downloadDone && m.downloadErr == nil {
-		return ""
-	}
-
-	var line string
-	barWidth := m.width - 30
-	if barWidth < 10 {
-		barWidth = 10
-	}
-
-	switch {
-	case m.downloadErr != nil:
-		line = fmt.Sprintf(" %s %s  ✗ %v",
-			styleErrorLabel.Render("⬇"),
-			truncate(m.downloadTitle, 30),
-			m.downloadErr,
-		)
-	case m.downloadDone:
-		line = fmt.Sprintf(" %s %s  ✓ done",
-			styleDoneLabel.Render("⬇"),
-			truncate(m.downloadTitle, 30),
-		)
-	default:
-		bar := renderProgressBar(m.downloadPct, barWidth)
-		line = fmt.Sprintf(" %s %s  %s  %.0f%%",
-			styleDownloadLabel.Render("⬇"),
-			truncate(m.downloadTitle, 30),
-			bar,
-			m.downloadPct,
-		)
-	}
-
-	// Render with a separator line above
-	sep := renderSeparator("═", m.width-2)
-	return sep + "\n" + line
-}
-
 // ─── Confirmation Overlay ──────────────────────────────────────────
 
 func (m Model) renderConfirmOverlay() string {
@@ -820,9 +811,9 @@ func (m Model) renderPlayerBar() string {
 		t := tracks[nowPlayingIdx]
 
 		trackLabel := t.Title + " — " + t.Artist
-		maxLabel := innerW - 16 // leave room for "▶ " + time + gaps
-		if len(trackLabel) > maxLabel && maxLabel > 5 {
-			trackLabel = trackLabel[:maxLabel-1] + "…"
+		// Title line gets the full inner width now (time appears on the progress row).
+		if len(trackLabel) > innerW && innerW > 5 {
+			trackLabel = trackLabel[:innerW-1] + "…"
 		}
 
 		currentStr := formatDuration(int(m.position))
@@ -832,22 +823,13 @@ func (m Model) renderPlayerBar() string {
 		}
 		timeInfo := fmt.Sprintf("%s / %s", currentStr, totalStr)
 
-		leftPart := lipgloss.JoinHorizontal(lipgloss.Left,
+		nowPlaying = lipgloss.JoinHorizontal(lipgloss.Left,
 			styleNowIndicator.Render("▶"),
 			"  ",
 			styleNowTitle.Render(trackLabel),
 		)
-		rightPart := styleTime.Render(timeInfo)
-		gap := innerW - lipgloss.Width(leftPart) - lipgloss.Width(rightPart)
-		if gap < 1 {
-			gap = 1
-		}
-		nowPlaying = lipgloss.JoinHorizontal(lipgloss.Left,
-			leftPart,
-			strings.Repeat(" ", gap),
-			rightPart,
-		)
 
+		rightPart := styleTime.Render(timeInfo)
 		barWidth := innerW - lipgloss.Width(rightPart) - 3
 		if barWidth < 10 {
 			barWidth = 10
@@ -962,7 +944,10 @@ func (m Model) renderStatus() string {
 	if m.statusMessage != "" {
 		return styleStatus.Render("● " + m.statusMessage)
 	}
-	return ""
+	// Nothing actionable to report — show a rotating tip so the bar is
+	// never empty. Tips are dimmer than live status messages to keep the
+	// visual hierarchy clear.
+	return styleStatusIdle.Render("▸ " + m.currentTip())
 }
 
 // ─── Help Overlay ──────────────────────────────────────────────────

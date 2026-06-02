@@ -10,10 +10,9 @@ import (
 )
 
 // Init satisfies tea.Model. It starts the tick for progress animation
-// and fetches personalized YouTube recommendations.
+// and fetches YouTube recommendations.
 func (m Model) Init() tea.Cmd {
-	m.results = nil // will be filled incrementally via streaming
-	return tea.Batch(tickCmd(), startRecStreamCmd(m.settings.CookieBrowser, m.settings.UserAgent), scanLibraryCmd(m.downloadDir()))
+	return tea.Batch(tickCmd(), fetchRecommendationsCmd(m.settings.CookieBrowser, m.settings.UserAgent), scanLibraryCmd(m.downloadDir()))
 }
 
 // Update satisfies tea.Model. It handles all messages without making
@@ -102,28 +101,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
-	// ── Streaming recommendations ───────────────────────────────
-	case RecStreamMsg:
-		if msg.Cancel != nil {
-			// First message from a stream — store channel & cancel.
-			m.recStreamCh = msg.Ch
-			m.recStreamCancel = msg.Cancel
-		}
-		if msg.Result != nil {
-			m.results = append(m.results, *msg.Result)
-			m.showingRecommendations = true
-			// Read the next result.
-			return m, readNextRecCmd(msg.Ch)
-		}
-		// Stream ended.
-		if len(m.results) == 0 {
-			m.statusMessage = "No recommendations available"
-		} else {
-			m.statusMessage = fmt.Sprintf("%d recommendations", len(m.results))
-		}
-		return m, nil
-
-		// ── Recommendations (YouTube home feed) ──────────────────────
+	// ── Recommendations ─────────────────────────────────────────
 	case RecommendationsMsg:
 		m.showingRecommendations = msg.Error == nil
 		if msg.Error != nil {
@@ -160,18 +138,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	// ── Download progress ────────────────────────────────────────
+	// Downloader state (active/done/failed/queued) lives in the DOWNLOADS
+	// sub-panel; we just keep the event subscription alive here.
 	case DownloadProgressMsg:
-		m.downloadPct = msg.Progress
-		if msg.Error != nil {
-			m.downloadErr = msg.Error
-			m.downloadDone = false
-			m.downloading = false
-			return m, nil
-		}
 		if msg.Done {
-			m.downloadPct = 100
-			m.downloadDone = true
-			m.downloading = false
 			// Mark the track as downloaded and record file path
 			m.queue.UpdateTrack(msg.TrackID, func(t *queue.Track) {
 				t.Downloaded = true
@@ -195,10 +165,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					}
 				}
 			}
-			// Keep listening for next download
-			return m, downloadCmd(m.downloader)
 		}
-		// In progress — keep listening
+		// Always keep listening for the next progress event so the
+		// DOWNLOADS sub-panel (active/pending/completed/failed sections)
+		// stays in sync. Failed downloads (msg.Error != nil) are surfaced
+		// in the Failed section of the sub-panel.
 		return m, downloadCmd(m.downloader)
 
 	// ── Player position update (from mpv IPC) ─────────────────────
@@ -253,6 +224,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				} else {
 					m.playerState = player.StateStopped
 				}
+			}
+		}
+		// Rotate the idle status-bar tip every idleTipRotateEvery ticks.
+		// Only advance the counter when no live status message or error is
+		// being shown — keeps rotation cadence steady regardless of activity.
+		if m.statusMessage == "" && m.err == nil {
+			m.tickCount++
+			if m.tickCount >= idleTipRotateEvery {
+				m.advanceTip()
 			}
 		}
 		// Real position comes from PositionMsg when player is active
@@ -319,12 +299,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				if query != "" {
 					m.showingRecommendations = false
-					// Cancel any running recommendation stream.
-					if m.recStreamCancel != nil {
-						m.recStreamCancel()
-						m.recStreamCancel = nil
-						m.recStreamCh = nil
-					}
 					m.results = nil
 					m.isSearching = true
 					m.searchCursor = 0
@@ -455,16 +429,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 
 		case "o":
-			// Settings page: open the download dir when cursor is on the
-			// Download Dir row (index 4). No-op on other pages / rows.
-			if m.activePage == PageSettings && !m.settingsEditField && m.settingsCursor == 4 {
-				path := m.downloadDir()
-				if err := openInOS(path); err != nil {
-					m.statusMessage = "Failed to open: " + err.Error()
-				} else {
-					m.statusMessage = "Opened: " + path
-				}
-				return m, nil
+			// Open the download directory from any page.
+			path := m.downloadDir()
+			if err := openInOS(path); err != nil {
+				m.statusMessage = "Failed to open: " + err.Error()
+			} else {
+				m.statusMessage = "Opened: " + path
 			}
 			return m, nil
 
@@ -608,11 +578,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						m.statusMessage = "Added to queue: " + t.Title
 						m.ensureDownloader()
 						m.downloader.Enqueue(t.ID, t.Title, r.URL, m.downloadDir())
-						m.downloading = true
-						m.downloadTitle = t.Title
-						m.downloadPct = 0
-						m.downloadDone = false
-						m.downloadErr = nil
 						return m, downloadCmd(m.downloader)
 					}
 
@@ -699,18 +664,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.activePage != PageStream {
 				m.switchPage(PageStream)
 			}
-			// Cancel any existing recommendation stream and start fresh.
-			if m.recStreamCancel != nil {
-				m.recStreamCancel()
-				m.recStreamCancel = nil
-				m.recStreamCh = nil
-			}
 			m.showingRecommendations = true
 			m.results = nil
 			m.searchCursor = 0
 			m.searchOffset = 0
 			m.statusMessage = "Loading recommendations…"
-			return m, startRecStreamCmd(m.settings.CookieBrowser, m.settings.UserAgent)
+			return m, fetchRecommendationsCmd(m.settings.CookieBrowser, m.settings.UserAgent)
 
 		case "h", "ctrl+b":
 			m.position = max(m.position-5, 0)
@@ -768,8 +727,26 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 
 		case "x":
-			// Download a queued track for offline use
-			if m.activePage == PageStream && m.activePanel == PanelQueue && m.queue.Len() > 0 {
+			// Download a track for offline use.
+			// Works from either the search results panel (download the highlighted result)
+			// or the queue panel (download the highlighted queue track).
+			switch {
+			case m.activePage == PageStream && m.activePanel == PanelSearch:
+				if len(m.results) == 0 || m.searchCursor < 0 || m.searchCursor >= len(m.results) {
+					return m, nil
+				}
+				r := m.results[m.searchCursor]
+				t := searchResultToTrack(r)
+				if t.URL == "" {
+					m.statusMessage = "No URL available for: " + t.Title
+					return m, nil
+				}
+				m.ensureDownloader()
+				m.downloader.Enqueue(t.ID, t.Title, t.URL, m.downloadDir())
+				m.statusMessage = "Download queued: " + t.Title
+				return m, downloadCmd(m.downloader)
+
+			case m.activePage == PageStream && m.activePanel == PanelQueue && m.queue.Len() > 0:
 				if m.queueCursor < 0 || m.queueCursor >= m.queue.Len() {
 					return m, nil
 				}
@@ -784,8 +761,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				m.ensureDownloader()
 				m.downloader.Enqueue(t.ID, t.Title, t.URL, m.downloadDir())
-				m.downloading = true
-				m.downloadTitle = t.Title
 				m.statusMessage = "Download queued: " + t.Title
 			}
 			return m, nil
@@ -1001,19 +976,33 @@ func (m Model) handleClick(x, y int) Model {
 				m.searchCursor = idx
 			}
 		} else {
-			// Right panel: queue
-			m.activePanel = PanelQueue
-			idx := (y - clickItemOffsetY) / clickLinesPerItem
-			idx += m.queueOffset
-			switch {
-			case idx < 0:
-				idx = 0
-			case m.queue.Len() == 0:
-				idx = 0
-			case idx >= m.queue.Len():
-				idx = m.queue.Len() - 1
+			// Right column: split into queue (top) and downloads (bottom).
+			// Must match renderPanels() exactly. Each sub-panel: title (1) +
+			// content (N) + borders (2) = N + 3 total lines.
+			const minSubContent = 4
+			totalSubContentH := panelHeight - 6
+			if totalSubContentH < minSubContent*2 {
+				totalSubContentH = minSubContent * 2
 			}
-			m.queueCursor = idx
+			queueContentH := totalSubContentH / 2
+			// Queue sub-panel ends at: start (1) + queueHeight (queueContentH + 3)
+			queueBorderY := clickPanelStartY + queueContentH + 3
+			if y < queueBorderY {
+				// Click landed in the queue sub-panel
+				m.activePanel = PanelQueue
+				idx := (y - clickItemOffsetY) / clickLinesPerItem
+				idx += m.queueOffset
+				switch {
+				case idx < 0:
+					idx = 0
+				case m.queue.Len() == 0:
+					idx = 0
+				case idx >= m.queue.Len():
+					idx = m.queue.Len() - 1
+				}
+				m.queueCursor = idx
+			}
+			// Click in the downloads sub-panel: not navigable, leave activePanel as-is
 		}
 		return m
 	}

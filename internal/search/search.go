@@ -1,21 +1,18 @@
 package search
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"os/exec"
 	"strings"
-	"sync"
 	"time"
-	"ytmgo/internal/innertube"
 	"ytmgo/internal/queue"
 	"ytmgo/internal/ytdlp"
 )
 
 // ─── Result ───────────────────────────────────────────────────────────
 
-// Result is a search result
+// Result is a single search/recommendation result.
 type Result struct {
 	ID       string
 	Title    string
@@ -24,6 +21,7 @@ type Result struct {
 	URL      string
 }
 
+// ToTrack converts a search Result to a queue.Track.
 func (r Result) ToTrack() queue.Track {
 	return queue.Track{
 		ID:          r.ID,
@@ -35,119 +33,65 @@ func (r Result) ToTrack() queue.Track {
 	}
 }
 
-// ─── InnerTube client (lazy singleton) ────────────────────────────────
-
-var (
-	itubeOnce sync.Once
-	itube     *innertube.Client
-)
-
-func innertubeClient() *innertube.Client {
-	itubeOnce.Do(func() {
-		itube = innertube.NewClient()
-	})
-	return itube
-}
-
 // ─── Public API ───────────────────────────────────────────────────────
 
-// Search performs a YouTube Music search using the InnerTube API (fast).
-// Falls back to yt-dlp if the API call fails.
+// Search runs yt-dlp to search YouTube and returns up to limit results.
+// Uses the configured cookie browser / user-agent for personalized results.
 func Search(query string, limit int, cookieBrowser, userAgent string) ([]Result, error) {
-	// Fast path: InnerTube API.
-	results, err := searchViaInnertube(query, limit)
-	if err == nil && len(results) > 0 {
-		return results, nil
+	searchQuery := fmt.Sprintf("ytsearch%d:%s", limit, query)
+	args := []string{
+		searchQuery,
+		"--dump-json",
+		"--flat-playlist",
+		"--no-download",
+		"--quiet",
+		"--no-warnings",
+	}
+	if ca := ytdlp.CookiesArg(cookieBrowser); ca != "" {
+		args = append(args, ca)
+	}
+	if ua := ytdlp.UserAgentArg(userAgent); ua != "" {
+		args = append(args, ua)
 	}
 
-	// Fallback: yt-dlp subprocess.
-	return searchViaYtdlp(query, limit, cookieBrowser, userAgent)
-}
-
-// FetchRecommendations fetches music recommendations via InnerTube API.
-// Falls back to yt-dlp if the API call fails.
-func FetchRecommendations(limit int, cookieBrowser, userAgent string) ([]Result, error) {
-	// Fast path: InnerTube API.
-	results, err := recommendationsViaInnertube(limit)
-	if err == nil && len(results) > 0 {
-		return results, nil
-	}
-
-	// Fallback: yt-dlp subprocess.
-	return recommendationsViaYtdlp(limit, cookieBrowser, userAgent)
-}
-
-// StreamRecommendations fetches recommendations and streams them to ch
-// one at a time as each result is decoded from the HTTP response body.
-// Each result appears in the UI promptly instead of arriving in a batch.
-func StreamRecommendations(limit int, ch chan<- Result, done <-chan struct{}, cookieBrowser, userAgent string) {
-	defer close(ch)
-
-	// Fast path: innerTube streaming (sends results incrementally as JSON
-	// is decoded off the wire rather than waiting for the full response).
-	ctx, cancel := context.WithCancel(context.Background())
-	go func() {
-		select {
-		case <-done:
-			cancel()
-		case <-ctx.Done():
-		}
-	}()
-
-	itubeCh := make(chan innertube.Result)
-	go func() {
-		defer close(itubeCh)
-		err := innertubeClient().SearchStream(ctx, "music", limit, itubeCh)
-		if err != nil {
-			return
-		}
-	}()
-
-	// Drain the streaming channel, converting and re-sending to ch.
-	// Stop on explicit done signal or stream exhaustion.
-	for r := range itubeCh {
-		select {
-		case ch <- convertResult(r):
-		case <-done:
-			cancel()
-			return
-		}
-	}
-
-	// Streaming finished (or never started). Cancel the context so the
-	// monitor goroutine can exit, then check if we were cancelled.
-	cancel()
-	select {
-	case <-done:
-		return
-	default:
-	}
-
-	results, err := recommendationsViaYtdlp(limit, cookieBrowser, userAgent)
+	cmd := exec.Command("yt-dlp", args...)
+	out, err := cmd.Output()
 	if err != nil {
-		return
+		return nil, fmt.Errorf("yt-dlp search failed: %w (is yt-dlp installed?)", err)
 	}
-	for _, r := range results {
-		select {
-		case ch <- r:
-		case <-done:
-			return
-		}
-	}
+	return parseYtdlpResults(out), nil
 }
 
-// convertResult converts an innertube.Result to a search.Result.
-func convertResult(r innertube.Result) Result {
-	return Result{
-		ID:       r.ID,
-		Title:    r.Title,
-		Uploader: r.Uploader,
-		Duration: r.Duration,
-		URL:      r.URL,
+// FetchRecommendations runs yt-dlp with a "music" search query, filtered to
+// tracks under 10 minutes. Returns up to limit results.
+func FetchRecommendations(limit int, cookieBrowser, userAgent string) ([]Result, error) {
+	query := fmt.Sprintf("ytsearch%d:music", limit)
+	args := []string{
+		query,
+		"--no-playlist",
+		"--match-filter", "duration < 600",
+		"--flat-playlist",
+		"--dump-json",
+		"--no-download",
+		"--quiet",
+		"--no-warnings",
 	}
+	if ca := ytdlp.CookiesArg(cookieBrowser); ca != "" {
+		args = append(args, ca)
+	}
+	if ua := ytdlp.UserAgentArg(userAgent); ua != "" {
+		args = append(args, ua)
+	}
+
+	cmd := exec.Command("yt-dlp", args...)
+	out, err := cmd.Output()
+	if err != nil {
+		return nil, fmt.Errorf("yt-dlp recommendations failed: %w", err)
+	}
+	return parseYtdlpResults(out), nil
 }
 
-// MockSearch returns fake results for testing.
+// MockSearch returns fake results for dev mode (no yt-dlp required).
 func MockSearch(query string, limit int) []Result {
 	songs := []struct{ title, artist string }{
 		{"Bohemian Rhapsody", "Queen"},
@@ -178,99 +122,9 @@ func MockSearch(query string, limit int) []Result {
 	return results
 }
 
-// ─── InnerTube backends ───────────────────────────────────────────────
+// ─── yt-dlp output parsing ────────────────────────────────────────────
 
-func searchViaInnertube(query string, limit int) ([]Result, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	raw, err := innertubeClient().Search(ctx, query, limit)
-	if err != nil {
-		return nil, err
-	}
-	return convertResults(raw), nil
-}
-
-func recommendationsViaInnertube(limit int) ([]Result, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	raw, err := innertubeClient().Home(ctx, limit)
-	if err != nil {
-		return nil, err
-	}
-	return convertResults(raw), nil
-}
-
-func convertResults(raw []innertube.Result) []Result {
-	if raw == nil {
-		return nil
-	}
-	results := make([]Result, len(raw))
-	for i, r := range raw {
-		results[i] = Result{
-			ID:       r.ID,
-			Title:    r.Title,
-			Uploader: r.Uploader,
-			Duration: r.Duration,
-			URL:      r.URL,
-		}
-	}
-	return results
-}
-
-// ─── yt-dlp fallbacks ─────────────────────────────────────────────────
-
-func searchViaYtdlp(query string, limit int, cookieBrowser, userAgent string) ([]Result, error) {
-	searchQuery := fmt.Sprintf("ytsearch%d:%s", limit, query)
-	args := []string{searchQuery,
-		"--dump-json",
-		"--flat-playlist",
-		"--no-download",
-		"--quiet",
-		"--no-warnings",
-	}
-	if ca := ytdlp.CookiesArg(cookieBrowser); ca != "" {
-		args = append(args, ca)
-	}
-	if ua := ytdlp.UserAgentArg(userAgent); ua != "" {
-		args = append(args, ua)
-	}
-	cmd := exec.Command("yt-dlp", args...)
-	out, err := cmd.Output()
-	if err != nil {
-		return nil, fmt.Errorf("yt-dlp search failed: %w (is yt-dlp installed?)", err)
-	}
-	return parseYtdlpResults(out), nil
-}
-
-func recommendationsViaYtdlp(limit int, cookieBrowser, userAgent string) ([]Result, error) {
-	query := fmt.Sprintf("ytsearch%d:music", limit)
-	args := []string{
-		query,
-		"--no-playlist",
-		"--match-filter", "duration < 600",
-		"--flat-playlist",
-		"--dump-json",
-		"--no-download",
-		"--quiet",
-		"--no-warnings",
-	}
-	if ca := ytdlp.CookiesArg(cookieBrowser); ca != "" {
-		args = append(args, ca)
-	}
-	if ua := ytdlp.UserAgentArg(userAgent); ua != "" {
-		args = append(args, ua)
-	}
-	cmd := exec.Command("yt-dlp", args...)
-	out, err := cmd.Output()
-	if err != nil {
-		return nil, fmt.Errorf("yt-dlp recommendations failed: %w", err)
-	}
-	return parseYtdlpResults(out), nil
-}
-
-// parseYtdlpResults parses yt-dlp JSON lines into Result slices.
+// parseYtdlpResults parses yt-dlp's line-delimited JSON output into Result slices.
 func parseYtdlpResults(data []byte) []Result {
 	var results []Result
 	lines := strings.Split(strings.TrimSpace(string(data)), "\n")
