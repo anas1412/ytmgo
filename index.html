@@ -192,7 +192,7 @@ kbd{font-family:var(--font-mono);font-size:.75rem;background:var(--bg-panel);bor
     <div class="install-label">Install &mdash; one line, zero config</div>
     <div class="install-bar">
       <div class="install-bar-content">
-        <span class="ib-prompt">$</span><span class="ib-cmd">curl</span> <span class="ib-flag">-fsSL</span> <span class="ib-url">https://raw.githubusercontent.com/anas1412/ytmgo/main/install.sh</span> <span class="ib-pipe">|</span> <span class="ib-bash">bash</span><span class="install-bar-cursor"></span>
+        <span class="ib-prompt">$</span><span class="ib-cmd">curl</span> <span class="ib-flag">-fsSL</span> <span class="ib-url">https://anas1412.github.io/ytmgo/install.sh</span> <span class="ib-pipe">|</span> <span class="ib-bash">bash</span><span class="install-bar-cursor"></span>
       </div>
       <button class="install-bar-copy" type="button" onclick="copyInstall(this)" aria-label="Copy install command">
         <svg class="ib-icon ib-icon-copy" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
@@ -317,7 +317,7 @@ function copyCode(btn) {
 
 // Copy install command
 function copyInstall(btn) {
-  const cmd = 'curl -fsSL https://raw.githubusercontent.com/anas1412/ytmgo/main/install.sh | bash';
+  const cmd = 'curl -fsSL https://anas1412.github.io/ytmgo/install.sh | bash';
   navigator.clipboard.writeText(cmd).then(() => {
     btn.classList.add('copied');
     const label = btn.querySelector('.ib-label');
