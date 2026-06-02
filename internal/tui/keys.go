@@ -141,16 +141,12 @@ var Keys = KeyMap{
 }
 
 // ShortHelp returns key bindings for the compact help line.
+// Only general-purpose utilities live here — all playback and
+// navigation hints are rendered inline next to their contextual
+// UI element (player bar controls, panel titles, header).
 func (k KeyMap) ShortHelp() []key.Binding {
 	return []key.Binding{
-		k.FocusNext,
-		k.Enter,
-		k.PlayPause,
-		k.Shuffle,
-		k.Repeat,
 		k.Download,
-		k.Recs,
-		k.Open,
 		k.Help,
 		k.Quit,
 	}
@@ -196,5 +192,18 @@ func (k KeyMap) FullHelp() [][]key.Binding {
 			k.Escape,
 			k.Quit,
 		},
+	}
+}
+
+// Globals returns bindings that work regardless of focus mode. These
+// are checked first by Update, so focus modes (search input, settings
+// text field, etc.) cannot accidentally swallow them.
+func (k KeyMap) Globals() []key.Binding {
+	return []key.Binding{
+		k.PageStream,
+		k.PageLibrary,
+		k.PageSettings,
+		k.Recs,
+		k.Open,
 	}
 }

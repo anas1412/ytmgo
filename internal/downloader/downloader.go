@@ -29,6 +29,7 @@ const (
 type Job struct {
 	TrackID  string
 	Title    string
+	Uploader string // channel/artist name, used by the TUI library view
 	URL      string
 	OutDir   string
 	Status   Status
@@ -40,6 +41,8 @@ type Job struct {
 // ProgressEvent is sent to the progress channel
 type ProgressEvent struct {
 	TrackID  string
+	Title    string
+	Uploader string
 	Progress float64
 	Status   Status
 	FilePath string
@@ -78,12 +81,14 @@ func (d *Downloader) Progress() <-chan ProgressEvent {
 }
 
 // Enqueue adds a job. If the file already exists on disk, it's marked done immediately.
-func (d *Downloader) Enqueue(trackID, title, url, outDir string) {
+func (d *Downloader) Enqueue(trackID, title, uploader, url, outDir string) {
 	// Check if file already downloaded
-	expected := filepath.Join(outDir, sanitizeFilename(title)+".mp3")
+	expected := filepath.Join(outDir, SanitizeFilename(title)+".mp3")
 	if _, err := os.Stat(expected); err == nil {
 		d.progress <- ProgressEvent{
 			TrackID:  trackID,
+			Title:    title,
+			Uploader: uploader,
 			Progress: 100,
 			Status:   StatusSkipped,
 			FilePath: expected,
@@ -94,6 +99,8 @@ func (d *Downloader) Enqueue(trackID, title, url, outDir string) {
 	if fp := findExisting(outDir, trackID); fp != "" {
 		d.progress <- ProgressEvent{
 			TrackID:  trackID,
+			Title:    title,
+			Uploader: uploader,
 			Progress: 100,
 			Status:   StatusSkipped,
 			FilePath: fp,
@@ -102,16 +109,31 @@ func (d *Downloader) Enqueue(trackID, title, url, outDir string) {
 	}
 
 	job := &Job{
-		TrackID: trackID,
-		Title:   title,
-		URL:     url,
-		OutDir:  outDir,
-		Status:  StatusPending,
+		TrackID:  trackID,
+		Title:    title,
+		Uploader: uploader,
+		URL:      url,
+		OutDir:   outDir,
+		Status:   StatusPending,
 	}
 	d.mu.Lock()
 	d.jobs = append(d.jobs, job)
 	d.mu.Unlock()
 	d.jobCh <- job
+}
+
+// IsDownloaded checks whether a file for this track already exists on disk.
+// This mirrors the same check at the top of Enqueue so callers can inspect
+// the result without consuming a channel event.
+func (d *Downloader) IsDownloaded(trackID, title, outDir string) bool {
+	expected := filepath.Join(outDir, SanitizeFilename(title)+".mp3")
+	if _, err := os.Stat(expected); err == nil {
+		return true
+	}
+	if fp := findExisting(outDir, trackID); fp != "" {
+		return true
+	}
+	return false
 }
 
 // Jobs returns a snapshot of all jobs
@@ -140,8 +162,15 @@ func (d *Downloader) worker(outDir string) {
 }
 
 func (d *Downloader) runJob(job *Job, outDir string) {
+	// Mark as downloading locally so Jobs() reflects the new state
+	// on the next view re-render, but DON'T emit a synthetic
+	// Progress: 0 event here — doing so makes the view show "0%"
+	// for as long as it takes yt-dlp to emit its first real
+	// progress line (and forever, if the regex never matches due
+	// to ANSI escapes or a different yt-dlp output format). The
+	// first genuine progress event will be emitted by the stdout
+	// parser below, which is the only signal worth showing.
 	job.Status = StatusDownloading
-	d.progress <- ProgressEvent{TrackID: job.TrackID, Progress: 0, Status: StatusDownloading}
 
 	// Output template: use title sanitized
 	outTemplate := filepath.Join(outDir, "%(title)s.%(ext)s")
@@ -154,6 +183,11 @@ func (d *Downloader) runJob(job *Job, outDir string) {
 		"--embed-thumbnail",
 		"--output", outTemplate,
 		"--newline",
+		// --no-color is essential: when yt-dlp detects a TTY (which
+		// it always does inside this TUI), it emits ANSI color
+		// escapes in front of [download] progress lines, breaking
+		// progressRe. Without this, the progress bar stays at 0%.
+		"--no-color",
 		"--no-playlist",
 		"--no-warnings",
 	}
@@ -208,7 +242,7 @@ func (d *Downloader) runJob(job *Job, outDir string) {
 			if pct != lastPct {
 				lastPct = pct
 				job.Progress = pct
-				d.progress <- ProgressEvent{TrackID: job.TrackID, Progress: pct, Status: StatusDownloading}
+				d.progress <- ProgressEvent{TrackID: job.TrackID, Title: job.Title, Uploader: job.Uploader, Progress: pct, Status: StatusDownloading}
 			}
 		}
 		// detect destination file
@@ -224,7 +258,7 @@ func (d *Downloader) runJob(job *Job, outDir string) {
 	if err != nil {
 		job.Status = StatusFailed
 		job.Err = err
-		d.progress <- ProgressEvent{TrackID: job.TrackID, Status: StatusFailed, Err: err}
+		d.progress <- ProgressEvent{TrackID: job.TrackID, Title: job.Title, Uploader: job.Uploader, Status: StatusFailed, Err: err}
 		return
 	}
 
@@ -233,7 +267,7 @@ func (d *Downloader) runJob(job *Job, outDir string) {
 		job.FilePath = findExisting(outDir, job.TrackID)
 		if job.FilePath == "" {
 			// best guess by title
-			job.FilePath = filepath.Join(outDir, sanitizeFilename(job.Title)+".mp3")
+			job.FilePath = filepath.Join(outDir, SanitizeFilename(job.Title)+".mp3")
 		}
 	}
 
@@ -241,13 +275,16 @@ func (d *Downloader) runJob(job *Job, outDir string) {
 	job.Progress = 100
 	d.progress <- ProgressEvent{
 		TrackID:  job.TrackID,
+		Title:    job.Title,
+		Uploader: job.Uploader,
 		Progress: 100,
 		Status:   StatusDone,
 		FilePath: job.FilePath,
 	}
 }
 
-func sanitizeFilename(s string) string {
+// SanitizeFilename replaces filesystem-unsafe characters with underscores.
+func SanitizeFilename(s string) string {
 	var b strings.Builder
 	for _, r := range s {
 		switch r {

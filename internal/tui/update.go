@@ -2,11 +2,15 @@ package tui
 
 import (
 	"fmt"
+	"time"
 
+	"ytmgo/internal/downloader"
 	"ytmgo/internal/player"
 	"ytmgo/internal/queue"
 
+	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 )
 
 // Init satisfies tea.Model. It starts the tick for progress animation
@@ -88,15 +92,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.isSearching = false
 		if msg.Error != nil {
 			m.err = msg.Error
-			m.statusMessage = "Search failed: " + msg.Error.Error()
+			m.setStatus("Search failed: " + msg.Error.Error())
 		} else {
 			m.results = msg.Results
 			m.searchCursor = 0
 			m.searchOffset = 0
 			if len(msg.Results) > 0 {
-				m.statusMessage = fmt.Sprintf("Found %d results", len(msg.Results))
+				m.setStatus(fmt.Sprintf("Found %d results", len(msg.Results)))
 			} else {
-				m.statusMessage = "No results found"
+				m.setStatus("No results found")
 			}
 		}
 		return m, nil
@@ -106,15 +110,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.showingRecommendations = msg.Error == nil
 		if msg.Error != nil {
 			m.err = msg.Error
-			m.statusMessage = "Recommendations unavailable: " + msg.Error.Error()
+			m.setStatus("Recommendations unavailable: " + msg.Error.Error())
 		} else {
 			m.results = msg.Results
 			m.searchCursor = 0
 			m.searchOffset = 0
 			if len(msg.Results) > 0 {
-				m.statusMessage = fmt.Sprintf("%d recommendations", len(msg.Results))
+				m.setStatus(fmt.Sprintf("%d recommendations", len(msg.Results)))
 			} else {
-				m.statusMessage = "No recommendations available"
+				m.setStatus("No recommendations available")
 			}
 		}
 		return m, nil
@@ -122,8 +126,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// ── Library scan complete ────────────────────────────────────
 	case LibraryScanMsg:
 		m.library = msg.Tracks
+		// Back-fill FilePath/Downloaded on any track already in the
+		// queue that was added from search before the library finished
+		// scanning. Without this, tracks queued in the first few
+		// hundred milliseconds of app startup would still stream from
+		// YouTube even though a local copy is now known to exist.
+		m.backfillQueueFromLibrary()
 		if len(msg.Tracks) > 0 {
-			m.statusMessage = fmt.Sprintf("Library: %d downloaded tracks", len(msg.Tracks))
+			m.setStatus(fmt.Sprintf("Library: %d downloaded tracks", len(msg.Tracks)))
 		}
 		return m, nil
 
@@ -131,9 +141,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case SettingsSavedMsg:
 		if msg.Error != nil {
 			m.err = msg.Error
-			m.statusMessage = "Failed to save settings: " + msg.Error.Error()
+			m.setStatus("Failed to save settings: " + msg.Error.Error())
 		} else {
-			m.statusMessage = "Settings saved"
+			m.setStatus("Settings saved")
 		}
 		return m, nil
 
@@ -142,6 +152,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// sub-panel; we just keep the event subscription alive here.
 	case DownloadProgressMsg:
 		if msg.Done {
+			// Fix the status message when the file already existed on
+			// disk (StatusSkipped) — the x-key handler optimistically
+			// shows "Download queued" before the downloader checks.
+			if msg.Status == downloader.StatusSkipped {
+				m.setStatus("Already downloaded: " + msg.Title)
+			}
 			// Mark the track as downloaded and record file path
 			m.queue.UpdateTrack(msg.TrackID, func(t *queue.Track) {
 				t.Downloaded = true
@@ -149,6 +165,35 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					t.FilePath = msg.FilePath
 				}
 			})
+			// Append to m.library so subsequent plays of the same
+			// song from search/recommendations resolve to the local
+			// file via resolveTrack's library lookup. Without this,
+			// m.library would stay frozen at the startup scan and
+			// freshly-downloaded tracks would always re-stream from
+			// YouTube. Dedup by FilePath so re-runs / duplicate events
+			// don't add the same entry twice.
+			if msg.FilePath != "" && msg.Title != "" {
+				alreadyInLibrary := false
+				for _, lt := range m.library {
+					if lt.FilePath == msg.FilePath {
+						alreadyInLibrary = true
+						break
+					}
+				}
+				if !alreadyInLibrary {
+					m.library = append(m.library, queue.Track{
+						ID:         msg.TrackID,
+						Title:      msg.Title,
+						Artist:     msg.Uploader,
+						FilePath:   msg.FilePath,
+						Downloaded: true,
+						// Duration/DurationSec left as zero — the next
+						// library scan (or ffprobe on demand) will
+						// populate them. The signature match in
+						// findLibraryMatch only needs Title+Artist.
+					})
+				}
+			}
 			// Auto-play the downloaded track if nothing is currently playing
 			if m.playerState == player.StateStopped {
 				tracks := m.queue.Tracks()
@@ -178,6 +223,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.Duration > 0 {
 			m.duration = msg.Duration
 		}
+		// Record for smooth interpolation in View. The bar will glide
+		// from this point forward based on time.Now() in renderPlayerBar.
+		m.lastPosition = msg.Position
+		m.lastPositionAt = time.Now()
 		// Keep listening
 		if m.player != nil {
 			return m, positionCmd(m.player)
@@ -186,27 +235,36 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	// ── Song ended naturally (mpv exited / track finished) ───────
 	case SongEndedMsg:
-		// Auto-advance: play by URL if streamable, by FilePath if downloaded.
-		// Tracks with no URL and not downloaded are skipped.
+		// Suppress auto-advance if the old mpv was just killed by a
+		// user-initiated playback (Enter on queue item, n/p keys).
+		// Without this guard, the stale endedCmd from the previous
+		// playback fires a SongEndedMsg milliseconds after Play()
+		// kills the old process, and the Next() below advances past
+		// the track the user just selected — the "press Enter on
+		// first song → skips to the 2nd" bug.
+		if m.suppressAutoAdvance {
+			m.suppressAutoAdvance = false
+			return m, nil
+		}
+
+		// Auto-advance: play the next track. PlayURL() returns the
+		// local file when downloaded, otherwise the original YouTube
+		// URL. Tracks with neither source are skipped.
 		for {
 			t, ok := m.queue.Next()
 			if !ok {
 				m.playerState = player.StateStopped
-				m.position = 0
+				m.setStatus("Queue empty")
 				return m, nil
 			}
-			m.queueCursor = m.queue.CurrentIndex()
-
-			playURL := ""
-			switch {
-			case t.Downloaded && t.FilePath != "":
-				playURL = t.FilePath
-			case t.URL != "":
-				playURL = t.URL
-			default:
+			playURL := t.PlayURL()
+			if playURL == "" {
 				continue // skip — nothing to play
 			}
 
+			// Single source of truth: cursor follows the playing track.
+			m.queueCursor = m.queue.CurrentIndex()
+			m.clampQueueOffset()
 			return m, m.startTrackPlayback(playURL, t.Title, t.DurationSec)
 		}
 
@@ -215,16 +273,26 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Dev mode (no player): fake position advance
 		if m.player == nil && m.playerState == player.StatePlaying && m.duration > 0 {
 			m.position += 0.5
+			// Keep the interpolation anchor fresh in dev mode so the
+			// smooth bar reads the dev-simulated position accurately.
+			m.lastPosition = m.position
+			m.lastPositionAt = time.Now()
 			if m.position >= m.duration {
 				m.position = 0
 				if t, ok := m.queue.Next(); ok {
 					m.queueCursor = m.queue.CurrentIndex()
 					m.duration = float64(t.DurationSec)
-					m.statusMessage = "Now playing: " + t.Title
+					m.setStatus("Now playing: " + t.Title)
 				} else {
 					m.playerState = player.StateStopped
 				}
 			}
+		}
+		// Auto-clear status messages after 3 seconds so the rotating idle
+		// tips cycle back into view. Never auto-clear during confirmation
+		// — the prompt must stay visible until Enter or Esc.
+		if m.statusMessage != "" && m.err == nil && !m.isConfirming() && !m.statusMessageSetAt.IsZero() && time.Since(m.statusMessageSetAt) >= 3*time.Second {
+			m.clearStatus()
 		}
 		// Rotate the idle status-bar tip every idleTipRotateEvery ticks.
 		// Only advance the counter when no live status message or error is
@@ -238,19 +306,28 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Real position comes from PositionMsg when player is active
 		return m, tickCmd() // keep the tick going
 
+	// ── Fast player tick (smooth progress interpolation) ────────
+	// Fires every 50ms while a track is playing. The model itself
+	// doesn't need to change — View reads time.Now() against
+	// lastPositionAt and renders a gliding bar. We just keep the
+	// ticker alive as long as we're in the playing state, and let
+	// it die off naturally when paused/stopped.
+	case playerTickMsg:
+		if m.playerState == player.StatePlaying {
+			return m, playerTickCmd()
+		}
+		return m, nil
+
 	// ── Key presses ──────────────────────────────────────────────
 	case tea.KeyMsg:
-		// When help is open, only Esc and q close it
-		if m.showHelp {
-			switch msg.String() {
-			case "?", "esc", "q":
-				m.showHelp = false
-			}
-			return m, nil
+		// Global keys work in any focus mode. Checked first so a focused
+		// text input (search box, settings field) cannot swallow them.
+		if handled, cmd := m.handleGlobalKey(msg); handled {
+			return m, cmd
 		}
 
-		// When confirming a destructive action, only the same key or Esc works
-		// (navigation keys 1/2/3 cancel the confirmation and pass through)
+		// When confirming a destructive action, route the key press.
+		// Navigation keys 1/2/3 cancel and pass through.
 		if m.isConfirming() {
 			key := msg.String()
 			// Check if the pressed key confirms the pending action
@@ -259,7 +336,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case confirmClearQueue:
 				confirmed = key == "D"
 			case confirmDeleteTrack:
-				confirmed = key == "d" || key == "delete"
+				// Delete-track uses status-bar confirmation: Enter to confirm,
+				// Esc to cancel, all other keys ignored so the prompt persists.
+				confirmed = key == "enter"
 			}
 
 			switch {
@@ -267,15 +346,18 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m.executeConfirmedAction()
 			case key == "esc":
 				m.clearConfirm()
-				m.statusMessage = "Cancelled"
+				m.setStatus("Cancelled")
 				return m, nil
 			case key == "1" || key == "2" || key == "3":
 				// Cancel confirmation and let navigation key fall through
 				m.clearConfirm()
+			case m.confirmAction == confirmDeleteTrack:
+				// Keep the status-bar prompt visible until Enter or Esc
+				return m, nil
 			default:
-				// Any other key also cancels
+				// For other confirmations, any key cancels
 				m.clearConfirm()
-				m.statusMessage = "Cancelled"
+				m.setStatus("Cancelled")
 				return m, nil
 			}
 		}
@@ -340,46 +422,20 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		// ── Global keybindings ───────────────────────────────
 		switch msg.String() {
-		case "1":
-			if m.activePage != PageStream {
-				m.switchPage(PageStream)
-				m.statusMessage = ""
-			}
-			return m, nil
-		case "2":
-			if m.activePage != PageLibrary {
-				m.switchPage(PageLibrary)
-				msg := fmt.Sprintf("Library: %d tracks  (type to filter)", len(m.library))
-				if len(m.library) == 0 {
-					msg = "No downloaded tracks"
-				}
-				m.statusMessage = msg
-			}
-			return m, nil
-		case "3":
-			if m.activePage != PageSettings {
-				m.switchPage(PageSettings)
-				m.statusMessage = ""
-			}
-			return m, nil
-
 		case "q", "ctrl+c":
 			m.quitting = true
 			m.Shutdown()
 			return m, tea.Quit
 
 		case "?":
-			m.showHelp = true
+			m.switchPage(PageSettings)
 			return m, nil
 
 		case "tab":
 			switch m.activePage {
 			case PageSettings:
-				// Settings page: tab moves cursor down
-				m.settingsCursor++
-				if m.settingsCursor > 6 {
-					m.settingsCursor = 0
-				}
+				// Tab does nothing on settings — arrows navigate the list.
+				return m, nil
 			case PageLibrary:
 				// Library page: search input ↔ library list
 				if m.searchFocused {
@@ -416,26 +472,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 
 		case "esc":
-			m.showHelp = false
 			if m.activePage == PageSettings && m.settingsEditField {
 				// Cancel inline editing on Settings page
 				m.settingsEditField = false
 				m.settingsEditInput.Blur()
-			} else if m.activePage == PageSettings {
-				// On Settings page outside edit mode: just deselect (no page exit)
-				// Use 1/2/3 to switch pages instead.
-				m.statusMessage = "Use 1/2/3 to switch pages"
+				return m, nil
 			}
-			return m, nil
-
-		case "o":
-			// Open the download directory from any page.
-			path := m.downloadDir()
-			if err := openInOS(path); err != nil {
-				m.statusMessage = "Failed to open: " + err.Error()
-			} else {
-				m.statusMessage = "Opened: " + path
-			}
+			// Otherwise Esc does nothing outside edit mode.
 			return m, nil
 
 		// ── Panel navigation ─────────────────────────────────
@@ -536,24 +579,37 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			switch m.activePage {
 			case PageLibrary:
 				if m.activePanel == PanelSearch && !m.searchFocused {
-					// Library mode: play a downloaded track directly (use filtered list)
+					// Add library track to queue, auto-play only if stopped + first track.
+					// Only SetCurrentIndex when a track actually starts playing —
+					// CurrentIndex is the single source of truth for what mpv is
+					// doing, so it must never point at a track that isn't playing.
+					// queueCursor is NOT moved — the user's selection stays where
+					// they left it. The new track is visible at the bottom.
 					tracks := m.filteredLibrary()
 					if len(tracks) > 0 && m.libraryCursor >= 0 && m.libraryCursor < len(tracks) {
 						t := tracks[m.libraryCursor]
 						m.queue.Add(t)
-						m.queue.SetCurrentIndex(m.queue.Len() - 1)
-						m.queueCursor = m.queue.Len() - 1
-						playCmd := m.startTrackPlayback(t.FilePath, t.Title, t.DurationSec)
-						if playCmd != nil {
-							return m, playCmd
+
+						if m.playerState == player.StateStopped && m.queue.Len() == 1 {
+							// First track in an empty queue — auto-play
+							m.queue.SetCurrentIndex(m.queue.Len() - 1)
+							m.queueCursor = m.queue.CurrentIndex()
+							m.clampQueueOffset()
+							if playCmd := m.startTrackPlayback(t.FilePath, t.Title, t.DurationSec); playCmd != nil {
+								return m, playCmd
+							}
 						}
-						// startTrackPlayback already set m.err / m.playerState.
+
+						m.setStatus("Added to queue: " + t.Title)
 					}
 					return m, nil
 				}
 				// On Library page download queue panel: play selected completed download
 				if m.activePanel == PanelQueue && !m.searchFocused {
 					m.playSelectedQueueItem()
+					if m.playerState == player.StatePlaying {
+						return m, tea.Batch(positionCmd(m.player), endedCmd(m.player), playerTickCmd())
+					}
 					return m, nil
 				}
 				return m, nil
@@ -561,28 +617,58 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			default:
 				// ── Stream page (default) ──────────────────────────
 				switch m.activePanel {
-				case PanelSearch:
-					if len(m.results) > 0 && m.searchCursor >= 0 && m.searchCursor < len(m.results) {
-						r := m.results[m.searchCursor]
-						t := searchResultToTrack(r)
-						m.queue.Add(t)
-						m.queue.SetCurrentIndex(m.queue.Len() - 1)
-						m.queueCursor = m.queue.Len() - 1
+			case PanelSearch:
+				if len(m.results) > 0 && m.searchCursor >= 0 && m.searchCursor < len(m.results) {
+					r := m.results[m.searchCursor]
+					// resolveTrack consults the local library so a track
+					// that already exists on disk plays the local file
+					// instead of re-streaming from YouTube.
+					t := m.resolveTrack(r)
+					m.queue.Add(t)
+					// queueCursor intentionally NOT moved — the user's
+					// selection stays where they left it.
 
-						// Check auto-download setting
-						if m.settings.StreamMode {
-							// Stream via URL — play immediately
-							return m, m.startTrackPlayback(t.URL, t.Title, t.DurationSec)
+					var cmds []tea.Cmd
+
+					// Auto-play only if nothing was playing (smart start).
+					// Only SetCurrentIndex when a track actually starts
+					// playing — the queue's CurrentIndex is the single
+					// source of truth for "what mpv is playing", so it
+					// must never be set to a track that isn't playing.
+					// queueCursor always follows currentIndex on playback.
+					if m.playerState == player.StateStopped && m.queue.Len() == 1 {
+						m.queue.SetCurrentIndex(m.queue.Len() - 1)
+						m.queueCursor = m.queue.CurrentIndex()
+						m.clampQueueOffset()
+						if playCmd := m.startTrackPlayback(t.PlayURL(), t.Title, t.DurationSec); playCmd != nil {
+							cmds = append(cmds, playCmd)
 						}
-						// Legacy mode: enqueue download
-						m.statusMessage = "Added to queue: " + t.Title
-						m.ensureDownloader()
-						m.downloader.Enqueue(t.ID, t.Title, r.URL, m.downloadDir())
-						return m, downloadCmd(m.downloader)
+					} else {
+						m.setStatus("Added to queue: " + t.Title)
 					}
+
+					// Download handling (separate from auto-play).
+					if !m.settings.StreamMode {
+						m.ensureDownloader()
+						m.downloader.Enqueue(t.ID, t.Title, r.Uploader, r.URL, m.downloadDir())
+						cmds = append(cmds, downloadCmd(m.downloader))
+					} else if m.settings.AutoDownload && !t.Downloaded {
+						m.ensureDownloader()
+						m.downloader.Enqueue(t.ID, t.Title, r.Uploader, r.URL, m.downloadDir())
+						cmds = append(cmds, downloadCmd(m.downloader))
+					}
+
+					if len(cmds) == 0 {
+						return m, nil
+					}
+					return m, tea.Batch(cmds...)
+				}
 
 				case PanelQueue:
 					m.playSelectedQueueItem()
+					if m.playerState == player.StatePlaying {
+						return m, tea.Batch(positionCmd(m.player), endedCmd(m.player), playerTickCmd())
+					}
 				}
 				return m, nil
 			}
@@ -598,6 +684,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				} else {
 					m.playerState = player.StatePlaying
 				}
+			}
+			// Re-anchor the smooth-progress timer and start the fast
+			// redraws again on resume (or keep it running through the
+			// pause tap if we never actually paused).
+			m.lastPositionAt = time.Now()
+			if m.playerState == player.StatePlaying {
+				return m, playerTickCmd()
 			}
 			return m, nil
 
@@ -626,7 +719,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if m.player != nil {
 					m.player.Seek(-oldPos)
 				}
-				m.statusMessage = "Restarting"
+				m.setStatus("Restarting")
 				return m, nil
 			}
 			// Less than 3s in — go to the previous track
@@ -655,21 +748,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if len(m.library) == 0 {
 					msg = "No downloaded tracks"
 				}
-				m.statusMessage = msg
+				m.setStatus(msg)
 			}
 			return m, nil
-
-		case "R":
-			// If not on Stream page, switch there first.
-			if m.activePage != PageStream {
-				m.switchPage(PageStream)
-			}
-			m.showingRecommendations = true
-			m.results = nil
-			m.searchCursor = 0
-			m.searchOffset = 0
-			m.statusMessage = "Loading recommendations…"
-			return m, fetchRecommendationsCmd(m.settings.CookieBrowser, m.settings.UserAgent)
 
 		case "h", "ctrl+b":
 			m.position = max(m.position-5, 0)
@@ -736,14 +817,27 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					return m, nil
 				}
 				r := m.results[m.searchCursor]
-				t := searchResultToTrack(r)
+				// resolveTrack checks the library first so we can tell
+				// the user "Already downloaded" instead of re-enqueueing
+				// a download for a file that already exists locally.
+				t := m.resolveTrack(r)
 				if t.URL == "" {
-					m.statusMessage = "No URL available for: " + t.Title
+					m.setStatus("No URL available for: " + t.Title)
 					return m, nil
 				}
+				if t.Downloaded {
+					m.setStatus("Already downloaded: " + t.Title)
+					return m, nil
+				}
+				// Filesystem check — the library scan may not have caught
+				// every file (manually placed, different session, etc.).
 				m.ensureDownloader()
-				m.downloader.Enqueue(t.ID, t.Title, t.URL, m.downloadDir())
-				m.statusMessage = "Download queued: " + t.Title
+				if m.downloader.IsDownloaded(t.ID, t.Title, m.downloadDir()) {
+					m.setStatus("Already downloaded: " + t.Title)
+					return m, nil
+				}
+				m.downloader.Enqueue(t.ID, t.Title, r.Uploader, t.URL, m.downloadDir())
+				m.setStatus("Download queued: " + t.Title)
 				return m, downloadCmd(m.downloader)
 
 			case m.activePage == PageStream && m.activePanel == PanelQueue && m.queue.Len() > 0:
@@ -752,21 +846,25 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				t := m.queue.Tracks()[m.queueCursor]
 				if t.Downloaded {
-					m.statusMessage = "Already downloaded: " + t.Title
+					m.setStatus("Already downloaded: " + t.Title)
 					return m, nil
 				}
 				if t.URL == "" {
-					m.statusMessage = "No URL available for: " + t.Title
+					m.setStatus("No URL available for: " + t.Title)
 					return m, nil
 				}
 				m.ensureDownloader()
-				m.downloader.Enqueue(t.ID, t.Title, t.URL, m.downloadDir())
-				m.statusMessage = "Download queued: " + t.Title
+				if m.downloader.IsDownloaded(t.ID, t.Title, m.downloadDir()) {
+					m.setStatus("Already downloaded: " + t.Title)
+					return m, nil
+				}
+				m.downloader.Enqueue(t.ID, t.Title, t.Artist, t.URL, m.downloadDir())
+				m.setStatus("Download queued: " + t.Title)
 			}
 			return m, nil
 
 		case "d", "delete":
-			if m.activePage == PageStream && m.activePanel == PanelQueue && m.queue.Len() > 0 {
+			if m.activePanel == PanelQueue && m.queue.Len() > 0 {
 				idx := m.queueCursor
 				removed := m.queue.Remove(idx)
 				if removed && m.queue.Len() == 0 {
@@ -793,7 +891,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if m.libraryCursor >= 0 && m.libraryCursor < len(tracks) {
 					t := tracks[m.libraryCursor]
 					m.startConfirm(confirmDeleteTrack, t.Title)
-					m.statusMessage = "Press d again to delete \"" + t.Title + "\" from disk"
+					// Styled confirmation: orange bullet, white action, mint Enter, pink Esc
+					bullet := lipgloss.NewStyle().Foreground(colorWarning).Render("●")
+					action := lipgloss.NewStyle().Foreground(colorText).Bold(true).Render("Delete")
+					title := lipgloss.NewStyle().Foreground(colorText).Render("\"" + t.Title + "\"?")
+					enterKey := lipgloss.NewStyle().Foreground(colorAccent2).Bold(true).Render("[Enter]")
+					enterDesc := lipgloss.NewStyle().Foreground(colorTextDim).Render("yes")
+					escKey := lipgloss.NewStyle().Foreground(colorAccent3).Bold(true).Render("[Esc]")
+					escDesc := lipgloss.NewStyle().Foreground(colorTextDim).Render("no")
+					m.setStatus(bullet + " " + action + " " + title + "  " + enterKey + " " + enterDesc + "  " + escKey + " " + escDesc)
 				}
 				return m, nil
 			}
@@ -805,7 +911,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			if !m.isConfirming() {
 				m.startConfirm(confirmClearQueue, "")
-				m.statusMessage = "Press D again to clear the entire queue"
+				m.setStatus("Press D again to clear the entire queue")
 				return m, nil
 			}
 			// Already confirmed — execute
@@ -818,30 +924,34 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.player != nil {
 				m.player.Stop()
 			}
-			m.statusMessage = "Queue cleared"
+			m.setStatus("Queue cleared")
 			return m, nil
 
 		case "s":
 			m.queue.ToggleShuffle()
+			// Brief flash on the SHFL label so the keypress feels
+			// acknowledged in the bar itself, not only in the status row.
+			m.modeFlashUntil = time.Now().Add(250 * time.Millisecond)
 			if m.queue.IsShuffle() {
-				m.statusMessage = "Shuffle: ON"
+				m.setStatus("Shuffle: ON")
 			} else {
-				m.statusMessage = "Shuffle: OFF"
+				m.setStatus("Shuffle: OFF")
 			}
 			return m, nil
 
 		case "r":
 			if !m.queue.IsRepeat() && !m.queue.IsRepeatAll() {
 				m.queue.ToggleRepeat() // → repeat: true
-				m.statusMessage = "Repeat: ONE"
+				m.setStatus("Repeat: ONE")
 			} else if m.queue.IsRepeat() {
 				m.queue.ToggleRepeat()    // repeat: false
 				m.queue.ToggleRepeatAll() // repeatAll: true
-				m.statusMessage = "Repeat: ALL"
+				m.setStatus("Repeat: ALL")
 			} else {
 				m.queue.ToggleRepeatAll() // repeatAll: false
-				m.statusMessage = "Repeat: OFF"
+				m.setStatus("Repeat: OFF")
 			}
+			m.modeFlashUntil = time.Now().Add(250 * time.Millisecond)
 			return m, nil
 
 		case "ctrl+up":
@@ -879,15 +989,12 @@ func (m *Model) playSelectedQueueItem() {
 	t := m.queue.Tracks()[m.queueCursor]
 	m.queue.SetCurrentIndex(m.queueCursor)
 
-	playURL := ""
-	switch {
-	case t.Downloaded && t.FilePath != "":
-		playURL = t.FilePath
-	case t.URL != "":
-		playURL = t.URL
-	default:
+	// PlayURL() returns the local file path when downloaded, else
+	// the streaming URL. A track with neither source is unplayable.
+	playURL := t.PlayURL()
+	if playURL == "" {
 		m.playerState = player.StateStopped
-		m.statusMessage = "Cannot play '" + t.Title + "': no file or URL"
+		m.setStatus("Cannot play '" + t.Title + "': no file or URL")
 		return
 	}
 
@@ -896,6 +1003,17 @@ func (m *Model) playSelectedQueueItem() {
 	// playSelectedQueueItem is responsible for attaching position/ended
 	// listeners (see the n/p/Enter handlers, which check
 	// m.playerState == StatePlaying to decide whether to batch them in).
+	//
+	// suppressAutoAdvance prevents the stale endedCmd from the PREVIOUS
+	// playback (which is still blocked on the old endCh) from calling
+	// Next() in the SongEnded handler when the old mpv is killed by
+	// the Play() call below. This is the key fix for the "press Enter
+	// on first queue item → skips to the 2nd" bug: without it, a stale
+	// SongEndedMsg arrives milliseconds after Play() and advances
+	// currentIndex past the track the user just selected.
+	if m.playerState == player.StatePlaying {
+		m.suppressAutoAdvance = true
+	}
 	_ = m.startTrackPlayback(playURL, t.Title, t.DurationSec)
 }
 
@@ -979,10 +1097,9 @@ func (m Model) handleClick(x, y int) Model {
 			// Right column: split into queue (top) and downloads (bottom).
 			// Must match renderPanels() exactly. Each sub-panel: title (1) +
 			// content (N) + borders (2) = N + 3 total lines.
-			const minSubContent = 4
 			totalSubContentH := panelHeight - 6
-			if totalSubContentH < minSubContent*2 {
-				totalSubContentH = minSubContent * 2
+			if totalSubContentH < 0 {
+				totalSubContentH = 0
 			}
 			queueContentH := totalSubContentH / 2
 			// Queue sub-panel ends at: start (1) + queueHeight (queueContentH + 3)
@@ -1027,4 +1144,65 @@ func (m Model) handleClick(x, y int) Model {
 	}
 
 	return m
+}
+
+// handleGlobalKey dispatches the key against the keymap's global
+// bindings (page switch, refresh recs, open download dir). If a
+// binding matches, its action runs and handled=true is returned.
+// Called first by Update so a focused text input cannot swallow
+// these keys.
+func (m *Model) handleGlobalKey(msg tea.KeyMsg) (handled bool, cmd tea.Cmd) {
+	for _, b := range Keys.Globals() {
+		if !key.Matches(msg, b) {
+			continue
+		}
+		// Matched a global — run the action. The case label and the
+		// binding must agree; if a key is renamed in keys.go, update
+		// both places.
+		switch msg.String() {
+		case "1": // Keys.PageStream
+			if m.activePage != PageStream {
+				m.switchPage(PageStream)
+				m.setStatus("")
+			}
+			return true, nil
+		case "2": // Keys.PageLibrary
+			if m.activePage != PageLibrary {
+				m.switchPage(PageLibrary)
+				statusMsg := fmt.Sprintf("Library: %d tracks  (type to filter)", len(m.library))
+				if len(m.library) == 0 {
+					statusMsg = "No downloaded tracks"
+				}
+				m.setStatus(statusMsg)
+			}
+			return true, nil
+		case "3": // Keys.PageSettings
+			if m.activePage != PageSettings {
+				m.switchPage(PageSettings)
+				m.setStatus("")
+			}
+			return true, nil
+		case "R": // Keys.Recs
+			if m.activePage != PageStream {
+				m.switchPage(PageStream)
+			}
+			m.showingRecommendations = true
+			m.results = nil
+			m.searchCursor = 0
+			m.searchOffset = 0
+			m.setStatus("Loading recommendations…")
+			return true, fetchRecommendationsCmd(m.settings.CookieBrowser, m.settings.UserAgent)
+		case "o": // Keys.Open
+			path := m.downloadDir()
+			if err := openInOS(path); err != nil {
+				m.setStatus("Failed to open: " + err.Error())
+			} else {
+				m.setStatus("Opened: " + path)
+			}
+			return true, nil
+		}
+		// Matched a global we don't have an action for here.
+		return true, nil
+	}
+	return false, nil
 }

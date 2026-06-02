@@ -48,12 +48,6 @@ var (
 				Border(lipgloss.RoundedBorder()).
 				BorderForeground(colorBorderFoc)
 
-	// Settings page uses same border style for consistency
-	panelBorderSettings = lipgloss.NewStyle().
-				Border(lipgloss.RoundedBorder()).
-				BorderForeground(colorBorder).
-				Padding(0, 2, 0, 2)
-
 	// Confirmation dialog border — double line for modal weight
 	styleConfirmBorder = lipgloss.NewStyle().
 				Border(lipgloss.DoubleBorder()).
@@ -178,7 +172,14 @@ var (
 			Bold(true)
 
 	styleModeInactive = lipgloss.NewStyle().
-				Foreground(colorTextDim)
+			Foreground(colorTextDim)
+
+	// Mode flash — used for ~250ms after the user presses `s` or `r`,
+	// so the SHFL / REPT label briefly pops to confirm the keypress
+	// in the bar itself (not only via the status row).
+	styleModeFlash = lipgloss.NewStyle().
+			Foreground(colorTitle).
+			Bold(true)
 
 	// Volume bar
 	styleVolumeLabel = lipgloss.NewStyle().
@@ -302,6 +303,18 @@ var (
 
 	styleHelpSep = lipgloss.NewStyle().
 			Foreground(colorTextDim)
+)
+
+// ─── Inline Key Hints ───────────────────────────────────────────────
+//
+// Rendered directly next to the UI element a key controls (play button,
+// mode indicators, panel titles, header) instead of only in the help
+// bar. Uses the same accent as styleHelpKey for visual consistency.
+
+var (
+	styleKeyHint = lipgloss.NewStyle().
+			Foreground(colorAccent2).
+			Bold(true)
 )
 
 // ─── Status ─────────────────────────────────────────────────────────

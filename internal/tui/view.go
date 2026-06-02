@@ -3,6 +3,7 @@ package tui
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"ytmgo/internal/downloader"
 	"ytmgo/internal/player"
@@ -69,77 +70,121 @@ func (m Model) View() string {
 		return "Loading…"
 	}
 
-	// If help is shown, render overlay
-	if m.showHelp {
-		return m.helpView()
-	}
-
-	// If confirming a destructive action, show confirmation overlay
-	if m.isConfirming() {
-		return m.renderConfirmOverlay()
-	}
-
-	switch m.activePage {
-	case PageStream:
-		return m.renderPage()
-	case PageLibrary:
-		return m.renderPage()
-	case PageSettings:
-		return m.renderSettingsPage()
+	var view string
+	switch {
+	case m.isConfirming() && m.confirmAction != confirmDeleteTrack:
+		view = m.renderConfirmOverlay()
 	default:
-		return m.renderPage()
+		switch m.activePage {
+		case PageSettings:
+			view = m.renderSettingsPage()
+		default:
+			view = m.renderPage()
+		}
 	}
+	return m.fillHeight(view)
+}
+
+// fillHeight pads the output to exactly m.height lines so a previous taller
+// render (e.g. before a terminal shrink) is fully overwritten. Without this,
+// Bubble Tea's incremental renderer leaves stale content visible at the bottom.
+func (m Model) fillHeight(view string) string {
+	if m.height <= 0 || m.width <= 0 {
+		return view
+	}
+	lines := strings.Count(view, "\n") + 1
+	if lines >= m.height {
+		return view
+	}
+	blank := strings.Repeat(" ", m.width)
+	return view + strings.Repeat("\n"+blank, m.height-lines)
 }
 
 // renderPage renders the base page layout (shared by Stream and Library).
 func (m Model) renderPage() string {
 	header := m.renderHeader()
 	panels := m.renderPanels()
+	status := m.renderStatus()
 	player := m.renderPlayerBar()
 	help := m.renderHelpBar()
-	status := m.renderStatus()
 
 	// Build the layout with optional sections
 	var elements []string
 	elements = append(elements, header)
 	elements = append(elements, panels)
-	elements = append(elements, player)
 	if status != "" {
 		elements = append(elements, status)
 	}
+	elements = append(elements, player)
 	elements = append(elements, help)
 
 	return lipgloss.JoinVertical(lipgloss.Left, elements...)
 }
 
-// renderSettingsPage renders the settings layout.
+// renderSettingsPage renders the settings layout with a two-column panel:
+// left = settings list, right = keyboard shortcuts.
 func (m Model) renderSettingsPage() string {
 	header := m.renderHeader()
-	body := m.renderSettingsList()
+	panels := m.renderSettingsPanels()
+	status := m.renderStatus()
 	player := m.renderPlayerBar()
 	help := m.renderHelpBar()
-	status := m.renderStatus()
-
-	// Wrap settings in a bordered container for visual consistency
-	// Border adds 2 chars (left + right), padding adds 4 (2 each side)
-	// Inner content area = panelW - 6, so set panelW = width - 6 + 2 = width - 4
-	// to account for border width setting being total width
-	panelW := m.width - 4
-	if panelW < 40 {
-		panelW = 40
-	}
-	body = panelBorderSettings.Width(panelW).Render(body)
 
 	var elements []string
 	elements = append(elements, header)
-	elements = append(elements, body)
-	elements = append(elements, player)
+	elements = append(elements, panels)
 	if status != "" {
 		elements = append(elements, status)
 	}
+	elements = append(elements, player)
 	elements = append(elements, help)
 
 	return lipgloss.JoinVertical(lipgloss.Left, elements...)
+}
+
+// renderSettingsPanels renders the left (settings) and right (shortcuts) panels.
+func (m Model) renderSettingsPanels() string {
+	outerWidth := (m.width - 2) / 2
+	panelWidth := outerWidth - 2
+	if panelWidth < 30 {
+		panelWidth = 30
+	}
+	panelHeight := m.panelHeight()
+
+	// Left panel: Settings list (always focused — arrows navigate it)
+	leftBorder := panelBorderFocused
+	settingsTitle := stylePanelTitle.Render("SETTINGS")
+	settingsContent := m.renderSettingsList(panelWidth, panelHeight-3)
+	leftPanel := lipgloss.JoinVertical(lipgloss.Top,
+		settingsTitle,
+		settingsContent,
+	)
+	leftPanel = leftBorder.
+		Width(panelWidth).
+		Height(panelHeight - 2).
+		Render(leftPanel)
+
+	// Right panel: Keyboard shortcuts (always visible, view-only)
+	rightBorder := panelBorder
+	helpTitle := stylePanelTitle.Render("KEYBOARD SHORTCUTS")
+	helpContent := m.renderHelpPanel(panelWidth, panelHeight-3)
+	rightPanel := lipgloss.JoinVertical(lipgloss.Top,
+		helpTitle,
+		helpContent,
+	)
+	rightPanel = rightBorder.
+		Width(panelWidth).
+		Height(panelHeight - 2).
+		Render(rightPanel)
+
+	// Horizontal spacer between columns
+	leftover := m.width - lipgloss.Width(leftPanel) - lipgloss.Width(rightPanel)
+	if leftover < 1 {
+		leftover = 1
+	}
+	spacer := strings.Repeat(" ", leftover)
+
+	return lipgloss.JoinHorizontal(lipgloss.Top, leftPanel, spacer, rightPanel)
 }
 
 // ─── Header ────────────────────────────────────────────────────────
@@ -170,7 +215,10 @@ func (m Model) renderHeader() string {
 	}
 	tabsStr := strings.Join(renderedTabs, " ")
 
-	left := lipgloss.JoinHorizontal(lipgloss.Center, title, "   ", searchView)
+	// Tab hint — shown inline so users discover focus cycling without
+	// glancing down at the help bar.
+	tabHint := styleKeyHint.Render("[tab]") + styleTextDim.Render(" cycle")
+	left := lipgloss.JoinHorizontal(lipgloss.Center, title, "   ", searchView, "  ", tabHint)
 
 	gap := m.width - lipgloss.Width(left) - lipgloss.Width(tabsStr) - 2
 	if gap < 1 {
@@ -203,11 +251,16 @@ func (m Model) renderPanels() string {
 
 	leftBorder := panelBorder
 	rightBorder := panelBorder
-	if m.activePanel == PanelSearch {
-		leftBorder = panelBorderFocused
-	}
-	if m.activePanel == PanelQueue {
-		rightBorder = panelBorderFocused
+	// Only highlight a panel border when the search input is NOT focused —
+	// a blinking cursor in the search box and a violet panel border would
+	// compete as two focus indicators pointing in different directions.
+	if !m.searchFocused {
+		if m.activePanel == PanelSearch {
+			leftBorder = panelBorderFocused
+		}
+		if m.activePanel == PanelQueue {
+			rightBorder = panelBorderFocused
+		}
 	}
 
 	// Search panel title
@@ -219,7 +272,8 @@ func (m Model) renderPanels() string {
 			panelLabel = "LIBRARY  🔍 \"" + q + "\""
 		}
 	} else if m.showingRecommendations {
-		panelLabel = "RECOMMENDATIONS"
+		rHint := styleKeyHint.Render("[R]")
+		panelLabel = rHint + "  RECOMMENDATIONS"
 	}
 	searchTitle := stylePanelTitle.Render(panelLabel)
 
@@ -243,21 +297,12 @@ func (m Model) renderPanels() string {
 	// Each sub-panel renders as: border-top (1) + title (1) + content (N) + border-bottom (1)
 	// = N + 3 total lines. Two sub-panels: 2N + 6 total. We want total = panelHeight,
 	// so N + M = panelHeight - 6 (split roughly 50/50).
-	const minSubContent = 4
 	totalSubContentH := panelHeight - 6
-	if totalSubContentH < minSubContent*2 {
-		totalSubContentH = minSubContent * 2
+	if totalSubContentH < 0 {
+		totalSubContentH = 0
 	}
 	queueContentH := totalSubContentH / 2
 	downloadsContentH := totalSubContentH - queueContentH
-	if queueContentH < minSubContent {
-		queueContentH = minSubContent
-		downloadsContentH = totalSubContentH - queueContentH
-	}
-	if downloadsContentH < minSubContent {
-		downloadsContentH = minSubContent
-		queueContentH = totalSubContentH - downloadsContentH
-	}
 
 	// Queue sub-panel (top of right column)
 	queueTitle := fmt.Sprintf("QUEUE  [%d]", m.queue.Len())
@@ -349,7 +394,19 @@ func (m Model) renderSearchResults(width, height int) string {
 		)
 	}
 
-	return strings.Join(lines, "\n")
+	// Pad each line to full width, then pad to full height — this
+	// overwrites both horizontal and vertical stale content from the
+	// previous frame's empty-state render ("No results", "Loading…").
+	result := strings.Join(lines, "\n")
+	paddedW := max(1, width-2)
+	result = padToWidth(result, paddedW)
+	if cnt := strings.Count(result, "\n") + 1; cnt < height {
+		result += "\n" + strings.Join(
+			make([]string, height-cnt),
+			"\n"+strings.Repeat(" ", paddedW),
+		)
+	}
+	return result
 }
 
 func (m Model) renderLibrary(width, height int) string {
@@ -418,7 +475,18 @@ func (m Model) renderLibrary(width, height int) string {
 		)
 	}
 
-	return strings.Join(lines, "\n")
+	// Pad each line to full width, then pad to full height — overwrites
+	// stale content from the empty-state render ("No tracks match…").
+	result := strings.Join(lines, "\n")
+	paddedW := max(1, width-2)
+	result = padToWidth(result, paddedW)
+	if cnt := strings.Count(result, "\n") + 1; cnt < height {
+		result += "\n" + strings.Join(
+			make([]string, height-cnt),
+			"\n"+strings.Repeat(" ", paddedW),
+		)
+	}
+	return result
 }
 
 func (m Model) formatResultRow(idx int, r search.Result, width int, isSelected bool) string {
@@ -482,17 +550,34 @@ func (m Model) renderQueue(width, height int) string {
 		)
 	}
 
-	return strings.Join(lines, "\n")
+	// Pad each line to full width, then pad to full height — overwrites
+	// stale content from the empty-state render ("Queue is empty").
+	result := strings.Join(lines, "\n")
+	paddedW := max(1, width-2)
+	result = padToWidth(result, paddedW)
+	if cnt := strings.Count(result, "\n") + 1; cnt < height {
+		result += "\n" + strings.Join(
+			make([]string, height-cnt),
+			"\n"+strings.Repeat(" ", paddedW),
+		)
+	}
+	return result
 }
 
 func (m Model) formatQueueRow(idx int, t queue.Track, width int) string {
+	// idx is the relative position within the visible window (0, 1, 2…).
+	// Convert to absolute for comparisons with model-level indices.
+	absIdx := m.queueOffset + idx
+
 	indicator := "  "
-	isPlaying := idx == m.queue.CurrentIndex()
+	isPlaying := absIdx == m.queue.CurrentIndex()
 	if isPlaying {
 		indicator = "▶ "
 	}
 
-	prefix := fmt.Sprintf("%s%d. ", indicator, idx+1)
+	// Absolute numbering: every track shows its real position (1..N)
+	// so the display number always matches the scrollbar cursor position.
+	prefix := fmt.Sprintf("%s%d. ", indicator, m.queueOffset+idx+1)
 	maxTitle := width - len(prefix)
 	title := t.Title
 	if len(title) > maxTitle && maxTitle > 3 {
@@ -517,7 +602,7 @@ func (m Model) formatQueueRow(idx int, t queue.Track, width int) string {
 	}
 	info := leftInfo + strings.Repeat(" ", spacing) + rightInfo
 
-	isSelected := m.activePanel == PanelQueue && idx == m.queueCursor
+	isSelected := m.activePanel == PanelQueue && absIdx == m.queueCursor
 	return renderListItemBlock(line, info, isSelected, isPlaying, width)
 }
 
@@ -565,12 +650,30 @@ func (m Model) renderDownloadQueue(width, height int) string {
 		if j.Status != downloader.StatusDownloading {
 			continue
 		}
-		bar := renderProgressBar(j.Progress, max(10, width-20))
-		line := fmt.Sprintf("⬇ %s  %s  %.0f%%",
-			truncate(j.Title, max(1, width-25)),
-			bar,
-			j.Progress,
-		)
+		// The worker flips status to Downloading the moment it picks
+		// up a job, but yt-dlp takes a beat before emitting its first
+		// `[download] X%` line. During that window j.Progress is 0,
+		// which is misleading to render as "0%" — the user reads it
+		// as "the download is broken." Show a spinner + "Starting…"
+		// instead, so the UI communicates the actual state.
+		var line string
+		if j.Progress > 0 {
+			bar := renderProgressBar(j.Progress, max(10, width-20))
+			line = fmt.Sprintf("⬇ %s  %s  %.0f%%",
+				truncate(j.Title, max(1, width-25)),
+				bar,
+				j.Progress,
+			)
+		} else {
+			// Braille spinner — 6 frames, advances every 500ms tick,
+			// so a full rotation every 3s.
+			spinnerFrames := []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴"}
+			spinner := spinnerFrames[m.tickCount%len(spinnerFrames)]
+			line = fmt.Sprintf("⬇ %s  %s  Starting…",
+				truncate(j.Title, max(1, width-25)),
+				spinner,
+			)
+		}
 		sections = append(sections, styleDownloadLabel.Render(line))
 	}
 
@@ -623,12 +726,23 @@ func (m Model) renderDownloadQueue(width, height int) string {
 		sections = append(sections, styleErrorLabel.Render(line))
 	}
 
-	return strings.Join(sections, "\n")
+	// Pad each line to full width, then pad to full height — overwrites
+	// stale content from the empty-state render ("No downloads").
+	result := strings.Join(sections, "\n")
+	paddedW := max(1, width-2)
+	result = padToWidth(result, paddedW)
+	if cnt := strings.Count(result, "\n") + 1; cnt < height {
+		result += "\n" + strings.Join(
+			make([]string, height-cnt),
+			"\n"+strings.Repeat(" ", paddedW),
+		)
+	}
+	return result
 }
 
 // ─── Settings List ────────────────────────────────────────────────
 
-func (m Model) renderSettingsList() string {
+func (m Model) renderSettingsList(panelWidth, panelHeight int) string {
 	var lines []string
 
 	settingsItems := []struct {
@@ -645,13 +759,19 @@ func (m Model) renderSettingsList() string {
 		{"User-Agent", truncate(m.settings.UserAgent, 30), "Custom UA for yt-dlp (empty = default)"},
 	}
 
-	// Scroll window: only render items within [offset, offset+visible)
-	vis := m.settingsVisibleItems()
+	// Each item uses ~4 lines (label, value, desc, blank).
+	// Reserve 2 lines for scroll indicator + help text at bottom.
+	vis := (panelHeight - 2) / 4
+	if vis < 1 {
+		vis = 1
+	}
 	offset := m.settingsOffset
 	end := offset + vis
 	if end > len(settingsItems) {
 		end = len(settingsItems)
 	}
+
+	innerW := max(1, panelWidth-2)
 
 	for i, item := range settingsItems[offset:end] {
 		idx := offset + i
@@ -692,7 +812,17 @@ func (m Model) renderSettingsList() string {
 	// Help text at bottom
 	lines = append(lines, styleSettingsDesc.Render("↑↓ navigate · Enter toggle/edit · Esc cancel edit · 1/2/3 switch page"))
 
-	return strings.Join(lines, "\n")
+	// Pad each line to full width and full height — overwrites any stale
+	// content from prior taller frames.
+	result := strings.Join(lines, "\n")
+	result = padToWidth(result, innerW)
+	if cnt := strings.Count(result, "\n") + 1; cnt < panelHeight {
+		result += "\n" + strings.Join(
+			make([]string, panelHeight-cnt),
+			"\n"+strings.Repeat(" ", innerW),
+		)
+	}
+	return result
 }
 
 // ─── Helpers ───────────────────────────────────────────────────────
@@ -702,6 +832,23 @@ func boolStr(v bool) string {
 		return styleSettingsBoolOn.Render("● ON")
 	}
 	return styleSettingsBoolOff.Render("○ OFF")
+}
+
+// padToWidth ensures every line of s is at least width visible characters
+// wide by appending trailing spaces. This is essential for Bubble Tea's
+// incremental renderer: when a previous frame had longer lines, characters
+// beyond the new line's end would remain visible as stale ghost text.
+func padToWidth(s string, width int) string {
+	if width <= 0 {
+		return s
+	}
+	lines := strings.Split(s, "\n")
+	for i, line := range lines {
+		if w := lipgloss.Width(line); w < width {
+			lines[i] = line + strings.Repeat(" ", width-w)
+		}
+	}
+	return strings.Join(lines, "\n")
 }
 
 func truncate(s string, maxLen int) string {
@@ -816,12 +963,32 @@ func (m Model) renderPlayerBar() string {
 			trackLabel = trackLabel[:innerW-1] + "…"
 		}
 
-		currentStr := formatDuration(int(m.position))
+		// Smooth progress: glide the bar from the last reported position
+		// using elapsed wall-clock time, so it moves continuously between
+		// coarse IPC updates instead of jumping every 500ms. Bounded to
+		// 2× the tick interval so a missed IPC update doesn't make the
+		// bar race ahead of reality.
+		displayPos := m.position
+		if m.playerState == player.StatePlaying {
+			elapsed := time.Since(m.lastPositionAt).Seconds()
+			if elapsed < 1.0 && elapsed >= 0 {
+				displayPos = m.lastPosition + elapsed
+				if m.duration > 0 && displayPos > m.duration {
+					displayPos = m.duration
+				}
+			}
+		}
+		currentStr := formatTime(displayPos)
 		totalStr := t.Duration
 		if totalStr == "" {
 			totalStr = formatDuration(t.DurationSec)
 		}
-		timeInfo := fmt.Sprintf("%s / %s", currentStr, totalStr)
+		// Pad the total to match the current's tabular width so the
+		// time display stays column-aligned as the song progresses.
+		if currentStr != "" && totalStr != "" && len(currentStr) < len(totalStr) {
+			currentStr = strings.Repeat(" ", len(totalStr)-len(currentStr)) + currentStr
+		}
+		timeInfo := currentStr + " / " + totalStr
 
 		nowPlaying = lipgloss.JoinHorizontal(lipgloss.Left,
 			styleNowIndicator.Render("▶"),
@@ -830,15 +997,23 @@ func (m Model) renderPlayerBar() string {
 		)
 
 		rightPart := styleTime.Render(timeInfo)
-		barWidth := innerW - lipgloss.Width(rightPart) - 3
+		hHint := styleKeyHint.Render("[h]")
+		lHint := styleKeyHint.Render("[l]")
+		barWidth := innerW - lipgloss.Width(rightPart) - lipgloss.Width(hHint) - lipgloss.Width(lHint) - 5
 		if barWidth < 10 {
 			barWidth = 10
 		}
-		bar := renderProgressBar(m.percentage(), barWidth)
+		displayPct := 0.0
+		if m.duration > 0 {
+			displayPct = (displayPos / m.duration) * 100.0
+		}
+		bar := renderProgressBar(displayPct, barWidth)
 		progress = lipgloss.JoinHorizontal(lipgloss.Left,
+			hHint, " ",
 			bar,
 			"  ",
-			rightPart,
+			rightPart, " ",
+			lHint,
 		)
 
 		controls = m.renderControls()
@@ -858,66 +1033,108 @@ func (m Model) renderPlayerBar() string {
 	return boxStyle.Width(m.width - 4).Render(content)
 }
 
+// renderControls renders the bottom row of the player bar.
+//
+// Layout (asymmetric, single separator):
+//
+//	[⏮  ▶  ⏭]            │            [🔀 SHFL  🔁 OFF  ▰▰▰▰▰ 80%]
+//	 ↑ transport (left)  hairline  ↑ modes + volume (right, flush-right)
+//
+// The transport cluster is a unit of *action* (what to do next).
+// The right cluster is a unit of *state* (shuffle / repeat / volume).
+// One hairline rule divides them; the right cluster is flush against
+// the right edge of the bar. Negative space is *intentional padding*
+// between two groups, not evenly-distributed filler, so wide terminals
+// don't turn the bar into three stranded clusters.
+//
+// Mode labels briefly flash bright for ~250ms after `s` or `r` is
+// pressed, so the keypress feels acknowledged in the bar itself,
+// not only in the status row.
 func (m Model) renderControls() string {
-	// Replaced standard text characters with modern crisp unicode icons
+	// ── Transport cluster (left, no leading separator) ─────────
+	pHint := styleKeyHint.Render("[p]")
 	prevBtn := styleCtrlBtn.Render("⏮")
-
 	var playBtn string
 	if m.playerState == player.StatePlaying {
 		playBtn = styleCtrlBtnPlaying.Render("⏸")
 	} else {
 		playBtn = styleCtrlBtnActive.Render("▶")
 	}
-
+	spaceHint := styleKeyHint.Render("[space]")
+	nHint := styleKeyHint.Render("[n]")
 	nextBtn := styleCtrlBtn.Render("⏭")
+	transport := lipgloss.JoinHorizontal(lipgloss.Left, pHint, " ", prevBtn, " ", playBtn, " ", spaceHint, " ", nextBtn, " ", nHint)
 
-	volBar := renderVolumeBar(m.volume, 10)
-	volLabel := volBar + fmt.Sprintf(" %d%%", m.volume)
+	// ── Right cluster: modes + volume (tight unit) ─────────────
+	flashing := time.Now().Before(m.modeFlashUntil)
 
-	var shuffleLabel string
-	if m.queue.IsShuffle() {
-		shuffleLabel = styleModeActive.Render("🔀 SHFL")
+	var shuffleStyle lipgloss.Style
+	if flashing {
+		shuffleStyle = styleModeFlash
+	} else if m.queue.IsShuffle() {
+		shuffleStyle = styleModeActive
 	} else {
-		shuffleLabel = styleModeInactive.Render("🔀 SHFL")
+		shuffleStyle = styleModeInactive
 	}
+	sHint := styleKeyHint.Render("[s]")
+	shuffleLabel := sHint + " " + shuffleStyle.Render("🔀 SHFL")
 
-	var repeatLabel string
+	// Repeat text follows the same state→label mapping as before, but
+	// style selection routes through the flash override.
+	var repeatText string
+	var repeatOn bool
 	switch {
 	case m.queue.IsRepeat():
-		repeatLabel = styleModeActive.Render("🔁 ONE")
+		repeatText, repeatOn = "🔁 ONE", true
 	case m.queue.IsRepeatAll():
-		repeatLabel = styleModeActive.Render("🔁 ALL")
+		repeatText, repeatOn = "🔁 ALL", true
 	default:
-		repeatLabel = styleModeInactive.Render("🔁 OFF")
+		repeatText, repeatOn = "🔁 OFF", false
+	}
+	var repeatStyle lipgloss.Style
+	if flashing {
+		repeatStyle = styleModeFlash
+	} else if repeatOn {
+		repeatStyle = styleModeActive
+	} else {
+		repeatStyle = styleModeInactive
+	}
+	rHint := styleKeyHint.Render("[r]")
+	repeatLabel := rHint + " " + repeatStyle.Render(repeatText)
+
+	volBar := renderVolumeBar(m.volume, 8)
+	volDownHint := styleKeyHint.Render("[-]")
+	volUpHint := styleKeyHint.Render("[+]")
+	volLabel := volDownHint + " " + volBar + styleVolumeLabel.Render(fmt.Sprintf(" %d%%", m.volume)) + " " + volUpHint
+
+	right := lipgloss.JoinHorizontal(lipgloss.Left,
+		shuffleLabel, "  ", repeatLabel, "  ", volLabel,
+	)
+
+	// ── Asymmetric composition: left flush-left, right flush-right,
+	// one hairline separator centered in the gap ────────────────
+	contentW := m.width - 10 // box width(m.width-4) - doubleBorder(2) - padding(4)
+	if contentW < 20 {
+		contentW = 20
 	}
 
-	sep := styleCtrlSep.Render(" │ ")
+	sep := styleCtrlSep.Render("│")
+	transportW := lipgloss.Width(transport)
+	rightW := lipgloss.Width(right)
+	sepW := lipgloss.Width(sep)
 
-	left := lipgloss.JoinHorizontal(lipgloss.Left, prevBtn, "  ", playBtn, "  ", nextBtn)
-	middle := stylePlayerCtrl.Render(volLabel)
-	right := lipgloss.JoinHorizontal(lipgloss.Left, shuffleLabel, "  ", repeatLabel)
-
-	leftWidth := lipgloss.Width(left)
-	middleWidth := lipgloss.Width(middle)
-	rightWidth := lipgloss.Width(right)
-
-	totalInnerWidth := m.width - 10
-
-	gap := (totalInnerWidth - leftWidth - middleWidth - rightWidth - 6) / 3
-	if gap < 1 {
-		gap = 1
+	gap := contentW - transportW - rightW - sepW
+	if gap < 2 {
+		gap = 2
 	}
-	spacer := strings.Repeat(" ", gap)
+	leftPad := gap / 2
+	rightPad := gap - leftPad
 
 	return lipgloss.JoinHorizontal(lipgloss.Left,
-		left,
-		spacer,
+		transport,
+		strings.Repeat(" ", leftPad),
 		sep,
-		spacer,
-		middle,
-		spacer,
-		sep,
-		spacer,
+		strings.Repeat(" ", rightPad),
 		right,
 	)
 }
@@ -941,76 +1158,47 @@ func (m Model) renderStatus() string {
 	if m.err != nil {
 		return styleStatusErr.Render("✗ Error: " + m.err.Error())
 	}
+	if m.isConfirming() && m.confirmAction == confirmDeleteTrack {
+		// Delete-track confirmation is fully styled inline in the message
+		// itself — return it raw so the ANSI codes aren't wrapped.
+		return m.statusMessage
+	}
 	if m.statusMessage != "" {
 		return styleStatus.Render("● " + m.statusMessage)
 	}
 	// Nothing actionable to report — show a rotating tip so the bar is
-	// never empty. Tips are dimmer than live status messages to keep the
-	// visual hierarchy clear.
+	// never empty. Tips are dimmer than action status to keep the visual
+	// hierarchy clear.
 	return styleStatusIdle.Render("▸ " + m.currentTip())
 }
 
 // ─── Help Overlay ──────────────────────────────────────────────────
 
-func (m Model) helpView() string {
-	helpContent := m.buildHelpContent()
-	helpHeight := strings.Count(helpContent, "\n") + 2
-	helpWidth := 60
-
-	if m.width < helpWidth+4 {
-		helpWidth = m.width - 4
-	}
-
-	box := lipgloss.NewStyle().
-		Border(lipgloss.DoubleBorder()).
-		BorderForeground(colorAccent).
-		Padding(1, 2, 1, 2).
-		Width(helpWidth).
-		Background(colorBg)
-
-	rendered := box.Render(helpContent)
-
-	vPad := (m.height - helpHeight) / 2
-	if vPad < 0 {
-		vPad = 0
-	}
-	hPad := (m.width - lipgloss.Width(rendered)) / 2
-	if hPad < 0 {
-		hPad = 0
-	}
-
-	padding := strings.Repeat("\n", vPad)
-	indent := strings.Repeat(" ", hPad)
-
-	lines := strings.Split(rendered, "\n")
-	for i := range lines {
-		if len(lines[i]) < m.width {
-			lines[i] = indent + lines[i]
-		}
-	}
-
-	return padding + strings.Join(lines, "\n")
-}
-
-func (m Model) buildHelpContent() string {
+// renderHelpPanel renders keyboard shortcuts inside a bordered panel.
+func (m Model) renderHelpPanel(panelWidth, panelHeight int) string {
 	var b strings.Builder
-	b.WriteString(stylePanelTitle.Render("KEYBOARD SHORTCUTS"))
-	b.WriteString("\n\n")
-
-	for _, group := range Keys.FullHelp() {
+	innerW := max(1, panelWidth-2)
+	keyCol := styleHelpKey.Width(18)
+	for i, group := range Keys.FullHelp() {
+		if i > 0 {
+			b.WriteString("\n")
+		}
 		for _, kb := range group {
 			keys := strings.Join(kb.Keys(), ", ")
 			desc := kb.Help().Desc
-			b.WriteString(fmt.Sprintf("  %-18s  %s\n",
-				styleHelpKey.Render(keys),
-				styleHelp.Render(desc),
-			))
+			b.WriteString("  " + keyCol.Render(keys) + "  " + styleHelp.Render(desc) + "\n")
 		}
-		b.WriteString("\n")
 	}
 
-	b.WriteString(styleHelp.Render("Press ? or Esc to close this help screen."))
-	return b.String()
+	result := b.String()
+	result = padToWidth(result, innerW)
+	if cnt := strings.Count(result, "\n") + 1; cnt < panelHeight {
+		result += "\n" + strings.Join(
+			make([]string, panelHeight-cnt),
+			"\n"+strings.Repeat(" ", innerW),
+		)
+	}
+	return result
 }
 
 // ─── Helpers ───────────────────────────────────────────────────────
@@ -1029,4 +1217,18 @@ func formatDuration(secs int) string {
 	m := secs / 60
 	s := secs % 60
 	return fmt.Sprintf("%d:%02d", m, s)
+}
+
+// formatTime renders seconds as a zero-padded "MM:SS" string. Unlike
+// formatDuration it always pads the minutes too, so current and total
+// time share a tabular width that stays column-aligned in the player
+// bar as the track progresses.
+func formatTime(secs float64) string {
+	if secs <= 0 {
+		return "00:00"
+	}
+	total := int(secs)
+	m := total / 60
+	s := total % 60
+	return fmt.Sprintf("%02d:%02d", m, s)
 }

@@ -54,7 +54,10 @@ type (
 	// DownloadProgressMsg reports status from the downloader worker.
 	DownloadProgressMsg struct {
 		TrackID  string
+		Title    string // carries through from the downloader Job so the
+		Uploader string // TUI can build a library entry on completion
 		Progress float64 // 0–100
+		Status   downloader.Status // StatusDone or StatusSkipped when Done
 		Done     bool
 		FilePath string // local path once downloaded
 		Error    error
@@ -86,6 +89,12 @@ type (
 // tickMsg triggers periodic UI updates (progress bar animation).
 type tickMsg struct{}
 
+// playerTickMsg fires at 50ms while a track is playing, purely to
+// trigger a redraw so the smooth-progress interpolation is visible.
+// The model does nothing with it — only View reads time.Now() against
+// lastPositionAt to render a gliding bar. Stops firing when paused.
+type playerTickMsg struct{}
+
 // ─── Model ──────────────────────────────────────────────────────────
 
 // Model is the root Bubble Tea model for the ytmgo TUI.
@@ -98,7 +107,6 @@ type Model struct {
 	// ── Page Navigation ──
 	activePage  Page
 	activePanel Panel
-	showHelp    bool
 	quitting    bool
 
 	// ── Confirmation (for destructive actions) ──
@@ -131,6 +139,23 @@ type Model struct {
 	duration    float64 // seconds
 	volume      int
 
+	// Smooth progress interpolation: store the last position from the
+	// player and when it arrived, so the view can glide the bar between
+	// coarse IPC updates instead of jumping.
+	lastPosition   float64
+	lastPositionAt time.Time
+
+	// Mode-toggle flash: for a short window after the user presses `s` or
+	// `r`, the SHFL / REPT labels render in a brighter style so the
+	// keypress feels acknowledged. Decays naturally as time passes.
+	modeFlashUntil time.Time
+	// suppressAutoAdvance prevents the SongEnded handler from calling
+	// Next() when the old mpv was intentionally killed by a new
+	// Play() call in playSelectedQueueItem. Without this, the stale
+	// endedCmd from the previous playback fires a SongEndedMsg that
+	// advances past the track the user just selected.
+	suppressAutoAdvance bool
+
 	// ── Downloads ──
 	downloader *downloader.Downloader
 
@@ -142,12 +167,33 @@ type Model struct {
 	settingsEditInput textinput.Model
 
 	// ── Status ──
-	statusMessage string
-	err           error
+	statusMessage      string
+	statusMessageSetAt time.Time
+	err                error
 
 	// ── Idle tip rotation (status bar shows tips when nothing else is happening) ──
 	tipIndex  int
 	tickCount int
+}
+
+// ─── Status helpers ─────────────────────────────────────────────────
+
+// setStatus records a status message and starts the auto-clear timer.
+// Passing "" is equivalent to clearStatus — the timer is reset so no
+// auto-clear fires on the next tick.
+func (m *Model) setStatus(msg string) {
+	m.statusMessage = msg
+	if msg == "" {
+		m.statusMessageSetAt = time.Time{}
+	} else {
+		m.statusMessageSetAt = time.Now()
+	}
+}
+
+// clearStatus immediately clears the status message and its timer.
+func (m *Model) clearStatus() {
+	m.statusMessage = ""
+	m.statusMessageSetAt = time.Time{}
 }
 
 // ─── Initial model ──────────────────────────────────────────────────
@@ -273,7 +319,11 @@ func (m *Model) ensurePlayer() {
 func (m *Model) startTrackPlayback(playURL, title string, durationSec int) tea.Cmd {
 	m.duration = float64(durationSec)
 	m.position = 0
-	m.statusMessage = "Now playing: " + title
+	m.setStatus("Now playing: " + title)
+	// Seed the smooth-progress anchor at zero so the bar starts
+	// gliding from the correct origin on the first render.
+	m.lastPosition = 0
+	m.lastPositionAt = time.Now()
 	m.ensurePlayer()
 	if err := m.player.Play(playURL); err != nil {
 		m.err = err
@@ -282,7 +332,10 @@ func (m *Model) startTrackPlayback(playURL, title string, durationSec int) tea.C
 	}
 	// Mirror the player's state — it is the single source of truth.
 	m.playerState = m.player.State()
-	return tea.Batch(positionCmd(m.player), endedCmd(m.player))
+	// playerTickCmd drives the 50ms redraws that make the progress
+	// bar glide instead of jumping. It self-perpetuates from within
+	// Update as long as playerState == StatePlaying.
+	return tea.Batch(positionCmd(m.player), endedCmd(m.player), playerTickCmd())
 }
 
 // tickCmd returns a command that fires every 500ms for progress animation.
@@ -292,7 +345,22 @@ func tickCmd() tea.Cmd {
 	})
 }
 
+// playerTickCmd fires every 50ms while a track is playing, so the
+// progress bar can glide instead of jumping between coarse IPC
+// position updates. The returned tea.Cmd re-arms itself from within
+// Update when the player is still in the playing state.
+func playerTickCmd() tea.Cmd {
+	return tea.Tick(playerTickInterval, func(_ time.Time) tea.Msg {
+		return playerTickMsg{}
+	})
+}
+
 const progressTickInterval = time.Second / 2
+
+// playerTickInterval drives the smooth progress interpolation in the
+// player bar. 50ms = 20fps, which is the lowest rate at which motion
+// reads as continuous on a terminal.
+const playerTickInterval = 50 * time.Millisecond
 
 // idleTips are short hints shown in the status bar when nothing else is happening.
 // Mix of keyboard shortcuts, feature discoverability, and personality. Rotates
@@ -367,6 +435,110 @@ func searchResultToTrack(r search.Result) queue.Track {
 	}
 }
 
+// ─── Library matching ───────────────────────────────────────────────
+//
+// Search results and library entries describe the same song with
+// different field shapes:
+//
+//	search:  ID=YouTube video ID  | Title=raw (e.g. "Song (Official Video)")
+//	                                Artist=uploader (e.g. "Channel - Topic")
+//	library: ID=file path         | Title=cleaned (e.g. "Song")
+//	                                Artist=filename prefix (e.g. "Channel")
+//
+// YouTube IDs and file paths can never match, so library lookup is
+// done via a normalized "artist|title" signature that strips the
+// common YouTube decorations (" - Topic" channel suffix, "(Official
+// Video)" title suffix, etc.) before comparing.
+
+// normalizeForMatch lower-cases, trims, and strips the YouTube-specific
+// decorations that differ between a search result and a library entry
+// even when they refer to the same track.
+func normalizeForMatch(s string) string {
+	s = strings.ToLower(strings.TrimSpace(s))
+	// YouTube auto-generated channels append " - Topic" to the channel
+	// name. The library filename parser doesn't capture this suffix.
+	s = strings.TrimSuffix(s, " - topic")
+	// Common title decorations that the library filename parser strips
+	// (see library.cleanTitle) but search results preserve.
+	for _, suf := range []string{
+		"(official music video)", "(official video)", "(official lyric video)",
+		"(lyric video)", "(lyrics)", "(audio)", "(official audio)",
+		"[official music video]", "[official video]", "[lyrics]",
+	} {
+		s = strings.TrimSuffix(s, suf)
+	}
+	return strings.TrimSpace(s)
+}
+
+// trackMatchKey returns the signature used for library lookups.
+// Format: "artist|title" with both fields normalized.
+func trackMatchKey(t queue.Track) string {
+	return normalizeForMatch(t.Artist) + "|" + normalizeForMatch(t.Title)
+}
+
+// findLibraryMatch searches the local library for a track whose
+// signature matches t. Returns the matching library track and true,
+// or a zero Track and false. Library entries with empty FilePath are
+// skipped (they aren't actually playable).
+func findLibraryMatch(library []queue.Track, t queue.Track) (queue.Track, bool) {
+	sig := trackMatchKey(t)
+	for i := range library {
+		lt := library[i]
+		if lt.FilePath == "" {
+			continue
+		}
+		if trackMatchKey(lt) == sig {
+			return lt, true
+		}
+	}
+	return queue.Track{}, false
+}
+
+// resolveTrack converts a search result to a queue Track, consulting
+// the local library so that an already-downloaded file is preferred
+// over re-streaming from YouTube. The returned track has Downloaded
+// and FilePath set when a library match exists, and the play sites
+// (playSelectedQueueItem, SongEnded auto-advance, startTrackPlayback)
+// all check those fields first.
+func (m *Model) resolveTrack(r search.Result) queue.Track {
+	t := searchResultToTrack(r)
+	if lib, ok := findLibraryMatch(m.library, t); ok {
+		t.Downloaded = true
+		t.FilePath = lib.FilePath
+	}
+	return t
+}
+
+// backfillQueueFromLibrary walks the current queue and back-fills
+// FilePath/Downloaded for any track that was added from search before
+// the library scan completed (i.e. when resolveTrack saw an empty
+// library). Call this from the LibraryScanMsg handler so the
+// play-locally-first behavior is consistent regardless of timing.
+func (m *Model) backfillQueueFromLibrary() {
+	if m.queue == nil || len(m.library) == 0 {
+		return
+	}
+	// Tracks() returns a copy so we can iterate safely while the
+	// queue continues to be used. For each unresolved track whose
+	// signature matches a library entry, patch the in-queue track
+	// in place via the queue's matching-by-key update helper.
+	for _, t := range m.queue.Tracks() {
+		if t.Downloaded && t.FilePath != "" {
+			continue
+		}
+		lib, ok := findLibraryMatch(m.library, t)
+		if !ok {
+			continue
+		}
+		fp := lib.FilePath
+		sig := trackMatchKey(t)
+		m.queue.UpdateTrackByMatch(sig, trackMatchKey, func(qt *queue.Track) {
+			qt.Downloaded = true
+			qt.FilePath = fp
+		})
+	}
+}
+
 // downloadDir returns the directory where downloaded tracks are stored.
 //
 // Resolution order:
@@ -437,16 +609,11 @@ func (m *Model) ensureDownloader() {
 // consumes h+2 lines. To keep the total exactly m.height, we subtract 2.
 
 func (m Model) panelHeight() int {
-	// Fixed overhead: header(1) + player(5) + help(1) = 7
-	// Status adds 1 when active (now always 1 since idle tip is always shown)
-	// +2 to account for the panel's border rows that lipgloss adds on top of Height(N)
-	overhead := 9
-	if m.err != nil || m.statusMessage != "" {
-		overhead++
-	}
+	// Fixed overhead: header(1) + status(1) + player(5) + help(1) + border(2) = 10
+	overhead := 10
 	h := m.height - overhead
-	if h < 5 {
-		h = 5
+	if h < 1 {
+		h = 1
 	}
 	return h
 }
@@ -540,18 +707,16 @@ func (m *Model) clampQueueOffset() {
 }
 
 // settingsVisibleItems returns how many settings items fit in the visible area.
+// Uses the same panel-height calculation as renderSettingsList.
 func (m Model) settingsVisibleItems() int {
-	// Layout: header(1) + player(5) + help(1) + border(2) + slack = ~10 lines overhead
-	// Each settings item is 4 lines (label, value, desc, blank)
-	// Leave 1 line for the help text at the bottom of the list
-	avail := m.height - 10
-	if m.err != nil || m.statusMessage != "" {
-		avail--
-	}
-	if avail < 4 {
+	// Panel content height minus 2 lines of overhead (scroll indicator + help text),
+	// divided by 4 lines per item.
+	contentH := m.panelHeight() - 3
+	vis := (contentH - 2) / 4
+	if vis < 1 {
 		return 1
 	}
-	return (avail - 1) / 4
+	return vis
 }
 
 // clampSettingsOffset adjusts settingsOffset so the cursor is visible.
@@ -576,7 +741,6 @@ func (m *Model) clampSettingsOffset() {
 func (m *Model) switchPage(page Page) {
 	m.activePage = page
 	m.searchFocused = false
-	m.showHelp = false
 
 	switch page {
 	case PageStream:
@@ -648,7 +812,10 @@ func downloadCmd(d *downloader.Downloader) tea.Cmd {
 		}
 		return DownloadProgressMsg{
 			TrackID:  evt.TrackID,
+			Title:    evt.Title,
+			Uploader: evt.Uploader,
 			Progress: evt.Progress,
+			Status:   evt.Status,
 			Done:     evt.Status == downloader.StatusDone || evt.Status == downloader.StatusSkipped,
 			FilePath: evt.FilePath,
 			Error:    evt.Err,
@@ -698,7 +865,7 @@ func (m *Model) executeConfirmedAction() (tea.Model, tea.Cmd) {
 		if m.player != nil {
 			m.player.Stop()
 		}
-		m.statusMessage = "Queue cleared"
+		m.setStatus("Queue cleared")
 		return m, nil
 
 	case confirmDeleteTrack:
@@ -707,7 +874,7 @@ func (m *Model) executeConfirmedAction() (tea.Model, tea.Cmd) {
 			t := tracks[m.libraryCursor]
 			if t.FilePath != "" {
 				if err := os.Remove(t.FilePath); err != nil {
-					m.statusMessage = "Failed to delete: " + err.Error()
+					m.setStatus("Failed to delete: " + err.Error())
 					return m, nil
 				}
 			}
@@ -722,7 +889,7 @@ func (m *Model) executeConfirmedAction() (tea.Model, tea.Cmd) {
 				m.library = append(m.library[:idx], m.library[idx+1:]...)
 			}
 			m.clampLibraryOffset()
-			m.statusMessage = "Deleted: " + t.Title
+			m.setStatus("Deleted: " + t.Title)
 		}
 		return m, nil
 	}

@@ -17,6 +17,19 @@ type Track struct {
 	URL         string // original youtube URL/query
 }
 
+// PlayURL returns the source that playback should use for this track:
+// the local file path when the track is already downloaded and the
+// file exists on disk, falling back to the original streaming URL
+// otherwise. Centralising this logic here prevents the bug class
+// where one call site uses t.URL directly and bypasses the local
+// file even when t.FilePath is set.
+func (t Track) PlayURL() string {
+	if t.Downloaded && t.FilePath != "" {
+		return t.FilePath
+	}
+	return t.URL
+}
+
 // Queue manages the ordered list of tracks
 type Queue struct {
 	mu           sync.RWMutex
@@ -252,6 +265,24 @@ func (q *Queue) UpdateTrack(id string, fn func(*Track)) {
 			return
 		}
 	}
+}
+
+// UpdateTrackByMatch applies fn to the first track whose match key
+// (computed by the caller-provided keyFn) matches the target key.
+// Used by the TUI layer to back-fill FilePath/Downloaded on tracks
+// added from search before the library scan completed, since those
+// tracks use YouTube video IDs that don't match the library's
+// file-path IDs.
+func (q *Queue) UpdateTrackByMatch(target string, keyFn func(Track) string, fn func(*Track)) bool {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	for i := range q.tracks {
+		if keyFn(q.tracks[i]) == target {
+			fn(&q.tracks[i])
+			return true
+		}
+	}
+	return false
 }
 
 func (q *Queue) rebuildShuffleOrder() {
