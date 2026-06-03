@@ -284,7 +284,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 					t := tracks[m.libraryCursor]
 					m.queue.Add(t)
 
-					if m.playerState == player.StateStopped && m.queue.Len() == 1 {
+					if m.playerState == player.StateStopped {
 						// First track in an empty queue — auto-play
 						m.queue.SetCurrentIndex(m.queue.Len() - 1)
 						m.queueCursor = m.queue.CurrentIndex()
@@ -330,7 +330,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 					// source of truth for "what mpv is playing", so it
 					// must never be set to a track that isn't playing.
 					// queueCursor always follows currentIndex on playback.
-					if m.playerState == player.StateStopped && m.queue.Len() == 1 {
+					if m.playerState == player.StateStopped {
 						m.queue.SetCurrentIndex(m.queue.Len() - 1)
 						m.queueCursor = m.queue.CurrentIndex()
 						m.clampQueueOffset()
@@ -625,6 +625,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.queue.ToggleShuffle()
 		// Brief flash on the SHFL label so the keypress feels
 		// acknowledged in the bar itself, not only in the status row.
+		m.modeFlashTarget = "shuffle"
 		m.modeFlashUntil = time.Now().Add(250 * time.Millisecond)
 		if m.queue.IsShuffle() {
 			m.setStatus("Shuffle: ON")
@@ -645,6 +646,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.queue.ToggleRepeatAll() // repeatAll: false
 			m.setStatus("Repeat: OFF")
 		}
+		m.modeFlashTarget = "repeat"
 		m.modeFlashUntil = time.Now().Add(250 * time.Millisecond)
 		return m, nil
 

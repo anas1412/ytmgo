@@ -189,6 +189,11 @@ func (m Model) handleSongEnded(msg SongEndedMsg) (tea.Model, tea.Cmd) {
 		t, ok := m.queue.Next()
 		if !ok {
 			m.playerState = player.StateStopped
+			m.player.Stop()
+			m.position = 0
+			m.duration = 0
+			m.lastPosition = 0
+			m.lastPositionAt = time.Time{}
 			m.setStatus("Queue empty")
 			return m, nil
 		}

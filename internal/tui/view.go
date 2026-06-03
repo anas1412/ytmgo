@@ -383,7 +383,7 @@ func (m Model) renderSearchResults(width, height int) string {
 
 	for i := start; i < end; i++ {
 		isSelected := !m.searchFocused && m.activePanel == PanelSearch && i == m.searchCursor
-		lines = append(lines, m.formatResultRow(i-start, m.results[i], width-2, isSelected))
+		lines = append(lines, m.formatResultRow(i, m.results[i], width-2, isSelected))
 	}
 
 	remaining := len(m.results) - end
@@ -872,11 +872,11 @@ func (m Model) renderPlayerBar() string {
 	nowPlayingIdx := m.queue.CurrentIndex()
 	tracks := m.queue.Tracks()
 
-	if m.queue.Len() == 0 || nowPlayingIdx < 0 || nowPlayingIdx >= len(tracks) {
+	if m.queue.Len() == 0 || nowPlayingIdx < 0 || nowPlayingIdx >= len(tracks) || m.playerState == player.StateStopped {
 		// ── Stopped / idle ──────────────────────────────────────
 		msg := "Ready — search and add tracks"
 		if m.queue.Len() > 0 {
-			msg = "Track ended — queue is empty"
+			msg = "Playback finished"
 		}
 		nowPlaying = lipgloss.JoinHorizontal(lipgloss.Left,
 			styleTime.Render("⏹"),
@@ -1000,10 +1000,10 @@ func (m Model) renderControls() string {
 	transport := lipgloss.JoinHorizontal(lipgloss.Left, pHint, " ", prevBtn, " ", playBtn, " ", spaceHint, " ", nextBtn, " ", nHint)
 
 	// ── Right cluster: modes + volume (tight unit) ─────────────
-	flashing := time.Now().Before(m.modeFlashUntil)
+	flashActive := time.Now().Before(m.modeFlashUntil)
 
 	var shuffleStyle lipgloss.Style
-	if flashing {
+	if flashActive && m.modeFlashTarget == "shuffle" {
 		shuffleStyle = styleModeFlash
 	} else if m.queue.IsShuffle() {
 		shuffleStyle = styleModeActive
@@ -1026,7 +1026,7 @@ func (m Model) renderControls() string {
 		repeatText, repeatOn = "🔁 OFF", false
 	}
 	var repeatStyle lipgloss.Style
-	if flashing {
+	if flashActive && m.modeFlashTarget == "repeat" {
 		repeatStyle = styleModeFlash
 	} else if repeatOn {
 		repeatStyle = styleModeActive

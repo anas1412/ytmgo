@@ -142,13 +142,23 @@ type Model struct {
 	// Mode-toggle flash: for a short window after the user presses `s` or
 	// `r`, the SHFL / REPT labels render in a brighter style so the
 	// keypress feels acknowledged. Decays naturally as time passes.
-	modeFlashUntil time.Time
+	// modeFlashUntil and modeFlashTarget coordinate the brief bright
+	// flash on the mode label (SHFL or REPT) after pressing `s`/`r`.
+	// Only the label matching modeFlashTarget lights up — the other
+	// stays at its normal active/inactive style.
+	modeFlashUntil  time.Time
+	modeFlashTarget string // "shuffle", "repeat", or ""
 	// suppressAutoAdvance prevents the SongEnded handler from calling
 	// Next() when the old mpv was intentionally killed by a new
 	// Play() call in playSelectedQueueItem. Without this, the stale
 	// endedCmd from the previous playback fires a SongEndedMsg that
 	// advances past the track the user just selected.
 	suppressAutoAdvance bool
+
+	// ── Mouse double-click tracking ──
+	lastClickAt    time.Time
+	lastClickY     int
+	lastClickPanel Panel
 
 	// ── Downloads ──
 	downloader *downloader.Downloader
