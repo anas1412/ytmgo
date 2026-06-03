@@ -2,6 +2,7 @@ package tui
 
 import (
 	"ytmgo/internal/player"
+	ver "ytmgo/internal/version"
 
 	tea "github.com/charmbracelet/bubbletea"
 )
@@ -9,7 +10,7 @@ import (
 // Init satisfies tea.Model. It starts the tick for progress animation
 // and fetches YouTube recommendations.
 func (m Model) Init() tea.Cmd {
-	return tea.Batch(tickCmd(), fetchRecommendationsCmd(m.recsSeq, m.settings.SearchLimit, m.settings.CookieBrowser, m.settings.UserAgent), scanLibraryCmd(m.downloadDir()))
+	return tea.Batch(tickCmd(), fetchRecommendationsCmd(m.recsSeq, m.settings.SearchLimit, m.settings.CookieBrowser, m.settings.UserAgent), scanLibraryCmd(m.downloadDir()), checkUpdateCmd(ver.Version))
 }
 
 // Update satisfies tea.Model. It handles all messages without making
@@ -45,6 +46,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// ── Library scan complete ────────────────────────────────────
 	case LibraryScanMsg:
 		return m.handleLibraryScan(msg)
+
+	// ── Update check complete ──────────────────────────────────
+	case UpdateCheckMsg:
+		return m.handleUpdateCheck(msg)
 
 	// ── Settings saved ────────────────────────────────────────────
 	case SettingsSavedMsg:

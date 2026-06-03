@@ -1,6 +1,8 @@
 package tui
 
 import (
+	"encoding/json"
+	"net/http"
 	"time"
 
 	"ytmgo/internal/downloader"
@@ -53,7 +55,40 @@ func fetchRecommendationsCmd(seq, limit int, cookieBrowser, userAgent string) te
 		}
 		return RecommendationsMsg{Results: results, Seq: seq}
 	}
-}// ─── Library scan ───────────────────────────────────────────────────────
+}
+
+// ─── Update check ─────────────────────────────────────────────────────────
+
+// checkUpdateCmd fetches the latest release tag from GitHub. Returns nil
+// (no message) on failure so the update handler is never called — zero
+// impact on the user experience when offline or rate limited.
+func checkUpdateCmd(currentVersion string) tea.Cmd {
+	return func() tea.Msg {
+		if currentVersion == "dev" || currentVersion == "" {
+			return nil // local/dev builds, skip
+		}
+		resp, err := http.Get("https://api.github.com/repos/anas1412/ytmgo/releases/latest")
+		if err != nil {
+			return nil
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			return nil // rate limited, not found, etc.
+		}
+		var result struct {
+			TagName string `json:"tag_name"`
+		}
+		if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+			return nil
+		}
+		if result.TagName == "" || result.TagName == currentVersion {
+			return nil // same version or empty — no update
+		}
+		return UpdateCheckMsg{LatestVersion: result.TagName}
+	}
+}
+
+// ─── Library scan ───────────────────────────────────────────────────────
 
 // scanLibraryCmd scans the downloads directory for existing audio files.
 func scanLibraryCmd(dir string) tea.Cmd {

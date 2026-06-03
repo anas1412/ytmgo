@@ -1096,6 +1096,15 @@ func (m Model) renderControls() string {
 // ─── Help Bar ──────────────────────────────────────────────────────
 
 func (m Model) renderHelpBar() string {
+	width := m.width
+	if width < 10 {
+		width = 10
+	}
+
+	// Left: version
+	version := styleVersion.Render("ytmgo " + ver.Version)
+
+	// Right: help shortcuts
 	bindings := Keys.ShortHelp()
 	var parts []string
 	for _, b := range bindings {
@@ -1103,7 +1112,15 @@ func (m Model) renderHelpBar() string {
 		desc := styleHelp.Render(b.Help().Desc)
 		parts = append(parts, fmt.Sprintf("%s %s", key, desc))
 	}
-	return styleHelp.Render(strings.Join(parts, "  •  "))
+	right := styleHelp.Render(strings.Join(parts, "  •  "))
+
+	leftW := lipgloss.Width(version)
+	rightW := lipgloss.Width(right)
+	gap := width - leftW - rightW
+	if gap < 1 {
+		gap = 1
+	}
+	return version + strings.Repeat(" ", gap) + right
 }
 
 // ─── Status ────────────────────────────────────────────────────────

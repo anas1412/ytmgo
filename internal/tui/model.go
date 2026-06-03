@@ -79,6 +79,11 @@ type (
 	SettingsSavedMsg struct {
 		Error error
 	}
+
+	// UpdateCheckMsg carries the latest version from GitHub.
+	UpdateCheckMsg struct {
+		LatestVersion string // empty when check was skipped/failed
+	}
 )
 
 // tickMsg triggers periodic UI updates (progress bar animation).

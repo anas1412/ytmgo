@@ -55,6 +55,13 @@ func (m Model) handleRecommendations(msg RecommendationsMsg) (tea.Model, tea.Cmd
 	return m, nil
 }
 
+// ── Update check complete ─────────────────────────────────────────────
+
+func (m Model) handleUpdateCheck(msg UpdateCheckMsg) (tea.Model, tea.Cmd) {
+	m.setStatus("Update available: " + msg.LatestVersion + " (github.com/anas1412/ytmgo)")
+	return m, nil
+}
+
 // ── Library scan complete ────────────────────────────────────────────
 
 func (m Model) handleLibraryScan(msg LibraryScanMsg) (tea.Model, tea.Cmd) {
