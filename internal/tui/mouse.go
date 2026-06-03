@@ -174,7 +174,13 @@ func (m Model) handleClick(x, y int) (Model, tea.Cmd) {
 			return m, nil
 		}
 
-		// ── Player controls row (same layout as other pages) ──
+		// ── Progress bar row (click to seek) ──
+		progressY := panelsEnd + 3
+		if y == progressY && m.width > 0 {
+			return m.handleProgressClick(x)
+		}
+
+		// ── Player controls row ──
 		controlsY := panelsEnd + 4
 		if y == controlsY && m.width > 0 {
 			return m.handleControlsClick(x)
@@ -264,6 +270,12 @@ func (m Model) handleClick(x, y int) (Model, tea.Cmd) {
 		m.lastClickY = y
 		m.lastClickPanel = m.activePanel
 		return m, nil
+	}
+
+	// ── Progress bar row (click to seek) ──
+	progressY := panelsEnd + 3
+	if y == progressY && m.width > 0 {
+		return m.handleProgressClick(x)
 	}
 
 	// ── Player controls row ──
@@ -618,5 +630,58 @@ func (m Model) activateSettingsItem() (Model, tea.Cmd) {
 		m.startSettingsEdit()
 		return m, nil
 	}
+	return m, nil
+}
+
+// handleProgressClick maps a click on the progress bar row to a seek position.
+// The bar layout matches renderPlayerBar: [h] ▓▓▓▓░░░░  MM:SS / M:SS [l]
+func (m Model) handleProgressClick(x int) (Model, tea.Cmd) {
+	if m.playerState == player.StateStopped || m.duration <= 0 {
+		return m, nil
+	}
+
+	innerW := m.width - 10
+	contentStartX := 3 // double border (1) + left padding (2)
+
+	hHint := styleKeyHint.Render("[h]")
+	lHint := styleKeyHint.Render("[l]")
+
+	// Replicate timeInfo from renderPlayerBar to measure rightPart width.
+	currentStr := formatTime(m.position)
+	totalStr := formatDuration(int(m.duration))
+	if len(currentStr) < len(totalStr) {
+		currentStr = strings.Repeat(" ", len(totalStr)-len(currentStr)) + currentStr
+	}
+	timeInfo := currentStr + " / " + totalStr
+	rightPart := styleTime.Render(timeInfo)
+
+	barWidth := innerW - lipgloss.Width(rightPart) - lipgloss.Width(hHint) - lipgloss.Width(lHint) - 5
+	if barWidth < 10 {
+		barWidth = 10
+	}
+
+	barStartX := contentStartX + lipgloss.Width(hHint) + 1
+	barEndX := barStartX + barWidth
+
+	if x < barStartX || x >= barEndX {
+		return m, nil
+	}
+
+	// Map click position to seek position.
+	relX := x - barStartX
+	pct := float64(relX) / float64(barWidth)
+	targetPos := pct * m.duration
+
+	delta := targetPos - m.position
+	if m.player != nil {
+		m.player.Seek(delta)
+	}
+	// Optimistically update so the bar jumps immediately — the next
+	// PositionMsg from the player will correct any discrepancy.
+	m.position = targetPos
+	m.lastPosition = targetPos
+	m.lastPositionAt = time.Now()
+	m.setStatus(fmt.Sprintf("Seeked to %s", formatTime(targetPos)))
+
 	return m, nil
 }
