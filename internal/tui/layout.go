@@ -181,7 +181,7 @@ func (m *Model) clampQueueOffset() {
 // clampSettingsOffset adjusts settingsOffset so the cursor is visible.
 func (m *Model) clampSettingsOffset() {
 	vis := m.settingsVisibleItems()
-	maxItem := 8 // 9 items indexed 0-8
+	maxItem := 6 // 7 items indexed 0-6
 	if m.settingsCursor > maxItem {
 		m.settingsCursor = maxItem
 	}

@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"ytmgo/internal/player"
+	"ytmgo/internal/settings"
 
 	"github.com/charmbracelet/lipgloss"
 	tea "github.com/charmbracelet/bubbletea"
@@ -35,42 +36,58 @@ const (
 func (m Model) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 	// Wheel up/down (action is always press, identified by button)
 	if msg.Button == tea.MouseButtonWheelUp {
-		switch m.activePanel {
-		case PanelSearch:
-			if m.activePage == PageLibrary {
-				if m.libraryCursor > 0 {
-					m.libraryCursor--
-					m.clampLibraryOffset()
-				}
-			} else if m.searchCursor > 0 {
-				m.searchCursor--
-				m.clampSearchOffset()
+		switch m.activePage {
+		case PageSettings:
+			if !m.settingsEditField && m.settingsCursor > 0 {
+				m.settingsCursor--
+				m.clampSettingsOffset()
 			}
-		case PanelQueue:
-			if m.queueCursor > 0 {
-				m.queueCursor--
-				m.clampQueueOffset()
+		default:
+			switch m.activePanel {
+			case PanelSearch:
+				if m.activePage == PageLibrary {
+					if m.libraryCursor > 0 {
+						m.libraryCursor--
+						m.clampLibraryOffset()
+					}
+				} else if m.searchCursor > 0 {
+					m.searchCursor--
+					m.clampSearchOffset()
+				}
+			case PanelQueue:
+				if m.queueCursor > 0 {
+					m.queueCursor--
+					m.clampQueueOffset()
+				}
 			}
 		}
 		return m, nil
 	}
 	if msg.Button == tea.MouseButtonWheelDown {
-		switch m.activePanel {
-		case PanelSearch:
-			if m.activePage == PageLibrary {
-				maxIdx := len(m.filteredLibrary()) - 1
-				if m.libraryCursor < maxIdx {
-					m.libraryCursor++
-					m.clampLibraryOffset()
-				}
-			} else if m.searchCursor < len(m.results)-1 {
-				m.searchCursor++
-				m.clampSearchOffset()
+		switch m.activePage {
+		case PageSettings:
+			if !m.settingsEditField && m.settingsCursor < 6 {
+				m.settingsCursor++
+				m.clampSettingsOffset()
 			}
-		case PanelQueue:
-			if m.queueCursor < m.queue.Len()-1 {
-				m.queueCursor++
-				m.clampQueueOffset()
+		default:
+			switch m.activePanel {
+			case PanelSearch:
+				if m.activePage == PageLibrary {
+					maxIdx := len(m.filteredLibrary()) - 1
+					if m.libraryCursor < maxIdx {
+						m.libraryCursor++
+						m.clampLibraryOffset()
+					}
+				} else if m.searchCursor < len(m.results)-1 {
+					m.searchCursor++
+					m.clampSearchOffset()
+				}
+			case PanelQueue:
+				if m.queueCursor < m.queue.Len()-1 {
+					m.queueCursor++
+					m.clampQueueOffset()
+				}
 			}
 		}
 		return m, nil
@@ -164,8 +181,8 @@ func (m Model) handleClick(x, y int) (Model, tea.Cmd) {
 				if idx < 0 {
 					idx = 0
 				}
-				if idx > 8 { // 9 items indexed 0-8
-					idx = 8
+				if idx > 6 { // 7 items indexed 0-6
+					idx = 6
 				}
 				m.settingsCursor = idx
 				m.clampSettingsOffset()
@@ -577,11 +594,11 @@ func (m Model) activateFocusedItem() (Model, tea.Cmd) {
 					m.setStatus("Added to queue: " + t.Title)
 				}
 
-				if !m.settings.StreamMode {
+				if m.settings.PlaybackMode == settings.PlaybackOffline {
 					m.ensureDownloader()
 					m.downloader.Enqueue(t.ID, t.Title, r.Uploader, r.URL, m.downloadDir())
 					cmds = append(cmds, downloadCmd(m.downloader))
-				} else if m.settings.AutoDownload && !t.Downloaded {
+				} else if m.settings.PlaybackMode == settings.PlaybackHybrid && !t.Downloaded {
 					m.ensureDownloader()
 					m.downloader.Enqueue(t.ID, t.Title, r.Uploader, r.URL, m.downloadDir())
 					cmds = append(cmds, downloadCmd(m.downloader))
@@ -626,20 +643,24 @@ func (m Model) activateSettingsItem() (Model, tea.Cmd) {
 		return m, tea.Batch(saveSettingsCmd(m.settings))
 	}
 	switch m.settingsCursor {
-	case 0: // Stream Mode (boolean)
-		m.settings.StreamMode = !m.settings.StreamMode
+	case 0: // Playback Mode (cycle)
+		m.settings.PlaybackMode = (m.settings.PlaybackMode + 1) % 3
 		return m, tea.Batch(saveSettingsCmd(m.settings))
-	case 1: // Auto-Download (boolean)
-		m.settings.AutoDownload = !m.settings.AutoDownload
+	case 1: // Show Quotes (boolean)
+		m.settings.ShowQuotes = !m.settings.ShowQuotes
+		m.tickCount = 0
+		if m.settings.ShowQuotes {
+			m.fallbackIdx = 0
+			m.currentQuote = fallbackQuotes[0]
+		} else {
+			m.advanceTip()
+		}
 		return m, tea.Batch(saveSettingsCmd(m.settings))
 	case 2, 3: // Volume / Search Limit (numbers — Enter does nothing)
 		return m, nil
 	case 4, 5, 6: // Download Dir / Cookie Browser / User-Agent (strings)
 		m.startSettingsEdit()
 		return m, nil
-	case 7: // Show Quotes (boolean)
-		m.settings.ShowQuotes = !m.settings.ShowQuotes
-		return m, tea.Batch(saveSettingsCmd(m.settings))
 	}
 	return m, nil
 }

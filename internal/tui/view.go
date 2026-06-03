@@ -9,6 +9,7 @@ import (
 	"ytmgo/internal/player"
 	"ytmgo/internal/queue"
 	"ytmgo/internal/search"
+	"ytmgo/internal/settings"
 	ver "ytmgo/internal/version"
 
 	"github.com/charmbracelet/lipgloss"
@@ -764,14 +765,13 @@ func (m Model) renderSettingsList(panelWidth, panelHeight int) string {
 		value string
 		desc  string
 	}{
-		{"Stream Mode", boolStr(m.settings.StreamMode), "Play via URL instead of forcing download"},
-		{"Auto-Download", boolStr(m.settings.AutoDownload), "Auto-download queued tracks for offline"},
-		{"Default Volume", fmt.Sprintf("%d", m.settings.DefaultVolume), "0-100  (+/- adjust)"},
-		{"Search Limit", fmt.Sprintf("%d", m.settings.SearchLimit), "Results per search  (+/- adjust)"},
-		{"Download Dir", truncate(m.settings.DownloadDir, 40), "Path for downloaded files  (press 'o' to open)"},
+		{"Playback Mode", settings.PlaybackModeLabel(m.settings.PlaybackMode), "Stream (online) · Hybrid (play+download) · Offline (download first)"},
+		{"Show Quotes", boolStr(m.settings.ShowQuotes), "Show quotes in status bar when idle"},
+		{"Default Volume", fmt.Sprintf("%d", m.settings.DefaultVolume), "Starting volume 0-100  (+/- adjust)"},
+		{"Search Limit", fmt.Sprintf("%d", m.settings.SearchLimit), "Max results per search  (+/- adjust)"},
+		{"Download Dir", truncate(m.settings.DownloadDir, 40), "Where files are saved  (press 'o' to open)"},
 		{"Cookie Browser", truncate(m.settings.CookieBrowser, 20), "Browser for YouTube cookies"},
 		{"User-Agent", truncate(m.settings.UserAgent, 30), "Custom UA for yt-dlp (empty = default)"},
-		{"Internet Quotes", boolStr(m.settings.ShowQuotes), "Fetch quotes online (falls back to local pool)"},
 	}
 
 	// Each item uses ~4 lines (label, value, desc, blank).
@@ -1151,8 +1151,11 @@ func (m Model) renderStatus() string {
 	if m.statusMessage != "" {
 		return styleStatus.Render("● " + m.statusMessage)
 	}
-	// Nothing actionable — show a rotating quote
-	return styleStatusIdle.Render("▸ " + m.currentQuote)
+	// Nothing actionable — show a quote (when enabled) or classic tip
+	if m.settings.ShowQuotes {
+		return styleStatusIdle.Render("▸ " + m.currentQuote)
+	}
+	return styleStatusIdle.Render("▸ " + m.currentTip())
 }
 
 // ─── Help Overlay ──────────────────────────────────────────────────

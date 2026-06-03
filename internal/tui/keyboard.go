@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"ytmgo/internal/player"
+	"ytmgo/internal/settings"
 
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
@@ -211,7 +212,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "down", "j":
 		// Settings page: navigate settings list
 		if m.activePage == PageSettings && !m.settingsEditField {
-			if m.settingsCursor < 8 { // 9 items indexed 0-8
+			if m.settingsCursor < 6 { // 7 items indexed 0-6
 				m.settingsCursor++
 				m.clampSettingsOffset()
 			}
@@ -257,20 +258,26 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				return m, tea.Batch(saveSettingsCmd(m.settings))
 			}
 			switch m.settingsCursor {
-			case 0: // Stream Mode (boolean)
-				m.settings.StreamMode = !m.settings.StreamMode
+			case 0: // Playback Mode (cycle)
+				m.settings.PlaybackMode = (m.settings.PlaybackMode + 1) % 3
 				return m, tea.Batch(saveSettingsCmd(m.settings))
-			case 1: // Auto-Download (boolean)
-				m.settings.AutoDownload = !m.settings.AutoDownload
+			case 1: // Show Quotes (boolean)
+				m.settings.ShowQuotes = !m.settings.ShowQuotes
+				m.tickCount = 0
+				if m.settings.ShowQuotes {
+					// Start from first fallback quote
+					m.fallbackIdx = 0
+					m.currentQuote = fallbackQuotes[0]
+				} else {
+					// Advance to next tip
+					m.advanceTip()
+				}
 				return m, tea.Batch(saveSettingsCmd(m.settings))
 			case 2, 3: // Volume / Search Limit (numbers — Enter does nothing, use +/-)
 				return m, nil
 			case 4, 5, 6: // Download Dir / Cookie Browser / User-Agent (strings)
 				m.startSettingsEdit()
 				return m, nil
-			case 7: // Show Quotes (boolean)
-				m.settings.ShowQuotes = !m.settings.ShowQuotes
-				return m, tea.Batch(saveSettingsCmd(m.settings))
 			}
 			return m, nil
 		}
@@ -348,11 +355,11 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 					}
 
 					// Download handling (separate from auto-play).
-					if !m.settings.StreamMode {
-						m.ensureDownloader()
-						m.downloader.Enqueue(t.ID, t.Title, r.Uploader, r.URL, m.downloadDir())
-						cmds = append(cmds, downloadCmd(m.downloader))
-					} else if m.settings.AutoDownload && !t.Downloaded {
+				if m.settings.PlaybackMode == settings.PlaybackOffline {
+					m.ensureDownloader()
+					m.downloader.Enqueue(t.ID, t.Title, r.Uploader, r.URL, m.downloadDir())
+					cmds = append(cmds, downloadCmd(m.downloader))
+				} else if m.settings.PlaybackMode == settings.PlaybackHybrid && !t.Downloaded {
 						m.ensureDownloader()
 						m.downloader.Enqueue(t.ID, t.Title, r.Uploader, r.URL, m.downloadDir())
 						cmds = append(cmds, downloadCmd(m.downloader))

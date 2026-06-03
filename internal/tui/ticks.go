@@ -35,23 +35,27 @@ func (m Model) handleTick(msg tickMsg) (tea.Model, tea.Cmd) {
 	if m.statusMessage != "" && m.err == nil && !m.isConfirming() && !m.statusMessageSetAt.IsZero() && time.Since(m.statusMessageSetAt) >= 3*time.Second {
 		m.clearStatus()
 	}
-	// Advance the idle quote every quoteRotateEvery ticks.
+	// Advance the idle content (quotes or tips) at the right interval.
 	// Only count when no live status message or error is being shown.
 	var cmds []tea.Cmd
 	if m.statusMessage == "" && m.err == nil {
 		m.tickCount++
-		if m.tickCount >= quoteRotateEvery {
-			m.tickCount = 0
-			// Advance to next fallback quote (always works, instant)
-			m.fallbackIdx++
-			if m.fallbackIdx >= len(fallbackQuotes) {
-				m.fallbackIdx = 0
-			}
-			m.currentQuote = fallbackQuotes[m.fallbackIdx]
-			// Fire API fetch only when quotes setting is on
-			if m.settings.ShowQuotes {
+		if m.settings.ShowQuotes {
+			// Quote mode: rotate every 30s, optionally fetch from API
+			if m.tickCount >= quoteRotateEvery {
+				m.tickCount = 0
+				m.fallbackIdx++
+				if m.fallbackIdx >= len(fallbackQuotes) {
+					m.fallbackIdx = 0
+				}
+				m.currentQuote = fallbackQuotes[m.fallbackIdx]
 				m.quoteSeq++
 				cmds = append(cmds, fetchQuoteCmd(m.quoteSeq))
+			}
+		} else {
+			// Tip mode: rotate every 8s, no API
+			if m.tickCount >= idleTipRotateEvery {
+				m.advanceTip()
 			}
 		}
 	}

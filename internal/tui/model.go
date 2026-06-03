@@ -189,10 +189,11 @@ type Model struct {
 	statusMessageSetAt time.Time
 	err                error
 
-	// ── Quote rotation (shown in status bar when idle) ──
+	// ── Quote/tip rotation (shown in status bar when idle) ──
 	currentQuote string
 	fallbackIdx  int
 	quoteSeq     int   // bumped each rotation; stale API responses dropped
+	tipIndex     int   // used when ShowQuotes is off (classic tips)
 	tickCount    int   // counts ticks between rotations
 }
 
@@ -314,6 +315,44 @@ var fallbackQuotes = []string{
 // quoteRotateEvery is how many 500ms ticks between quote rotations.
 // 60 ticks = 30 seconds — slow enough to read a quote.
 const quoteRotateEvery = 60
+
+// ─── Classic tips (shown when ShowQuotes is off) ─────────────────────
+
+var idleTips = []string{
+	"Press `?` for all keyboard shortcuts",
+	"`Tab` cycles focus · `o` opens the download folder",
+	"Press `R` for fresh recommendations",
+	"Press `D` twice to clear the entire queue",
+	"`1` `2` `3` jump between Stream · Library · Settings",
+	"`↑↓` or `j`/`k` to navigate lists",
+	"`space` toggles play / pause",
+	"`ctrl+↑` / `ctrl+↓` to reorder the queue",
+	"`s` toggles shuffle · `r` cycles repeat",
+	"Stream mode plays without downloading — toggle in Settings",
+	"Press `x` on any track to download it for offline use",
+	"Already have MP3s? Point Download Dir at them in Settings",
+	"Set Default Volume in Settings so every track starts at your level",
+	"Use a cookie browser in Settings for age-restricted tracks",
+}
+
+// idleTipRotateEvery is how many 500ms ticks between tip rotations.
+// 16 ticks = 8 seconds.
+const idleTipRotateEvery = 16
+
+// currentTip returns the tip to show right now.
+func (m Model) currentTip() string {
+	tip := idleTips[m.tipIndex%len(idleTips)]
+	return tip
+}
+
+// advanceTip moves to the next tip in the rotation.
+func (m *Model) advanceTip() {
+	m.tipIndex++
+	if m.tipIndex >= len(idleTips) {
+		m.tipIndex = 0
+	}
+	m.tickCount = 0
+}
 
 
 
