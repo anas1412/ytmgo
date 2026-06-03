@@ -33,7 +33,7 @@ go build -o ytmgo .
 - **Audio Download** — Download tracks as MP3s with real-time progress
 - **Play Queue** — Full queue management: reorder, shuffle, repeat (one / all)
 - **Audio Playback** — Plays through `mpv` with seek, volume, and progress tracking
-- **Keyboard-driven TUI** — Tab-focused layout with vim navigation, no mouse needed
+- **Keyboard-driven TUI** — Tab-focused layout with vim navigation + mouse support (click tabs, panels, progress bar, and settings)
 - **Concurrency-safe** — Mutex-guarded queue, single-playback lock, serial download pipeline
 
 ---
@@ -96,6 +96,8 @@ Or use the pre-built binary included in the repository.
 
 Tab cycles focus through: search input → result list → queue panel → settings — and the focused panel's border glows violet.
 
+**Mouse support** — Click header tabs to switch pages, click list items to select, double-click to activate, click the progress bar to seek, and click the controls row to play/pause, adjust volume, or toggle shuffle/repeat.
+
 ### Keybindings
 
 | Key | Action |
@@ -118,7 +120,9 @@ Tab cycles focus through: search input → result list → queue panel → setti
 | `R` | Refresh recommendations |
 | `1` / `2` / `3` | Switch page: Stream / Library / Settings |
 | `Ctrl+↑` / `Ctrl+↓` | Move item up/down in queue |
-| `?` | Toggle help overlay |
+| `o` | Open download directory |
+| `?` | Show keyboard shortcuts |
+| `esc` | Cancel / back |
 | `q` / `Ctrl+C` | Quit |
 
 ---

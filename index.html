@@ -226,7 +226,7 @@ kbd{font-family:var(--font-mono);font-size:.75rem;background:var(--bg-panel);bor
     <div class="feature-card"><span class="feature-icon">&#11015;</span><div class="feature-name">Audio Download</div><div class="feature-desc">Download tracks as MP3s with real-time progress bars. Serial pipeline, one at a time.</div></div>
     <div class="feature-card"><span class="feature-icon">&#9776;</span><div class="feature-name">Play Queue</div><div class="feature-desc">Full queue management: reorder, shuffle, repeat one or all. Thread-safe and blazing fast.</div></div>
     <div class="feature-card"><span class="feature-icon">&#9654;</span><div class="feature-name">Audio Playback</div><div class="feature-desc">Plays through mpv with seek, volume control, and real-time progress tracking via IPC.</div></div>
-    <div class="feature-card"><span class="feature-icon">&#8984;</span><div class="feature-name">Keyboard Driven</div><div class="feature-desc">Every action bound to a key. Tab between panels, j/k to navigate, Enter to select. Zero mouse.</div></div>
+    <div class="feature-card"><span class="feature-icon">&#8984;</span><div class="feature-name">Keyboard + Mouse</div><div class="feature-desc">Full keyboard control plus mouse support. Click tabs, panels, the progress bar, settings, and controls.</div></div>
     <div class="feature-card"><span class="feature-icon">&#9889;</span><div class="feature-name">Concurrency Safe</div><div class="feature-desc">Mutex-guarded queue, single-playback lock, serial download pipeline. No race conditions.</div></div>
   </div>
 </section>
@@ -235,7 +235,7 @@ kbd{font-family:var(--font-mono);font-size:.75rem;background:var(--bg-panel);bor
   <div class="reveal">
     <div class="section-label">Keybindings</div>
     <h2 class="section-title">Every key, a superpower.</h2>
-    <p class="section-desc">No mouse needed. Full keyboard control over search, queue, and playback.</p>
+    <p class="section-desc">Keyboard-driven with optional mouse support. Click tabs, list items, the progress bar, and controls.</p>
   </div>
   <div class="keys-grid reveal">
     <div class="key-row"><div class="key-combo"><kbd>Tab</kbd></div><div class="key-action">Cycle focus: search &rarr; results &rarr; queue &rarr; search</div></div>
@@ -254,9 +254,11 @@ kbd{font-family:var(--font-mono);font-size:.75rem;background:var(--bg-panel);bor
     <div class="key-row"><div class="key-combo"><kbd>r</kbd></div><div class="key-action">Cycle repeat: OFF &rarr; ONE &rarr; ALL</div></div>
     <div class="key-row"><div class="key-combo"><kbd>x</kbd></div><div class="key-action">Download selected track</div></div>
     <div class="key-row"><div class="key-combo"><kbd>R</kbd></div><div class="key-action">Refresh recommendations</div></div>
+    <div class="key-row"><div class="key-combo"><kbd>o</kbd></div><div class="key-action">Open download directory</div></div>
     <div class="key-row"><div class="key-combo"><kbd>1</kbd><kbd>2</kbd><kbd>3</kbd></div><div class="key-action">Switch page: Stream / Library / Settings</div></div>
     <div class="key-row"><div class="key-combo"><kbd>Ctrl+&uarr;</kbd><kbd>Ctrl+&darr;</kbd></div><div class="key-action">Move item in queue</div></div>
-    <div class="key-row"><div class="key-combo"><kbd>?</kbd></div><div class="key-action">Toggle help overlay</div></div>
+    <div class="key-row"><div class="key-combo"><kbd>?</kbd></div><div class="key-action">Show keyboard shortcuts</div></div>
+    <div class="key-row"><div class="key-combo"><kbd>Esc</kbd></div><div class="key-action">Cancel / back</div></div>
     <div class="key-row"><div class="key-combo"><kbd>q</kbd><kbd>Ctrl+C</kbd></div><div class="key-action">Quit</div></div>
   </div>
 </section>

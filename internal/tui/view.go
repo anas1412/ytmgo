@@ -203,15 +203,24 @@ func (m Model) renderHeader() string {
 		searchView = styleSearchBox.Render(m.searchInput.View())
 	}
 
-	// Build page tabs (right side)
-	tabs := []string{"1 Stream", "2 Library", "3 Settings"}
+	// Build page tabs (right side) with inline key hints matching [h] / [l] style
+	type tabDef struct {
+		key   string
+		label string
+	}
+	tabs := []tabDef{
+		{"1", "Stream"},
+		{"2", "Library"},
+		{"3", "Settings"},
+	}
 	var renderedTabs []string
-	for i, tab := range tabs {
+	for i, t := range tabs {
+		hint := styleKeyHint.Render("[" + t.key + "]")
+		label := styleNavTab.Render(t.label)
 		if int(m.activePage) == i {
-			renderedTabs = append(renderedTabs, styleNavTabActive.Render(tab))
-		} else {
-			renderedTabs = append(renderedTabs, styleNavTab.Render(tab))
+			label = styleNavTabActive.Render(t.label)
 		}
+		renderedTabs = append(renderedTabs, hint+" "+label)
 	}
 	tabsStr := strings.Join(renderedTabs, " ")
 
@@ -266,14 +275,16 @@ func (m Model) renderPanels() string {
 	// Search panel title
 	panelLabel := "SEARCH RESULTS"
 	if m.activePage == PageLibrary {
-		panelLabel = "LIBRARY"
+		dHint := styleKeyHint.Render("[d]")
+		panelLabel = "LIBRARY  " + dHint + " delete file"
 		q := m.searchInput.Value()
 		if q != "" {
-			panelLabel = "LIBRARY  🔍 \"" + q + "\""
+			panelLabel = "LIBRARY  🔍 \"" + q + "\"  " + dHint + " delete file"
 		}
 	} else if m.showingRecommendations {
 		rHint := styleKeyHint.Render("[R]")
-		panelLabel = rHint + "  RECOMMENDATIONS"
+		xHint := styleKeyHint.Render("[x]")
+		panelLabel = "RECOMMENDATIONS  " + rHint + " refresh  " + xHint + " download"
 	}
 	searchTitle := stylePanelTitle.Render(panelLabel)
 
@@ -305,7 +316,11 @@ func (m Model) renderPanels() string {
 	downloadsContentH := totalSubContentH - queueContentH
 
 	// Queue sub-panel (top of right column)
-	queueTitle := fmt.Sprintf("QUEUE  [%d]", m.queue.Len())
+	dHint := styleKeyHint.Render("[d]")
+	dCapHint := styleKeyHint.Render("[D]")
+	reorderHint := styleKeyHint.Render("[ctrl+↑↓]")
+	queueTitle := fmt.Sprintf("QUEUE  [%d]  %s remove  %s clear  %s reorder",
+		m.queue.Len(), dHint, dCapHint, reorderHint)
 	queueTitleStyled := stylePanelTitle.Render(queueTitle)
 	queueContent := m.renderQueue(panelWidth-2, queueContentH)
 	queuePanel := lipgloss.JoinVertical(lipgloss.Top,
@@ -322,7 +337,8 @@ func (m Model) renderPanels() string {
 	if m.downloader != nil {
 		dlCount = len(m.downloader.Jobs())
 	}
-	downloadsTitle := fmt.Sprintf("DOWNLOADS  [%d]", dlCount)
+	oHint := styleKeyHint.Render("[o]")
+	downloadsTitle := fmt.Sprintf("DOWNLOADS  [%d]  %s open folder", dlCount, oHint)
 	downloadsTitleStyled := stylePanelTitle.Render(downloadsTitle)
 	downloadsContent := m.renderDownloadQueue(panelWidth-2, downloadsContentH)
 	downloadsPanel := lipgloss.JoinVertical(lipgloss.Top,
@@ -971,8 +987,8 @@ func (m Model) renderPlayerBar() string {
 //
 // Layout (asymmetric, single separator):
 //
-//	[⏮  ▶  ⏭]            │            [🔀 SHFL  🔁 OFF  ▰▰▰▰▰ 80%]
-//	 ↑ transport (left)  hairline  ↑ modes + volume (right, flush-right)
+//	[p] ⏮ Prev  [space] ▶ Play  [n] ⏭ Next  │  [s] SHFL  [r] REPT  [-] ▰▰▰▰▰ 80% [+]
+//	           ↑ transport (left)            hairline  ↑ modes + volume (right, flush-right)
 //
 // The transport cluster is a unit of *action* (what to do next).
 // The right cluster is a unit of *state* (shuffle / repeat / volume).
@@ -987,17 +1003,21 @@ func (m Model) renderPlayerBar() string {
 func (m Model) renderControls() string {
 	// ── Transport cluster (left, no leading separator) ─────────
 	pHint := styleKeyHint.Render("[p]")
-	prevBtn := styleCtrlBtn.Render("⏮")
-	var playBtn string
-	if m.playerState == player.StatePlaying {
-		playBtn = styleCtrlBtnPlaying.Render("⏸")
-	} else {
-		playBtn = styleCtrlBtnActive.Render("▶")
-	}
+	prevLabel := styleCtrlBtn.Render("⏮ Prev")
 	spaceHint := styleKeyHint.Render("[space]")
+	var playLabel string
+	if m.playerState == player.StatePlaying {
+		playLabel = styleCtrlBtnActive.Render("⏸ Pause")
+	} else {
+		playLabel = styleCtrlBtn.Render("▶ Play")
+	}
 	nHint := styleKeyHint.Render("[n]")
-	nextBtn := styleCtrlBtn.Render("⏭")
-	transport := lipgloss.JoinHorizontal(lipgloss.Left, pHint, " ", prevBtn, " ", playBtn, " ", spaceHint, " ", nextBtn, " ", nHint)
+	nextLabel := styleCtrlBtn.Render("⏭ Next")
+	transport := lipgloss.JoinHorizontal(lipgloss.Left,
+		pHint, " ", prevLabel, "  ",
+		spaceHint, " ", playLabel, "  ",
+		nHint, " ", nextLabel,
+	)
 
 	// ── Right cluster: modes + volume (tight unit) ─────────────
 	flashActive := time.Now().Before(m.modeFlashUntil)

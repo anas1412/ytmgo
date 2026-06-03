@@ -146,7 +146,6 @@ var Keys = KeyMap{
 // UI element (player bar controls, panel titles, header).
 func (k KeyMap) ShortHelp() []key.Binding {
 	return []key.Binding{
-		k.Download,
 		k.Help,
 		k.Quit,
 	}
@@ -180,6 +179,7 @@ func (k KeyMap) FullHelp() [][]key.Binding {
 			k.MoveUp,
 			k.MoveDown,
 			k.Download,
+			k.Open,
 		},
 		{
 			k.PageStream,

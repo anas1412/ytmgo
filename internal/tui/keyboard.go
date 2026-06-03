@@ -14,49 +14,9 @@ import (
 // handleKey processes all tea.KeyMsg events. Extracted from Update so each
 // message-handler family lives in its own focused file.
 func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	// Global keys work in any focus mode. Checked first so a focused
-	// text input (search box, settings field) cannot swallow them.
-	if handled, cmd := m.handleGlobalKey(msg); handled {
-		return m, cmd
-	}
-
-	// When confirming a destructive action, route the key press.
-	// Navigation keys 1/2/3 cancel and pass through.
-	if m.isConfirming() {
-		key := msg.String()
-		// Check if the pressed key confirms the pending action
-		confirmed := false
-		switch m.confirmAction {
-		case confirmClearQueue:
-			confirmed = key == "D"
-		case confirmDeleteTrack:
-			// Delete-track uses status-bar confirmation: Enter to confirm,
-			// Esc to cancel, all other keys ignored so the prompt persists.
-			confirmed = key == "enter"
-		}
-
-		switch {
-		case confirmed:
-			return m.executeConfirmedAction()
-		case key == "esc":
-			m.clearConfirm()
-			m.setStatus("Cancelled")
-			return m, nil
-		case key == "1" || key == "2" || key == "3":
-			// Cancel confirmation and let navigation key fall through
-			m.clearConfirm()
-		case m.confirmAction == confirmDeleteTrack:
-			// Keep the status-bar prompt visible until Enter or Esc
-			return m, nil
-		default:
-			// For other confirmations, any key cancels
-			m.clearConfirm()
-			m.setStatus("Cancelled")
-			return m, nil
-		}
-	}
-
-	// When search is focused, route input to textinput (except tab/esc/enter)
+	// ── Search-input focus: route letters/numbers to textinput ──
+	// Checked *before* global keys so typing "o", "R", "1" etc. in
+	// the search box works instead of triggering page/action shortcuts.
 	if m.searchFocused {
 		switch msg.String() {
 		case "esc":
@@ -98,7 +58,8 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, cmd
 	}
 
-	// When editing a string field on the Settings page, route to input
+	// ── Settings string editing: route letters/numbers to textinput ──
+	// Checked before global keys so typing "o" in a path field works.
 	if m.settingsEditField {
 		switch msg.String() {
 		case "esc":
@@ -111,6 +72,47 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			var cmd tea.Cmd
 			m.settingsEditInput, cmd = m.settingsEditInput.Update(msg)
 			return m, cmd
+		}
+	}
+
+	// ── Global keys (only fire when no text input is focused) ──
+	if handled, cmd := m.handleGlobalKey(msg); handled {
+		return m, cmd
+	}
+
+	// When confirming a destructive action, route the key press.
+	// Navigation keys 1/2/3 cancel and pass through.
+	if m.isConfirming() {
+		key := msg.String()
+		// Check if the pressed key confirms the pending action
+		confirmed := false
+		switch m.confirmAction {
+		case confirmClearQueue:
+			confirmed = key == "D"
+		case confirmDeleteTrack:
+			// Delete-track uses status-bar confirmation: Enter to confirm,
+			// Esc to cancel, all other keys ignored so the prompt persists.
+			confirmed = key == "enter"
+		}
+
+		switch {
+		case confirmed:
+			return m.executeConfirmedAction()
+		case key == "esc":
+			m.clearConfirm()
+			m.setStatus("Cancelled")
+			return m, nil
+		case key == "1" || key == "2" || key == "3":
+			// Cancel confirmation and let navigation key fall through
+			m.clearConfirm()
+		case m.confirmAction == confirmDeleteTrack:
+			// Keep the status-bar prompt visible until Enter or Esc
+			return m, nil
+		default:
+			// For other confirmations, any key cancels
+			m.clearConfirm()
+			m.setStatus("Cancelled")
+			return m, nil
 		}
 	}
 

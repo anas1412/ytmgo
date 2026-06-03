@@ -90,16 +90,24 @@ func (m Model) handleClick(x, y int) (Model, tea.Cmd) {
 	// ── Header (y=0) → page tabs or search input ──
 	if y == 0 {
 		// Replicate the tab rendering from renderHeader to find tab positions.
-		tabs := []string{"1 Stream", "2 Library", "3 Settings"}
+		type tabDef struct {
+			key   string
+			label string
+		}
+		tabs := []tabDef{
+			{"1", "Stream"},
+			{"2", "Library"},
+			{"3", "Settings"},
+		}
 		var renderedTabs []string
 		var tabWidths []int
-		for i, tab := range tabs {
-			var rendered string
+		for i, t := range tabs {
+			hint := styleKeyHint.Render("[" + t.key + "]")
+			label := styleNavTab.Render(t.label)
 			if int(m.activePage) == i {
-				rendered = styleNavTabActive.Render(tab)
-			} else {
-				rendered = styleNavTab.Render(tab)
+				label = styleNavTabActive.Render(t.label)
 			}
+			rendered := hint + " " + label
 			renderedTabs = append(renderedTabs, rendered)
 			tabWidths = append(tabWidths, lipgloss.Width(rendered))
 		}
@@ -297,23 +305,30 @@ func (m Model) handleClick(x, y int) (Model, tea.Cmd) {
 func (m Model) handleControlsClick(x int) (Model, tea.Cmd) {
 	// ── Transport cluster (left) ──
 	// Layout rendered by renderControls:
-	//   transport = pHint + " " + prevBtn + " " + playBtn + " " + spaceHint + " " + nextBtn + " " + nHint
-	//     chars:  [ p ]   ⏮   ▶   [ s p a c e ]   ⏭   [ n ]
-	//     pos:    0 1 2 3 4 5 6 7 8 9 ... 14 15 16 17 18 19 20
+	//   transport = pHint + " " + prevLabel + "  " + spaceHint + " " + playLabel + "  " + nHint + " " + nextLabel
+	//     text:  [p] ⏮ Prev  [space] ▶ Play  [n] ⏭ Next
+	//                ←prev→     ←─play/pause─→     ←next→
 	//
 	// Player box has DoubleBorder (1 char left border) + PaddingLeft(2).
 	// Content starts at terminal column 3.
 	contentStartX := 3
 
-	// Exact content-area columns for each logical transport zone.
-	// Zone boundaries are at the separator spaces between groups.
-	//   [3, 9)   = "[p] " + ⏮ + " "  → prev
-	//   [9, 19)  = "▶" + " " + "[space]" + " "  → play/pause
-	//   [19, ∞)  = "⏭" + " " + "[n]"  → next (limited by rightStartX)
-	const (
-		prevEnd = 9
-		playEnd = 19
-	)
+	// Render transport components to measure zone boundaries dynamically.
+	pHint := styleKeyHint.Render("[p]")
+	prevLabel := styleCtrlBtn.Render("⏮ Prev")
+	spaceHint := styleKeyHint.Render("[space]")
+	// Use "▶ Play" (7 chars) for zone calculation; "⏸ Pause" (8 chars) is
+	// close enough — the 1-char difference doesn't cross group boundaries.
+	playLabel := styleCtrlBtn.Render("▶ Play")
+	nHint := styleKeyHint.Render("[n]")
+	nextLabel := styleCtrlBtn.Render("⏭ Next")
+
+	prevGroupW := lipgloss.Width(pHint + " " + prevLabel)
+	playGroupW := lipgloss.Width(spaceHint + " " + playLabel)
+	nextGroupW := lipgloss.Width(nHint + " " + nextLabel)
+
+	prevEnd := contentStartX + prevGroupW            // exclusive
+	playEnd := prevEnd + 2 + playGroupW              // +2 for "  " between groups
 
 	// ── Right cluster (modes + volume) ──
 	sHint := styleKeyHint.Render("[s]")
@@ -338,14 +353,7 @@ func (m Model) handleControlsClick(x int) (Model, tea.Cmd) {
 	right := lipgloss.JoinHorizontal(lipgloss.Left, shuffleLabel, "  ", repeatLabel, "  ", volLabel)
 	rightW := lipgloss.Width(right)
 
-	// Replicate renderControls layout to find where the right cluster starts.
-	pHint := styleKeyHint.Render("[p]")
-	prevBtn := styleCtrlBtn.Render("⏮")
-	spaceHint := styleKeyHint.Render("[space]")
-	nHint := styleKeyHint.Render("[n]")
-	nextBtn := styleCtrlBtn.Render("⏭")
-
-	transportW := lipgloss.Width(pHint + " " + prevBtn + " " + "▶" + " " + spaceHint + " " + nextBtn + " " + nHint)
+	transportW := prevGroupW + 2 + playGroupW + 2 + nextGroupW
 	contentW := m.width - 10 // from renderControls
 	sepW := 1                // "│"
 	gap := contentW - transportW - rightW - sepW
