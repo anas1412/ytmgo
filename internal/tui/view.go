@@ -1108,9 +1108,9 @@ func (m Model) renderHelpBar() string {
 	case "":
 		left = styleVersion.Render("ytmgo " + ver.Version)
 	case "latest":
-		left = styleVersion.Render("✓ up to date")
+		left = styleVersion.Render("✓ " + ver.Version + " — up to date")
 	default:
-		left = styleUpdateAvail.Render("⬆ Update: " + m.updateAvailable)
+		left = styleUpdateAvail.Render("⬆ " + ver.Version + " → " + m.updateAvailable)
 	}
 
 	// Right: help shortcuts
