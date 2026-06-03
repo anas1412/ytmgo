@@ -1101,8 +1101,19 @@ func (m Model) renderHelpBar() string {
 		width = 10
 	}
 
-	// Left: version
-	version := styleVersion.Render("ytmgo " + ver.Version)
+	margin := 2
+	innerWidth := width - 2*margin
+
+	// Left: version or update status
+	var left string
+	switch m.updateAvailable {
+	case "":
+		left = styleVersion.Render("ytmgo " + ver.Version)
+	case "latest":
+		left = styleVersion.Render("✓ up to date")
+	default:
+		left = styleUpdateAvail.Render("⬆ Update: " + m.updateAvailable)
+	}
 
 	// Right: help shortcuts
 	bindings := Keys.ShortHelp()
@@ -1114,13 +1125,13 @@ func (m Model) renderHelpBar() string {
 	}
 	right := styleHelp.Render(strings.Join(parts, "  •  "))
 
-	leftW := lipgloss.Width(version)
+	leftW := lipgloss.Width(left)
 	rightW := lipgloss.Width(right)
-	gap := width - leftW - rightW
+	gap := innerWidth - leftW - rightW
 	if gap < 1 {
 		gap = 1
 	}
-	return version + strings.Repeat(" ", gap) + right
+	return strings.Repeat(" ", margin) + left + strings.Repeat(" ", gap) + right + strings.Repeat(" ", margin)
 }
 
 // ─── Status ────────────────────────────────────────────────────────

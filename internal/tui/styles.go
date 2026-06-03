@@ -68,6 +68,10 @@ var (
 
 	styleVersion = lipgloss.NewStyle().
 			Foreground(colorTextDim)
+
+	styleUpdateAvail = lipgloss.NewStyle().
+				Foreground(colorAccent2).
+				Bold(true)
 )
 
 // ─── Separator / Horizontal Rule ────────────────────────────────────

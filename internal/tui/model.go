@@ -121,7 +121,8 @@ type Model struct {
 	results                []search.Result
 	isSearching            bool
 	showingRecommendations bool
-	recsSeq                int // bumped each time R is pressed or a search starts
+	recsSeq                int       // bumped each time R is pressed or a search starts
+	updateAvailable        string    // "" = unknown, "latest" = up to date, "v0.X.Y" = update
 
 	// ── Library (local downloaded files) ──
 	library       []queue.Track

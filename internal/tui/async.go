@@ -7,6 +7,7 @@ import (
 	"ytmgo/internal/downloader"
 	"ytmgo/internal/player"
 	"ytmgo/internal/queue"
+	ver "ytmgo/internal/version"
 
 	tea "github.com/charmbracelet/bubbletea"
 )
@@ -58,7 +59,18 @@ func (m Model) handleRecommendations(msg RecommendationsMsg) (tea.Model, tea.Cmd
 // ── Update check complete ─────────────────────────────────────────────
 
 func (m Model) handleUpdateCheck(msg UpdateCheckMsg) (tea.Model, tea.Cmd) {
-	m.setStatus("Update available: " + msg.LatestVersion + " (github.com/anas1412/ytmgo)")
+	if msg.LatestVersion == "" {
+		return m, nil // check failed/skipped, stay unknown
+	}
+	if msg.LatestVersion != ver.Version {
+		// ignore "dev" vs. something (local build) — don't notify
+		if ver.Version == "dev" {
+			return m, nil
+		}
+		m.updateAvailable = msg.LatestVersion
+	} else {
+		m.updateAvailable = "latest"
+	}
 	return m, nil
 }
 
