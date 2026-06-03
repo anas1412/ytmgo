@@ -1106,7 +1106,7 @@ func (m Model) renderHelpBar() string {
 	var left string
 	switch m.updateAvailable {
 	case "":
-		left = styleVersion.Render("ytmgo " + ver.Version)
+		left = styleVersion.Render("⋯ " + ver.Version)
 	case "latest":
 		left = styleVersion.Render("✓ " + ver.Version + " — up to date")
 	default:
