@@ -72,16 +72,11 @@ func (m Model) View() string {
 	}
 
 	var view string
-	switch {
-	case m.isConfirming() && m.confirmAction != confirmDeleteTrack:
-		view = m.renderConfirmOverlay()
+	switch m.activePage {
+	case PageSettings:
+		view = m.renderSettingsPage()
 	default:
-		switch m.activePage {
-		case PageSettings:
-			view = m.renderSettingsPage()
-		default:
-			view = m.renderPage()
-		}
+		view = m.renderPage()
 	}
 	return m.fillHeight(view)
 }
@@ -427,6 +422,11 @@ func (m Model) renderSearchResults(width, height int) string {
 func (m Model) renderLibrary(width, height int) string {
 	tracks := m.filteredLibrary()
 	if len(tracks) == 0 {
+		if !m.libraryLoaded {
+			return styleEmpty.Width(width - 2).Height(height).Render(
+				"⏳  Scanning library…",
+			)
+		}
 		if m.searchInput.Value() != "" {
 			return styleEmpty.Width(width - 2).Height(height).Render(
 				"No tracks match \"" + m.searchInput.Value() + "\"",
@@ -1115,7 +1115,7 @@ func (m Model) renderHelpBar() string {
 	case "latest":
 		left = styleVersion.Render("✓ " + ver.Version + " — up to date")
 	default:
-		left = styleUpdateAvail.Render("⬆ " + ver.Version + " → " + m.updateAvailable)
+		left = styleUpdateAvail.Render("⬆  Update " + ver.Version + " → " + m.updateAvailable + " — press U")
 	}
 
 	// Right: help shortcuts

@@ -84,6 +84,11 @@ type (
 		LatestVersion string // empty when check was skipped/failed
 	}
 
+	// UpdateResultMsg is sent after the install script finishes running.
+	UpdateResultMsg struct {
+		Error error
+	}
+
 	// QuoteMsg carries a random quote fetched from the API.
 	QuoteMsg struct {
 		Quote  string
@@ -134,6 +139,7 @@ type Model struct {
 	library       []queue.Track
 	libraryCursor int
 	libraryOffset int
+	libraryLoaded bool // true after the first directory scan completes
 
 	// ── Queue ──
 	queue       *queue.Queue

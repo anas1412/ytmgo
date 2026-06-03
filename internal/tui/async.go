@@ -74,6 +74,17 @@ func (m Model) handleUpdateCheck(msg UpdateCheckMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+// ── Update install complete ──────────────────────────────────────────
+
+func (m Model) handleUpdateResult(msg UpdateResultMsg) (tea.Model, tea.Cmd) {
+	if msg.Error != nil {
+		m.setStatus("✗ " + msg.Error.Error())
+		return m, nil
+	}
+	m.setStatus("Update complete, restarting…")
+	return m, tea.Quit
+}
+
 // ── Random quote received ──────────────────────────────────────────
 
 func (m Model) handleQuote(msg QuoteMsg) (tea.Model, tea.Cmd) {
@@ -88,6 +99,7 @@ func (m Model) handleQuote(msg QuoteMsg) (tea.Model, tea.Cmd) {
 
 func (m Model) handleLibraryScan(msg LibraryScanMsg) (tea.Model, tea.Cmd) {
 	m.library = msg.Tracks
+	m.libraryLoaded = true
 	// Back-fill FilePath/Downloaded on any track already in the
 	// queue that was added from search before the library finished
 	// scanning. Without this, tracks queued in the first few

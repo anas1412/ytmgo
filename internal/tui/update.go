@@ -51,6 +51,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case UpdateCheckMsg:
 		return m.handleUpdateCheck(msg)
 
+	// ── Update install complete ────────────────────────────────
+	case UpdateResultMsg:
+		return m.handleUpdateResult(msg)
+
 	// ── Random quote received ─────────────────────────────────
 	case QuoteMsg:
 		return m.handleQuote(msg)

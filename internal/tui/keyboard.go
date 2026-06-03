@@ -95,6 +95,10 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			// Delete-track uses status-bar confirmation: Enter to confirm,
 			// Esc to cancel, all other keys ignored so the prompt persists.
 			confirmed = key == "enter"
+		case confirmUpdate:
+			// Update uses status-bar confirmation: Enter to confirm,
+			// Esc to cancel, all other keys ignored so the prompt persists.
+			confirmed = key == "enter"
 		}
 
 		switch {
@@ -107,7 +111,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		case key == "1" || key == "2" || key == "3":
 			// Cancel confirmation and let navigation key fall through
 			m.clearConfirm()
-		case m.confirmAction == confirmDeleteTrack:
+		case m.confirmAction == confirmDeleteTrack || m.confirmAction == confirmUpdate:
 			// Keep the status-bar prompt visible until Enter or Esc
 			return m, nil
 		default:
@@ -632,6 +636,22 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.player.Stop()
 		}
 		m.setStatus("Queue cleared")
+		return m, nil
+
+	case "U":
+		if m.updateAvailable == "" || m.updateAvailable == "latest" {
+			return m, nil
+		}
+		m.startConfirm(confirmUpdate, m.updateAvailable)
+		// Styled confirmation: orange bullet, white action, mint Enter, pink Esc
+		bullet := lipgloss.NewStyle().Foreground(colorWarning).Render("●")
+		action := lipgloss.NewStyle().Foreground(colorText).Bold(true).Render("Update to")
+		ver := lipgloss.NewStyle().Foreground(colorAccent2).Bold(true).Render(m.updateAvailable + "?")
+		enterKey := lipgloss.NewStyle().Foreground(colorAccent2).Bold(true).Render("[Enter]")
+		enterDesc := lipgloss.NewStyle().Foreground(colorTextDim).Render("yes")
+		escKey := lipgloss.NewStyle().Foreground(colorAccent3).Bold(true).Render("[Esc]")
+		escDesc := lipgloss.NewStyle().Foreground(colorTextDim).Render("no")
+		m.setStatus(bullet + " " + action + " " + ver + "  " + enterKey + " " + enterDesc + "  " + escKey + " " + escDesc)
 		return m, nil
 
 	case "s":

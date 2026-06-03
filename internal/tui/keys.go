@@ -26,6 +26,7 @@ type KeyMap struct {
 	Download     key.Binding
 	Recs         key.Binding
 	Open         key.Binding
+	Update       key.Binding
 	PageStream   key.Binding // 1
 	PageLibrary  key.Binding // 2
 	PageSettings key.Binding // 3
@@ -122,6 +123,10 @@ var Keys = KeyMap{
 		key.WithKeys("o"),
 		key.WithHelp("o", "open download dir"),
 	),
+	Update: key.NewBinding(
+		key.WithKeys("U"),
+		key.WithHelp("U", "update ytmgo"),
+	),
 	PageStream: key.NewBinding(
 		key.WithKeys("1"),
 		key.WithHelp("1", "stream page"),
@@ -180,6 +185,7 @@ func (k KeyMap) FullHelp() [][]key.Binding {
 			k.MoveDown,
 			k.Download,
 			k.Open,
+			k.Update,
 		},
 		{
 			k.PageStream,
