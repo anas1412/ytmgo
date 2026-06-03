@@ -1,8 +1,8 @@
 package tui
 
 import (
-	"encoding/json"
 	"net/http"
+	"path"
 	"time"
 
 	"ytmgo/internal/downloader"
@@ -59,32 +59,38 @@ func fetchRecommendationsCmd(seq, limit int, cookieBrowser, userAgent string) te
 
 // ─── Update check ─────────────────────────────────────────────────────────
 
-// checkUpdateCmd fetches the latest release tag from GitHub. Returns nil
-// (no message) on failure so the update handler is never called — zero
-// impact on the user experience when offline or rate limited.
+// checkUpdateCmd fetches the latest release tag from GitHub by following
+// the /releases/latest redirect. No API key, no rate limits — just a
+// single HTTP HEAD. Returns nil (no message) on any failure so the
+// handler is never called — zero UX impact when offline.
 func checkUpdateCmd(currentVersion string) tea.Cmd {
 	return func() tea.Msg {
 		if currentVersion == "dev" || currentVersion == "" {
-			return nil // local/dev builds, skip
+			return nil
 		}
-		resp, err := http.Get("https://api.github.com/repos/anas1412/ytmgo/releases/latest")
+		// Don't follow redirect — we want the Location header.
+		client := &http.Client{
+			CheckRedirect: func(*http.Request, []*http.Request) error {
+				return http.ErrUseLastResponse
+			},
+		}
+		resp, err := client.Get("https://github.com/anas1412/ytmgo/releases/latest")
 		if err != nil {
 			return nil
 		}
-		defer resp.Body.Close()
-		if resp.StatusCode != http.StatusOK {
-			return nil // rate limited, not found, etc.
-		}
-		var result struct {
-			TagName string `json:"tag_name"`
-		}
-		if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		resp.Body.Close()
+		if resp.StatusCode != http.StatusFound && resp.StatusCode != http.StatusMovedPermanently {
 			return nil
 		}
-		if result.TagName == "" || result.TagName == currentVersion {
-			return nil // same version or empty — no update
+		loc := resp.Header.Get("Location")
+		if loc == "" {
+			return nil
 		}
-		return UpdateCheckMsg{LatestVersion: result.TagName}
+		latest := path.Base(loc) // e.g. "/…/tag/v0.2.0" → "v0.2.0"
+		if latest == "" || latest == currentVersion {
+			return nil
+		}
+		return UpdateCheckMsg{LatestVersion: latest}
 	}
 }
 
