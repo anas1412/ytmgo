@@ -87,7 +87,7 @@ func checkUpdateCmd(currentVersion string) tea.Cmd {
 			return nil
 		}
 		latest := path.Base(loc) // e.g. "/…/tag/v0.2.0" → "v0.2.0"
-		if latest == "" || latest == currentVersion {
+		if latest == "" {
 			return nil
 		}
 		return UpdateCheckMsg{LatestVersion: latest}
