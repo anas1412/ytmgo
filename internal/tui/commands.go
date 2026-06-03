@@ -41,20 +41,19 @@ func searchCmd(query string, limit int, cookieBrowser, userAgent string) tea.Cmd
 }
 
 // fetchRecommendationsCmd fires a request for YouTube home page recommendations.
-func fetchRecommendationsCmd(cookieBrowser, userAgent string) tea.Cmd {
+// seq is the generation counter — stale responses are ignored.
+func fetchRecommendationsCmd(seq, limit int, cookieBrowser, userAgent string) tea.Cmd {
 	return func() tea.Msg {
-		results, err := search.FetchRecommendations(40, cookieBrowser, userAgent)
+		results, err := search.FetchRecommendations(limit, cookieBrowser, userAgent)
 		if err != nil {
-			return RecommendationsMsg{Error: err}
+			return RecommendationsMsg{Error: err, Seq: seq}
 		}
 		if results == nil {
 			results = []search.Result{}
 		}
-		return RecommendationsMsg{Results: results}
+		return RecommendationsMsg{Results: results, Seq: seq}
 	}
-}
-
-// ─── Library scan ───────────────────────────────────────────────────────
+}// ─── Library scan ───────────────────────────────────────────────────────
 
 // scanLibraryCmd scans the downloads directory for existing audio files.
 func scanLibraryCmd(dir string) tea.Cmd {

@@ -34,6 +34,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 			if query != "" {
+				m.recsSeq++ // invalidate any pending recommendations
 				m.showingRecommendations = false
 				m.results = nil
 				m.isSearching = true
@@ -710,12 +711,13 @@ func (m *Model) handleGlobalKey(msg tea.KeyMsg) (handled bool, cmd tea.Cmd) {
 			if m.activePage != PageStream {
 				m.switchPage(PageStream)
 			}
+			m.recsSeq++
 			m.showingRecommendations = true
 			m.results = nil
 			m.searchCursor = 0
 			m.searchOffset = 0
 			m.setStatus("Loading recommendations…")
-			return true, fetchRecommendationsCmd(m.settings.CookieBrowser, m.settings.UserAgent)
+			return true, fetchRecommendationsCmd(m.recsSeq, m.settings.SearchLimit, m.settings.CookieBrowser, m.settings.UserAgent)
 		case "o": // Keys.Open
 			path := m.downloadDir()
 			if err := openInOS(path); err != nil {

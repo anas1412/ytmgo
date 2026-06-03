@@ -67,6 +67,7 @@ type (
 	RecommendationsMsg struct {
 		Results []search.Result
 		Error   error
+		Seq     int // generation counter; stale responses are skipped
 	}
 
 	// LibraryScanMsg carries the list of downloaded tracks found on disk.
@@ -115,6 +116,7 @@ type Model struct {
 	results                []search.Result
 	isSearching            bool
 	showingRecommendations bool
+	recsSeq                int // bumped each time R is pressed or a search starts
 
 	// ── Library (local downloaded files) ──
 	library       []queue.Track

@@ -34,6 +34,10 @@ func (m Model) handleSearchResults(msg SearchResultsMsg) (tea.Model, tea.Cmd) {
 // ── Recommendations ──────────────────────────────────────────────────
 
 func (m Model) handleRecommendations(msg RecommendationsMsg) (tea.Model, tea.Cmd) {
+	// Stale response — a newer request or search invalidated this one.
+	if msg.Seq != m.recsSeq {
+		return m, nil
+	}
 	m.showingRecommendations = msg.Error == nil
 	if msg.Error != nil {
 		m.err = msg.Error

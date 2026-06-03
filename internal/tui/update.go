@@ -9,7 +9,7 @@ import (
 // Init satisfies tea.Model. It starts the tick for progress animation
 // and fetches YouTube recommendations.
 func (m Model) Init() tea.Cmd {
-	return tea.Batch(tickCmd(), fetchRecommendationsCmd(m.settings.CookieBrowser, m.settings.UserAgent), scanLibraryCmd(m.downloadDir()))
+	return tea.Batch(tickCmd(), fetchRecommendationsCmd(m.recsSeq, m.settings.SearchLimit, m.settings.CookieBrowser, m.settings.UserAgent), scanLibraryCmd(m.downloadDir()))
 }
 
 // Update satisfies tea.Model. It handles all messages without making
