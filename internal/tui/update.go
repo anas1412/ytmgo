@@ -10,7 +10,7 @@ import (
 // Init satisfies tea.Model. It starts the tick for progress animation
 // and fetches YouTube recommendations.
 func (m Model) Init() tea.Cmd {
-	return tea.Batch(tickCmd(), fetchRecommendationsCmd(m.recsSeq, m.settings.SearchLimit, m.settings.CookieBrowser, m.settings.UserAgent), scanLibraryCmd(m.downloadDir()), checkUpdateCmd(ver.Version))
+	return tea.Batch(tickCmd(), fetchQuoteCmd(m.quoteSeq), fetchRecommendationsCmd(m.recsSeq, m.settings.SearchLimit, m.settings.CookieBrowser, m.settings.UserAgent), scanLibraryCmd(m.downloadDir()), checkUpdateCmd(ver.Version))
 }
 
 // Update satisfies tea.Model. It handles all messages without making
@@ -50,6 +50,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// ── Update check complete ──────────────────────────────────
 	case UpdateCheckMsg:
 		return m.handleUpdateCheck(msg)
+
+	// ── Random quote received ─────────────────────────────────
+	case QuoteMsg:
+		return m.handleQuote(msg)
 
 	// ── Settings saved ────────────────────────────────────────────
 	case SettingsSavedMsg:

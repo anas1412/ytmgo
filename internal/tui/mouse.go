@@ -164,8 +164,8 @@ func (m Model) handleClick(x, y int) (Model, tea.Cmd) {
 				if idx < 0 {
 					idx = 0
 				}
-				if idx > 6 { // 7 items indexed 0-6
-					idx = 6
+				if idx > 8 { // 9 items indexed 0-8
+					idx = 8
 				}
 				m.settingsCursor = idx
 				m.clampSettingsOffset()
@@ -637,6 +637,9 @@ func (m Model) activateSettingsItem() (Model, tea.Cmd) {
 	case 4, 5, 6: // Download Dir / Cookie Browser / User-Agent (strings)
 		m.startSettingsEdit()
 		return m, nil
+	case 7: // Show Quotes (boolean)
+		m.settings.ShowQuotes = !m.settings.ShowQuotes
+		return m, tea.Batch(saveSettingsCmd(m.settings))
 	}
 	return m, nil
 }

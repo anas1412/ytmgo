@@ -771,6 +771,7 @@ func (m Model) renderSettingsList(panelWidth, panelHeight int) string {
 		{"Download Dir", truncate(m.settings.DownloadDir, 40), "Path for downloaded files  (press 'o' to open)"},
 		{"Cookie Browser", truncate(m.settings.CookieBrowser, 20), "Browser for YouTube cookies"},
 		{"User-Agent", truncate(m.settings.UserAgent, 30), "Custom UA for yt-dlp (empty = default)"},
+		{"Internet Quotes", boolStr(m.settings.ShowQuotes), "Fetch quotes online (falls back to local pool)"},
 	}
 
 	// Each item uses ~4 lines (label, value, desc, blank).
@@ -826,17 +827,21 @@ func (m Model) renderSettingsList(panelWidth, panelHeight int) string {
 	// Help text at bottom
 	lines = append(lines, styleSettingsDesc.Render("↑↓ navigate · Enter toggle/edit · Esc cancel edit · 1/2/3 switch page"))
 
-	// Pad each line to full width and full height — overwrites any stale
-	// content from prior taller frames.
+	// Pad/truncate each line to full width and full height — overwrites
+	// any stale content from prior taller frames.
 	result := strings.Join(lines, "\n")
 	result = padToWidth(result, innerW)
-	if cnt := strings.Count(result, "\n") + 1; cnt < panelHeight {
-		result += "\n" + strings.Join(
-			make([]string, panelHeight-cnt),
-			"\n"+strings.Repeat(" ", innerW),
-		)
+	contentLines := strings.Split(result, "\n")
+	if len(contentLines) > panelHeight {
+		contentLines = contentLines[:panelHeight]
 	}
-	return result
+	if cnt := len(contentLines); cnt < panelHeight {
+		contentLines = append(contentLines, make([]string, panelHeight-cnt)...)
+		for i := cnt; i < panelHeight; i++ {
+			contentLines[i] = strings.Repeat(" ", innerW)
+		}
+	}
+	return strings.Join(contentLines, "\n")
 }
 
 // ─── Helpers ───────────────────────────────────────────────────────
@@ -1146,10 +1151,8 @@ func (m Model) renderStatus() string {
 	if m.statusMessage != "" {
 		return styleStatus.Render("● " + m.statusMessage)
 	}
-	// Nothing actionable to report — show a rotating tip so the bar is
-	// never empty. Tips are dimmer than action status to keep the visual
-	// hierarchy clear.
-	return styleStatusIdle.Render("▸ " + m.currentTip())
+	// Nothing actionable — show a rotating quote
+	return styleStatusIdle.Render("▸ " + m.currentQuote)
 }
 
 // ─── Help Overlay ──────────────────────────────────────────────────
@@ -1172,13 +1175,20 @@ func (m Model) renderHelpPanel(panelWidth, panelHeight int) string {
 
 	result := b.String()
 	result = padToWidth(result, innerW)
-	if cnt := strings.Count(result, "\n") + 1; cnt < panelHeight {
-		result += "\n" + strings.Join(
-			make([]string, panelHeight-cnt),
-			"\n"+strings.Repeat(" ", innerW),
-		)
+	lines := strings.Split(result, "\n")
+	// Truncate if taller than panelHeight
+	if len(lines) > panelHeight {
+		lines = lines[:panelHeight]
 	}
-	return result
+	// Pad if shorter than panelHeight
+	if cnt := len(lines); cnt < panelHeight {
+		lines = append(lines, make([]string, panelHeight-cnt)...)
+		// Each padded line is a blank line of innerW spaces
+		for i := cnt; i < panelHeight; i++ {
+			lines[i] = strings.Repeat(" ", innerW)
+		}
+	}
+	return strings.Join(lines, "\n")
 }
 
 // ─── Helpers ───────────────────────────────────────────────────────

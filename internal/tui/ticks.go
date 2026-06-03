@@ -29,23 +29,35 @@ func (m Model) handleTick(msg tickMsg) (tea.Model, tea.Cmd) {
 			}
 		}
 	}
-	// Auto-clear status messages after 3 seconds so the rotating idle
-	// tips cycle back into view. Never auto-clear during confirmation
+	// Auto-clear status messages after 3 seconds so the idle quote
+	// cycles back into view. Never auto-clear during confirmation
 	// — the prompt must stay visible until Enter or Esc.
 	if m.statusMessage != "" && m.err == nil && !m.isConfirming() && !m.statusMessageSetAt.IsZero() && time.Since(m.statusMessageSetAt) >= 3*time.Second {
 		m.clearStatus()
 	}
-	// Rotate the idle status-bar tip every idleTipRotateEvery ticks.
-	// Only advance the counter when no live status message or error is
-	// being shown — keeps rotation cadence steady regardless of activity.
+	// Advance the idle quote every quoteRotateEvery ticks.
+	// Only count when no live status message or error is being shown.
+	var cmds []tea.Cmd
 	if m.statusMessage == "" && m.err == nil {
 		m.tickCount++
-		if m.tickCount >= idleTipRotateEvery {
-			m.advanceTip()
+		if m.tickCount >= quoteRotateEvery {
+			m.tickCount = 0
+			// Advance to next fallback quote (always works, instant)
+			m.fallbackIdx++
+			if m.fallbackIdx >= len(fallbackQuotes) {
+				m.fallbackIdx = 0
+			}
+			m.currentQuote = fallbackQuotes[m.fallbackIdx]
+			// Fire API fetch only when quotes setting is on
+			if m.settings.ShowQuotes {
+				m.quoteSeq++
+				cmds = append(cmds, fetchQuoteCmd(m.quoteSeq))
+			}
 		}
 	}
 	// Real position comes from PositionMsg when player is active
-	return m, tickCmd() // keep the tick going
+	cmds = append(cmds, tickCmd())
+	return m, tea.Batch(cmds...)
 }
 
 // ── Fast player tick (smooth progress interpolation) ─────────────────

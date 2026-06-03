@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"encoding/json"
 	"net/http"
 	"path"
 	"time"
@@ -91,6 +92,31 @@ func checkUpdateCmd(currentVersion string) tea.Cmd {
 			return nil
 		}
 		return UpdateCheckMsg{LatestVersion: latest}
+	}
+}
+
+// ─── Random quote fetch ─────────────────────────────────────────────
+
+// fetchQuoteCmd fetches a random quote from dummyjson.
+// On failure it returns nil so the fallback quote stays displayed.
+func fetchQuoteCmd(seq int) tea.Cmd {
+	return func() tea.Msg {
+		resp, err := http.Get("https://dummyjson.com/quotes/random")
+		if err != nil {
+			return nil
+		}
+		defer resp.Body.Close()
+		var result struct {
+			Quote  string `json:"quote"`
+			Author string `json:"author"`
+		}
+		if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+			return nil
+		}
+		if result.Quote == "" {
+			return nil
+		}
+		return QuoteMsg{Quote: result.Quote, Author: result.Author, Seq: seq}
 	}
 }
 

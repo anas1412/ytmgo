@@ -211,7 +211,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "down", "j":
 		// Settings page: navigate settings list
 		if m.activePage == PageSettings && !m.settingsEditField {
-			if m.settingsCursor < 7 { // 8 items indexed 0-7
+			if m.settingsCursor < 8 { // 9 items indexed 0-8
 				m.settingsCursor++
 				m.clampSettingsOffset()
 			}
@@ -268,6 +268,9 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			case 4, 5, 6: // Download Dir / Cookie Browser / User-Agent (strings)
 				m.startSettingsEdit()
 				return m, nil
+			case 7: // Show Quotes (boolean)
+				m.settings.ShowQuotes = !m.settings.ShowQuotes
+				return m, tea.Batch(saveSettingsCmd(m.settings))
 			}
 			return m, nil
 		}

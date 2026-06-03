@@ -1,7 +1,6 @@
 package tui
 
 import (
-	"fmt"
 	"time"
 
 	"ytmgo/internal/downloader"
@@ -83,6 +82,13 @@ type (
 	// UpdateCheckMsg carries the latest version from GitHub.
 	UpdateCheckMsg struct {
 		LatestVersion string // empty when check was skipped/failed
+	}
+
+	// QuoteMsg carries a random quote fetched from the API.
+	QuoteMsg struct {
+		Quote  string
+		Author string
+		Seq    int // generation counter; stale responses are skipped
 	}
 )
 
@@ -183,9 +189,11 @@ type Model struct {
 	statusMessageSetAt time.Time
 	err                error
 
-	// ── Idle tip rotation (status bar shows tips when nothing else is happening) ──
-	tipIndex  int
-	tickCount int
+	// ── Quote rotation (shown in status bar when idle) ──
+	currentQuote string
+	fallbackIdx  int
+	quoteSeq     int   // bumped each rotation; stale API responses dropped
+	tickCount    int   // counts ticks between rotations
 }
 
 // ─── Status helpers ─────────────────────────────────────────────────
@@ -246,6 +254,7 @@ func InitialModel() Model {
 		showingRecommendations: true,
 		settings:               defSettings,
 		settingsEditInput:      sti,
+		currentQuote:           fallbackQuotes[0],
 	}
 }
 
@@ -282,63 +291,29 @@ func (m *Model) startTrackPlayback(playURL, title string, durationSec int) tea.C
 	return tea.Batch(positionCmd(m.player), endedCmd(m.player), playerTickCmd())
 }
 
-// idleTips are short hints shown in the status bar when nothing else is happening.
-// Mix of keyboard shortcuts, feature discoverability, and personality. Rotates
-// every tipRotateEvery ticks (8 seconds at 500ms tick).
-var idleTips = []string{
-	// Keyboard / shortcuts
-	"Press `?` for all keyboard shortcuts",
-	"`Tab` cycles focus · `o` opens the download folder",
-	"Press `R` for fresh recommendations",
-	"Press `D` twice to clear the entire queue",
-	"`1` `2` `3` jump between Stream · Library · Settings",
-	"`↑↓` or `j`/`k` to navigate lists",
-	"`space` toggles play / pause",
-	"`ctrl+↑` / `ctrl+↓` to reorder the queue",
-	"`s` toggles shuffle · `r` cycles repeat",
-
-	// Features
-	"Stream mode plays without downloading — toggle in Settings",
-	"Press `x` on any track to download it for offline use",
-	"Queue + Downloads are always visible on the right →",
-	"Already have MP3s? Point Download Dir at them in Settings",
-	"Set Default Volume in Settings so every track starts at your level",
-	"Use a cookie browser in Settings for age-restricted tracks",
-
-	// State-aware (formatted each tick)
-	"__SESSIONS__", // placeholder — replaced at render time with session stats
+// ─── Fallback quotes (used when API fetch fails) ─────────────────────
+// Rotated through as a fallback whenever the internet quote fetch fails.
+var fallbackQuotes = []string{
+	`"Music is the shorthand of emotion" — Leo Tolstoy`,
+	`"Without music, life would be a mistake" — Friedrich Nietzsche`,
+	`"One good thing about music, when it hits you, you feel no pain" — Bob Marley`,
+	`"Music can change the world" — Beethoven`,
+	`"Where words fail, music speaks" — Hans Christian Andersen`,
+	`"Life is like jazz — best when you improvise" — George Gershwin`,
+	`"Music is the universal language of mankind" — H. W. Longfellow`,
+	`"The only truth is music" — Jack Kerouac`,
+	`"After silence, that which comes nearest to expressing the inexpressible is music" — Aldous Huxley`,
+	`"Music gives a soul to the universe, wings to the mind" — Plato`,
+	`"If music be the food of love, play on" — Shakespeare`,
+	`"Everything in the universe has rhythm" — unknown`,
+	`"Let the music play" — unknown`,
+	`"When in doubt, turn up the volume" — unknown`,
+	`"Music is what feelings sound like" — unknown`,
 }
 
-// idleTipRotateEvery is how many 500ms ticks between tip rotations.
-// 16 ticks = 8 seconds.
-const idleTipRotateEvery = 16
-
-// currentTip returns the tip to show right now. Placeholders are resolved
-// against current model state (queue length, downloads tracked, etc.).
-func (m Model) currentTip() string {
-	tip := idleTips[m.tipIndex%len(idleTips)]
-	if tip == "__SESSIONS__" {
-		queue := m.queue.Len()
-		dlCount := 0
-		if m.downloader != nil {
-			dlCount = len(m.downloader.Jobs())
-		}
-		if queue == 0 && dlCount == 0 {
-			return "Tip: search for an artist to get started"
-		}
-		return fmt.Sprintf("Session: %d in queue · %d downloads tracked", queue, dlCount)
-	}
-	return tip
-}
-
-// advanceTip moves to the next tip in the rotation. Returns the new index.
-func (m *Model) advanceTip() {
-	m.tipIndex++
-	if m.tipIndex >= len(idleTips) {
-		m.tipIndex = 0
-	}
-	m.tickCount = 0
-}
+// quoteRotateEvery is how many 500ms ticks between quote rotations.
+// 60 ticks = 30 seconds — slow enough to read a quote.
+const quoteRotateEvery = 60
 
 
 

@@ -74,6 +74,16 @@ func (m Model) handleUpdateCheck(msg UpdateCheckMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+// ── Random quote received ──────────────────────────────────────────
+
+func (m Model) handleQuote(msg QuoteMsg) (tea.Model, tea.Cmd) {
+	if msg.Seq != m.quoteSeq {
+		return m, nil // stale response
+	}
+	m.currentQuote = fmt.Sprintf(`"%s" — %s`, msg.Quote, msg.Author)
+	return m, nil
+}
+
 // ── Library scan complete ────────────────────────────────────────────
 
 func (m Model) handleLibraryScan(msg LibraryScanMsg) (tea.Model, tea.Cmd) {

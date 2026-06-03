@@ -17,6 +17,7 @@ type Settings struct {
 	DownloadDir   string `json:"download_dir"`    // relative or absolute path for downloads
 	CookieBrowser string `json:"cookie_browser"`  // "brave", "firefox", "chrome", or ""
 	UserAgent     string `json:"user_agent"`      // custom UA for yt-dlp (empty = yt-dlp default)
+	ShowQuotes    bool   `json:"show_quotes"`     // fetch internet quotes (falls back to local pool when off or offline)
 }
 
 // Defaults returns a Settings with sane defaults.
@@ -28,6 +29,7 @@ func Defaults() *Settings {
 		SearchLimit:   20,
 		DownloadDir:   "downloads",
 		CookieBrowser: "brave",
+		ShowQuotes:    true,
 	}
 }
 
