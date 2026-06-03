@@ -190,10 +190,8 @@ func (m Model) renderSettingsPanels() string {
 // ─── Header ────────────────────────────────────────────────────────
 
 func (m Model) renderHeader() string {
-	// Logo & Version
+	// Logo
 	logo := styleLogo.Render("♫ ytmgo")
-	version := styleVersion.Render(ver.Version)
-	title := lipgloss.JoinHorizontal(lipgloss.Left, logo, " ", version)
 
 	// Search input
 	var searchView string
@@ -227,7 +225,7 @@ func (m Model) renderHeader() string {
 	// Tab hint — shown inline so users discover focus cycling without
 	// glancing down at the help bar.
 	tabHint := styleKeyHint.Render("[tab]") + styleTextDim.Render(" cycle")
-	left := lipgloss.JoinHorizontal(lipgloss.Center, title, "   ", searchView, "  ", tabHint)
+	left := lipgloss.JoinHorizontal(lipgloss.Center, logo, "   ", searchView, "  ", tabHint)
 
 	gap := m.width - lipgloss.Width(left) - lipgloss.Width(tabsStr) - 2
 	if gap < 1 {
