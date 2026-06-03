@@ -354,7 +354,7 @@ func (m Model) handleControlsClick(x int) (Model, tea.Cmd) {
 	rightW := lipgloss.Width(right)
 
 	transportW := prevGroupW + 2 + playGroupW + 2 + nextGroupW
-	contentW := m.width - 10 // from renderControls
+	contentW := m.width - 6 // from renderControls
 	sepW := 1                // "│"
 	gap := contentW - transportW - rightW - sepW
 	if gap < 2 {
@@ -648,7 +648,7 @@ func (m Model) handleProgressClick(x int) (Model, tea.Cmd) {
 		return m, nil
 	}
 
-	innerW := m.width - 10
+	innerW := m.width - 6
 	contentStartX := 3 // double border (1) + left padding (2)
 
 	hHint := styleKeyHint.Render("[h]")

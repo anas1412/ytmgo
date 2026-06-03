@@ -883,7 +883,7 @@ var styleTextDim = lipgloss.NewStyle().Foreground(colorTextDim)
 
 func (m Model) renderPlayerBar() string {
 	var nowPlaying, progress, controls string
-	innerW := m.width - 10 // box width(m.width-4) - doubleBorder(2) - padding(4) = content width
+	innerW := m.width - 6 // box width(m.width) - doubleBorder(2) - padding(4) = content width
 
 	nowPlayingIdx := m.queue.CurrentIndex()
 	tracks := m.queue.Tracks()
@@ -980,7 +980,7 @@ func (m Model) renderPlayerBar() string {
 		boxStyle = stylePlayerBoxStopped
 	}
 
-	return boxStyle.Width(m.width - 4).Render(content)
+	return boxStyle.Render(content)
 }
 
 // renderControls renders the bottom row of the player bar.
@@ -1067,7 +1067,7 @@ func (m Model) renderControls() string {
 
 	// ── Asymmetric composition: left flush-left, right flush-right,
 	// one hairline separator centered in the gap ────────────────
-	contentW := m.width - 10 // box width(m.width-4) - doubleBorder(2) - padding(4)
+	contentW := m.width - 6 // box width(m.width) - doubleBorder(2) - padding(4)
 	if contentW < 20 {
 		contentW = 20
 	}
