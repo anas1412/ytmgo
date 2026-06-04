@@ -866,6 +866,7 @@ func (m Model) renderSettingsList(panelWidth, panelHeight int) string {
 	}{
 		{"Playback Mode", settings.PlaybackModeLabel(m.settings.PlaybackMode), "Stream (online) · Hybrid (play+download) · Offline (download first)"},
 		{"Show Quotes", boolStr(m.settings.ShowQuotes), "Show quotes in status bar when idle"},
+		{"Discord RPC", boolStr(m.settings.DiscordRPCEnabled), "Show currently playing track on your Discord profile"},
 		{"Default Volume", fmt.Sprintf("%d", m.settings.DefaultVolume), "Starting volume 0-100  (+/- adjust)"},
 		{"Search Limit", fmt.Sprintf("%d", m.settings.SearchLimit), "Max results per search  (+/- adjust)"},
 		{"Download Dir", truncate(m.settings.DownloadDir, 40), "Where files are saved  (press 'o' to open)"},
@@ -903,7 +904,7 @@ func (m Model) renderSettingsList(panelWidth, panelHeight int) string {
 
 		// Show an inline [Open] button when the cursor is on the Download
 		// Dir row and we're not editing — makes the 'o' shortcut discoverable.
-		if idx == 4 && !m.settingsEditField {
+		if idx == 5 && !m.settingsEditField {
 			openBtn := "  " + styleSettingsOpenBtn.Render("[Open]")
 			value = value + openBtn
 		}

@@ -74,7 +74,7 @@ func (m Model) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 	if msg.Button == tea.MouseButtonWheelDown {
 		switch m.activePage {
 		case PageSettings:
-			if !m.settingsEditField && m.settingsCursor < 6 {
+			if !m.settingsEditField && m.settingsCursor < 7 {
 				m.settingsCursor++
 				m.clampSettingsOffset()
 			}
@@ -199,8 +199,8 @@ func (m Model) handleClick(x, y int) (Model, tea.Cmd) {
 				if idx < 0 {
 					idx = 0
 				}
-				if idx > 6 { // 7 items indexed 0-6
-					idx = 6
+				if idx > 7 { // 8 items indexed 0-7
+					idx = 7
 				}
 				m.settingsCursor = idx
 				m.clampSettingsOffset()
@@ -442,6 +442,7 @@ func (m Model) handleControlsClick(x int) (Model, tea.Cmd) {
 				}
 			}
 			m.lastPositionAt = time.Now()
+			m.updateDiscordRPC()
 			if m.playerState == player.StatePlaying {
 				return m, playerTickCmd()
 			}
@@ -684,11 +685,11 @@ func (m Model) activateSettingsItem() (Model, tea.Cmd) {
 		m.settingsEditField = false
 		m.settingsEditInput.Blur()
 		switch m.settingsCursor {
-		case 4: // Download Dir
+		case 5: // Download Dir
 			m.settings.DownloadDir = newVal
-		case 5: // Cookie Browser
+		case 6: // Cookie Browser
 			m.settings.CookieBrowser = newVal
-		case 6: // User-Agent
+		case 7: // User-Agent
 			m.settings.UserAgent = newVal
 		}
 		return m, tea.Batch(saveSettingsCmd(m.db, m.settings))
@@ -707,9 +708,13 @@ func (m Model) activateSettingsItem() (Model, tea.Cmd) {
 			m.advanceTip()
 		}
 		return m, tea.Batch(saveSettingsCmd(m.db, m.settings))
-	case 2, 3: // Volume / Search Limit (numbers — Enter does nothing)
+	case 2: // Discord RPC (boolean)
+		m.settings.DiscordRPCEnabled = !m.settings.DiscordRPCEnabled
+		m.reinitDiscordRPC()
+		return m, tea.Batch(saveSettingsCmd(m.db, m.settings))
+	case 3, 4: // Volume / Search Limit (numbers — Enter does nothing)
 		return m, nil
-	case 4, 5, 6: // Download Dir / Cookie Browser / User-Agent (strings)
+	case 5, 6, 7: // Download Dir / Cookie Browser / User-Agent (strings)
 		m.startSettingsEdit()
 		return m, nil
 	}
@@ -765,6 +770,7 @@ func (m Model) handleProgressClick(x int) (Model, tea.Cmd) {
 	m.lastPosition = targetPos
 	m.lastPositionAt = time.Now()
 	m.setStatus(fmt.Sprintf("Seeked to %s", formatTime(targetPos)))
+	m.updateDiscordRPC()
 
 	return m, nil
 }

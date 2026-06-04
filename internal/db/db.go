@@ -63,19 +63,20 @@ CREATE TABLE IF NOT EXISTS play_history (
 );
 
 CREATE TABLE IF NOT EXISTS settings (
-    id              INTEGER PRIMARY KEY CHECK (id = 1),
-    playback_mode   INTEGER NOT NULL DEFAULT 0,
-    default_volume  INTEGER NOT NULL DEFAULT 80,
-    search_limit    INTEGER NOT NULL DEFAULT 20,
-    download_dir    TEXT NOT NULL DEFAULT 'downloads',
-    cookie_browser  TEXT NOT NULL DEFAULT 'brave',
-    user_agent      TEXT NOT NULL DEFAULT '',
-    show_quotes     INTEGER NOT NULL DEFAULT 1
+    id                  INTEGER PRIMARY KEY CHECK (id = 1),
+    playback_mode       INTEGER NOT NULL DEFAULT 0,
+    default_volume      INTEGER NOT NULL DEFAULT 80,
+    search_limit        INTEGER NOT NULL DEFAULT 20,
+    download_dir        TEXT NOT NULL DEFAULT 'downloads',
+    cookie_browser      TEXT NOT NULL DEFAULT 'brave',
+    user_agent          TEXT NOT NULL DEFAULT '',
+    show_quotes         INTEGER NOT NULL DEFAULT 1,
+    discord_rpc_enabled INTEGER NOT NULL DEFAULT 1
 );
 `
 
 const insertDefaultQueueState = `INSERT OR IGNORE INTO queue_state (id, tracks, current_idx, shuffle, repeat, repeat_all) VALUES (1, '[]', -1, 0, 0, 0);`
-const insertDefaultSettings = `INSERT OR IGNORE INTO settings (id, playback_mode, default_volume, search_limit, download_dir, cookie_browser, user_agent, show_quotes) VALUES (1, 0, 80, 20, 'downloads', 'brave', '', 1);`
+const insertDefaultSettings = `INSERT OR IGNORE INTO settings (id, playback_mode, default_volume, search_limit, download_dir, cookie_browser, user_agent, show_quotes, discord_rpc_enabled) VALUES (1, 0, 80, 20, 'downloads', 'brave', '', 1, 1);`
 
 // Open opens (or creates) the SQLite database, runs migrations, and
 // returns a DB handle. The database is opened with WAL journal mode,
@@ -96,6 +97,12 @@ func Open() (*DB, error) {
 		db.Close()
 		return nil, fmt.Errorf("db: create schema: %w", err)
 	}
+
+	// Migration: add discord_rpc_enabled column for databases created before
+	// the Discord RPC feature was added. Must run before any INSERT that
+	// references the column, or existing databases will fail with
+	// "table settings has no column named discord_rpc_enabled".
+	db.Exec(`ALTER TABLE settings ADD COLUMN discord_rpc_enabled INTEGER NOT NULL DEFAULT 1`)
 
 	if _, err := db.Exec(insertDefaultQueueState); err != nil {
 		db.Close()
@@ -230,20 +237,21 @@ func (d *DB) RecordPlay(t queue.Track) error {
 // Returns Defaults if the row doesn't exist or any error occurs.
 func (d *DB) LoadSettings() (*settings.Settings, error) {
 	var s settings.Settings
-	var showQuotes int
-	row := d.QueryRow(`SELECT playback_mode, default_volume, search_limit, download_dir, cookie_browser, user_agent, show_quotes FROM settings WHERE id = 1`)
-	if err := row.Scan(&s.PlaybackMode, &s.DefaultVolume, &s.SearchLimit, &s.DownloadDir, &s.CookieBrowser, &s.UserAgent, &showQuotes); err != nil {
+	var showQuotes, discordRPC int
+	row := d.QueryRow(`SELECT playback_mode, default_volume, search_limit, download_dir, cookie_browser, user_agent, show_quotes, discord_rpc_enabled FROM settings WHERE id = 1`)
+	if err := row.Scan(&s.PlaybackMode, &s.DefaultVolume, &s.SearchLimit, &s.DownloadDir, &s.CookieBrowser, &s.UserAgent, &showQuotes, &discordRPC); err != nil {
 		return settings.Defaults(), fmt.Errorf("load settings: %w", err)
 	}
 	s.ShowQuotes = showQuotes != 0
+	s.DiscordRPCEnabled = discordRPC != 0
 	return &s, nil
 }
 
 // SaveSettings writes settings to the database.
 func (d *DB) SaveSettings(s *settings.Settings) error {
 	_, err := d.Exec(
-		`UPDATE settings SET playback_mode = ?, default_volume = ?, search_limit = ?, download_dir = ?, cookie_browser = ?, user_agent = ?, show_quotes = ? WHERE id = 1`,
-		s.PlaybackMode, s.DefaultVolume, s.SearchLimit, s.DownloadDir, s.CookieBrowser, s.UserAgent, boolInt(s.ShowQuotes),
+		`UPDATE settings SET playback_mode = ?, default_volume = ?, search_limit = ?, download_dir = ?, cookie_browser = ?, user_agent = ?, show_quotes = ?, discord_rpc_enabled = ? WHERE id = 1`,
+		s.PlaybackMode, s.DefaultVolume, s.SearchLimit, s.DownloadDir, s.CookieBrowser, s.UserAgent, boolInt(s.ShowQuotes), boolInt(s.DiscordRPCEnabled),
 	)
 	if err != nil {
 		return fmt.Errorf("save settings: %w", err)

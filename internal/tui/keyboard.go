@@ -220,7 +220,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "down", "j":
 		// Settings page: navigate settings list
 		if m.activePage == PageSettings && !m.settingsEditField {
-			if m.settingsCursor < 6 { // 7 items indexed 0-6
+			if m.settingsCursor < 7 { // 8 items indexed 0-7
 				m.settingsCursor++
 				m.clampSettingsOffset()
 			}
@@ -265,11 +265,11 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.settingsEditField = false
 				m.settingsEditInput.Blur()
 				switch m.settingsCursor {
-				case 4: // Download Dir
+				case 5: // Download Dir
 					m.settings.DownloadDir = newVal
-				case 5: // Cookie Browser
+				case 6: // Cookie Browser
 					m.settings.CookieBrowser = newVal
-				case 6: // User-Agent
+				case 7: // User-Agent
 					m.settings.UserAgent = newVal
 				}
 				return m, tea.Batch(saveSettingsCmd(m.db, m.settings))
@@ -290,9 +290,13 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 					m.advanceTip()
 				}
 				return m, tea.Batch(saveSettingsCmd(m.db, m.settings))
-			case 2, 3: // Volume / Search Limit (numbers — Enter does nothing, use +/-)
+			case 2: // Discord RPC (boolean)
+				m.settings.DiscordRPCEnabled = !m.settings.DiscordRPCEnabled
+				m.reinitDiscordRPC()
+				return m, tea.Batch(saveSettingsCmd(m.db, m.settings))
+			case 3, 4: // Volume / Search Limit (numbers — Enter does nothing, use +/-)
 				return m, nil
-			case 4, 5, 6: // Download Dir / Cookie Browser / User-Agent (strings)
+			case 5, 6, 7: // Download Dir / Cookie Browser / User-Agent (strings)
 				m.startSettingsEdit()
 				return m, nil
 			}
@@ -432,6 +436,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		// redraws again on resume (or keep it running through the
 		// pause tap if we never actually paused).
 		m.lastPositionAt = time.Now()
+		m.updateDiscordRPC()
 		if m.playerState == player.StatePlaying {
 			return m, playerTickCmd()
 		}
@@ -479,6 +484,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if m.player != nil {
 			m.player.Seek(5)
 		}
+		m.updateDiscordRPC()
 		return m, nil
 
 	case "L":
@@ -529,7 +535,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		// Settings page: adjust number settings
 		if m.activePage == PageSettings && !m.settingsEditField {
 			switch m.settingsCursor {
-			case 2: // Default Volume
+			case 3: // Default Volume
 				if m.settings.DefaultVolume < 100 {
 					m.settings.DefaultVolume = min(m.settings.DefaultVolume+5, 100)
 					if m.player != nil {
@@ -537,7 +543,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 					}
 					m.volume = m.settings.DefaultVolume
 				}
-			case 3: // Search Limit
+			case 4: // Search Limit
 				m.settings.SearchLimit = min(m.settings.SearchLimit+5, 100)
 			}
 			return m, tea.Batch(saveSettingsCmd(m.db, m.settings))
@@ -553,7 +559,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		// Settings page: adjust number settings
 		if m.activePage == PageSettings && !m.settingsEditField {
 			switch m.settingsCursor {
-			case 2: // Default Volume
+			case 3: // Default Volume
 				if m.settings.DefaultVolume > 0 {
 					m.settings.DefaultVolume = max(m.settings.DefaultVolume-5, 0)
 					if m.player != nil {
@@ -561,7 +567,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 					}
 					m.volume = m.settings.DefaultVolume
 				}
-			case 3: // Search Limit
+			case 4: // Search Limit
 				m.settings.SearchLimit = max(m.settings.SearchLimit-5, 5)
 			}
 			return m, tea.Batch(saveSettingsCmd(m.db, m.settings))
@@ -645,6 +651,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.playerState = player.StateStopped
 				m.position = 0
 				m.duration = 0
+				m.updateDiscordRPC()
 			} else {
 				if m.queueCursor >= m.queue.Len() {
 					m.queueCursor = max(0, m.queue.Len()-1)
@@ -655,6 +662,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				if m.player != nil {
 					m.player.Stop()
 				}
+				m.updateDiscordRPC()
 			}
 			return m, saveQueueCmd(m.db, m.queue)
 		}
@@ -697,6 +705,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if m.player != nil {
 			m.player.Stop()
 		}
+		m.updateDiscordRPC()
 		m.setStatus("Queue cleared")
 		return m, nil
 

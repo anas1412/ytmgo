@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"ytmgo/internal/db"
+	"ytmgo/internal/discordrpc"
 	"ytmgo/internal/downloader"
 	"ytmgo/internal/player"
 	"ytmgo/internal/queue"
@@ -331,6 +332,7 @@ func (m *Model) startTrackPlayback(playURL string, t queue.Track) tea.Cmd {
 	}
 	// Mirror the player's state — it is the single source of truth.
 	m.playerState = m.player.State()
+	m.updateDiscordRPC()
 	// playerTickCmd drives the 50ms redraws that make the progress
 	// bar glide instead of jumping. It self-perpetuates from within
 	// Update as long as playerState == StatePlaying.
@@ -340,6 +342,48 @@ func (m *Model) startTrackPlayback(playURL string, t queue.Track) tea.Cmd {
 		cmds = append(cmds, recordPlayCmd(m.db, t))
 	}
 	return tea.Batch(cmds...)
+}
+
+// updateDiscordRPC syncs the current playback state to Discord Rich
+// Presence. Shows the idle state when nothing is playing, track info
+// when a track is active. No-op when the feature is disabled.
+func (m *Model) updateDiscordRPC() {
+	if !m.settings.DiscordRPCEnabled {
+		discordrpc.Close()
+		return
+	}
+	t, ok := m.queue.Current()
+	if !ok || m.playerState == player.StateStopped || t.Title == "" {
+		discordrpc.ShowIdle()
+		return
+	}
+	discordrpc.Update(t, m.playerState, m.position)
+}
+
+// reinitDiscordRPC tears down and re-initialises the Discord RPC
+// connection. Called when the user toggles the feature in Settings.
+func (m *Model) reinitDiscordRPC() {
+	discordrpc.Close()
+	if m.settings.DiscordRPCEnabled {
+		discordrpc.Init()
+		m.updateDiscordRPC()
+	}
+}
+
+// discordRPCInitCmd returns a tea.Cmd that initialises Discord RPC in
+// the background so the TUI starts rendering immediately. Logs in and
+// sets idle presence; errors are silently ignored.
+func discordRPCInitCmd(enabled bool) tea.Cmd {
+	if !enabled {
+		return nil
+	}
+	return func() tea.Msg {
+		if err := discordrpc.Init(); err != nil {
+			return nil
+		}
+		discordrpc.ShowIdle()
+		return nil
+	}
 }
 
 // ─── Fallback quotes (used when API fetch fails) ─────────────────────
@@ -414,6 +458,7 @@ func (m Model) Shutdown() {
 	if m.downloader != nil {
 		m.downloader.Close()
 	}
+	discordrpc.Close()
 	if m.db != nil {
 		m.db.Close()
 	}

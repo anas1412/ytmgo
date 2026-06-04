@@ -261,6 +261,7 @@ func (m Model) handleSongEnded(msg SongEndedMsg) (tea.Model, tea.Cmd) {
 			m.duration = 0
 			m.lastPosition = 0
 			m.lastPositionAt = time.Time{}
+			m.updateDiscordRPC()
 			m.setStatus("Queue empty")
 			return m, nil
 		}

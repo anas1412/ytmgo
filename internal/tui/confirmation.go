@@ -51,6 +51,7 @@ func (m *Model) executeConfirmedAction() (tea.Model, tea.Cmd) {
 		if m.player != nil {
 			m.player.Stop()
 		}
+		m.updateDiscordRPC()
 		m.setStatus("Queue cleared")
 		return m, saveQueueCmd(m.db, m.queue)
 

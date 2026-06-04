@@ -216,7 +216,8 @@ func (m *Model) clampQueueOffset() {
 // clampSettingsOffset adjusts settingsOffset so the cursor is visible.
 func (m *Model) clampSettingsOffset() {
 	vis := m.settingsVisibleItems()
-	maxItem := 6 // 7 items indexed 0-6
+	maxItem := 7 // 8 items indexed 0-7
+
 	if m.settingsCursor > maxItem {
 		m.settingsCursor = maxItem
 	}
@@ -274,11 +275,11 @@ func (m *Model) startSettingsEdit() {
 	m.settingsEditField = true
 	current := ""
 	switch m.settingsCursor {
-	case 4:
-		current = m.settings.DownloadDir
 	case 5:
-		current = m.settings.CookieBrowser
+		current = m.settings.DownloadDir
 	case 6:
+		current = m.settings.CookieBrowser
+	case 7:
 		current = m.settings.UserAgent
 	}
 	m.settingsEditInput.SetValue(current)

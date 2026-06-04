@@ -11,7 +11,7 @@ import (
 // Init satisfies tea.Model. It starts the tick for progress animation,
 // opens the database, and fetches YouTube recommendations.
 func (m Model) Init() tea.Cmd {
-	return tea.Batch(tickCmd(), initQueueFavoritesCmd(m.db), fetchQuoteCmd(m.quoteSeq), fetchRecommendationsCmd(m.recsSeq, m.settings.SearchLimit, m.settings.CookieBrowser, m.settings.UserAgent), scanLibraryCmd(m.downloadDir()), checkUpdateCmd(ver.Version))
+	return tea.Batch(tickCmd(), initQueueFavoritesCmd(m.db), fetchQuoteCmd(m.quoteSeq), fetchRecommendationsCmd(m.recsSeq, m.settings.SearchLimit, m.settings.CookieBrowser, m.settings.UserAgent), scanLibraryCmd(m.downloadDir()), checkUpdateCmd(ver.Version), discordRPCInitCmd(m.settings.DiscordRPCEnabled))
 }
 
 // Update satisfies tea.Model. It handles all messages without making
