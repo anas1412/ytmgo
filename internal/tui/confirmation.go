@@ -52,7 +52,7 @@ func (m *Model) executeConfirmedAction() (tea.Model, tea.Cmd) {
 			m.player.Stop()
 		}
 		m.setStatus("Queue cleared")
-		return m, nil
+		return m, saveQueueCmd(m.queue)
 
 	case confirmDeleteTrack:
 		tracks := m.filteredLibrary()

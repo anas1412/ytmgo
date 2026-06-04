@@ -308,13 +308,13 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 						m.queueCursor = m.queue.CurrentIndex()
 						m.clampQueueOffset()
 						if playCmd := m.startTrackPlayback(t.FilePath, t.Title, t.DurationSec); playCmd != nil {
-							return m, playCmd
+							return m, tea.Batch(playCmd, saveQueueCmd(m.queue))
 						}
 					}
 
 					m.setStatus("Added to queue: " + t.Title)
 				}
-				return m, nil
+				return m, saveQueueCmd(m.queue)
 			}
 			// On Library page download queue panel: play selected completed download
 			if m.activePanel == PanelQueue && !m.searchFocused {
@@ -340,7 +340,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 					// queueCursor intentionally NOT moved — the user's
 					// selection stays where they left it.
 
-					var cmds []tea.Cmd
+					cmds := []tea.Cmd{saveQueueCmd(m.queue)}
 
 					// Auto-play only if nothing was playing (smart start).
 					// Only SetCurrentIndex when a track actually starts
@@ -595,7 +595,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 					m.player.Stop()
 				}
 			}
-			return m, nil
+			return m, saveQueueCmd(m.queue)
 		}
 		// Library page: delete a downloaded track from disk (requires confirmation)
 		if m.activePage == PageLibrary && m.activePanel == PanelSearch && !m.searchFocused {
@@ -669,7 +669,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		} else {
 			m.setStatus("Shuffle: OFF")
 		}
-		return m, nil
+		return m, saveQueueCmd(m.queue)
 
 	case "r":
 		if !m.queue.IsRepeat() && !m.queue.IsRepeatAll() {
@@ -685,21 +685,21 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		m.modeFlashTarget = "repeat"
 		m.modeFlashUntil = time.Now().Add(250 * time.Millisecond)
-		return m, nil
+		return m, saveQueueCmd(m.queue)
 
 	case "ctrl+up":
 		if m.activePage == PageStream && m.activePanel == PanelQueue && m.queueCursor > 0 {
 			m.queue.MoveUp(m.queueCursor)
 			m.queueCursor--
 		}
-		return m, nil
+		return m, saveQueueCmd(m.queue)
 
 	case "ctrl+down":
 		if m.activePage == PageStream && m.activePanel == PanelQueue && m.queueCursor < m.queue.Len()-1 {
 			m.queue.MoveDown(m.queueCursor)
 			m.queueCursor++
 		}
-		return m, nil
+		return m, saveQueueCmd(m.queue)
 	}
 
 	return m, nil

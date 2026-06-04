@@ -1,6 +1,8 @@
 package tui
 
 import (
+	"fmt"
+
 	"ytmgo/internal/player"
 	ver "ytmgo/internal/version"
 
@@ -10,7 +12,7 @@ import (
 // Init satisfies tea.Model. It starts the tick for progress animation
 // and fetches YouTube recommendations.
 func (m Model) Init() tea.Cmd {
-	return tea.Batch(tickCmd(), fetchQuoteCmd(m.quoteSeq), fetchRecommendationsCmd(m.recsSeq, m.settings.SearchLimit, m.settings.CookieBrowser, m.settings.UserAgent), scanLibraryCmd(m.downloadDir()), checkUpdateCmd(ver.Version))
+	return tea.Batch(tickCmd(), fetchQuoteCmd(m.quoteSeq), fetchRecommendationsCmd(m.recsSeq, m.settings.SearchLimit, m.settings.CookieBrowser, m.settings.UserAgent), scanLibraryCmd(m.downloadDir()), checkUpdateCmd(ver.Version), loadQueueCmd(m.queue))
 }
 
 // Update satisfies tea.Model. It handles all messages without making
@@ -54,6 +56,21 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// ── Update install complete ────────────────────────────────
 	case UpdateResultMsg:
 		return m.handleUpdateResult(msg)
+
+	// ── Queue state loaded from disk ───────────────────────────
+	case QueueLoadedMsg:
+		if msg.Error != nil {
+			m.err = msg.Error
+			return m, nil
+		}
+		if msg.Loaded {
+			count := m.queue.Len()
+			if count > 0 {
+				m.queueCursor = max(0, min(m.queueCursor, count-1))
+				m.setStatus(fmt.Sprintf("Queue restored (%d tracks)", count))
+			}
+		}
+		return m, nil
 
 	// ── Random quote received ─────────────────────────────────
 	case QuoteMsg:

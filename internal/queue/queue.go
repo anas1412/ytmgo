@@ -1,20 +1,23 @@
 package queue
 
 import (
+	"encoding/json"
+	"fmt"
 	"math/rand"
+	"os"
 	"sync"
 )
 
 // Track represents a music track
 type Track struct {
-	ID          string // YouTube video ID
-	Title       string
-	Artist      string
-	Duration    string // human readable e.g. "3:45"
-	DurationSec int    // seconds
-	FilePath    string // local path once downloaded
-	Downloaded  bool
-	URL         string // original youtube URL/query
+	ID          string `json:"id"`           // YouTube video ID
+	Title       string `json:"title"`
+	Artist      string `json:"artist"`
+	Duration    string `json:"duration"`     // human readable e.g. "3:45"
+	DurationSec int    `json:"duration_sec"` // seconds
+	FilePath    string `json:"file_path"`    // local path once downloaded
+	Downloaded  bool   `json:"downloaded"`
+	URL         string `json:"url"`          // original youtube URL/query
 }
 
 // PlayURL returns the source that playback should use for this track:
@@ -283,6 +286,71 @@ func (q *Queue) UpdateTrackByMatch(target string, keyFn func(Track) string, fn f
 		}
 	}
 	return false
+}
+
+// ─── Queue state persistence ───────────────────────────────────────────
+
+// queueStateJSON is the serializable form of a Queue.
+type queueStateJSON struct {
+	Tracks       []Track `json:"tracks"`
+	CurrentIndex int     `json:"current_index"`
+	Shuffle      bool    `json:"shuffle"`
+	Repeat       bool    `json:"repeat"`
+	RepeatAll    bool    `json:"repeat_all"`
+}
+
+// SaveState writes the queue state to a JSON file.
+func (q *Queue) SaveState(path string) error {
+	q.mu.RLock()
+	defer q.mu.RUnlock()
+	state := queueStateJSON{
+		Tracks:       q.tracks,
+		CurrentIndex: q.currentIndex,
+		Shuffle:      q.shuffle,
+		Repeat:       q.repeat,
+		RepeatAll:    q.repeatAll,
+	}
+	data, err := json.MarshalIndent(state, "", "  ")
+	if err != nil {
+		return fmt.Errorf("encoding queue: %w", err)
+	}
+	if err := os.WriteFile(path, data, 0644); err != nil {
+		return fmt.Errorf("writing queue: %w", err)
+	}
+	return nil
+}
+
+// LoadState reads the queue state from a JSON file.
+// Returns ok=false and no error when the file doesn't exist (first run).
+func (q *Queue) LoadState(path string) (ok bool, err error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return false, nil // first run — silently empty
+		}
+		return false, fmt.Errorf("reading queue: %w", err)
+	}
+	var state queueStateJSON
+	if err := json.Unmarshal(data, &state); err != nil {
+		return false, fmt.Errorf("parsing queue: %w", err)
+	}
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	q.tracks = state.Tracks
+	// Don't restore currentIndex — mpv isn't loaded with any track
+	// after a restart. Reset to -1 so the UI doesn't show a phantom
+	// "now playing" track that produces no audio.
+	q.currentIndex = -1
+	q.shuffle = state.Shuffle
+	q.repeat = state.Repeat
+	q.repeatAll = state.RepeatAll
+	if q.shuffle && len(q.tracks) > 0 {
+		q.rebuildShuffleOrder()
+	}
+	if q.tracks == nil {
+		q.tracks = []Track{} // never nil
+	}
+	return true, nil
 }
 
 func (q *Queue) rebuildShuffleOrder() {

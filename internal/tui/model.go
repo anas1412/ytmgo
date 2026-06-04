@@ -95,6 +95,12 @@ type (
 		Author string
 		Seq    int // generation counter; stale responses are skipped
 	}
+
+	// QueueLoadedMsg is sent after restoring queue state from disk.
+	QueueLoadedMsg struct {
+		Loaded bool
+		Error  error
+	}
 )
 
 // tickMsg triggers periodic UI updates (progress bar animation).

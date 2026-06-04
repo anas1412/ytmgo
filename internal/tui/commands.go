@@ -4,8 +4,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
 	"os/exec"
 	"path"
+	"path/filepath"
 	"time"
 
 	"ytmgo/internal/downloader"
@@ -185,6 +187,51 @@ func saveSettingsCmd(s *settings.Settings) tea.Cmd {
 			return SettingsSavedMsg{Error: err}
 		}
 		return SettingsSavedMsg{}
+	}
+}
+
+// ─── Queue persistence ─────────────────────────────────────────────────
+
+// queueStatePath returns the path to the queue state JSON file.
+func queueStatePath() (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	dir := filepath.Join(home, ".config", "ytmgo")
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return "", err
+	}
+	return filepath.Join(dir, "queue-state.json"), nil
+}
+
+// saveQueueCmd persists the current queue to disk in a goroutine.
+// Returns nil on success — only fires a message on error (silent saves).
+func saveQueueCmd(q *queue.Queue) tea.Cmd {
+	return func() tea.Msg {
+		path, err := queueStatePath()
+		if err != nil {
+			return QueueLoadedMsg{Error: err}
+		}
+		if err := q.SaveState(path); err != nil {
+			return QueueLoadedMsg{Error: err}
+		}
+		return nil // success is silent
+	}
+}
+
+// loadQueueCmd reads queue state from disk into the queue.
+func loadQueueCmd(q *queue.Queue) tea.Cmd {
+	return func() tea.Msg {
+		path, err := queueStatePath()
+		if err != nil {
+			return QueueLoadedMsg{Error: err}
+		}
+		ok, err := q.LoadState(path)
+		if err != nil {
+			return QueueLoadedMsg{Error: err}
+		}
+		return QueueLoadedMsg{Loaded: ok}
 	}
 }
 
