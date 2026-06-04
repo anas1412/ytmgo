@@ -44,8 +44,8 @@ func Init() error {
 // idleActivity is the presence shown while the app is open but nothing is
 // playing. It keeps the ytmgo logo visible on the Discord profile.
 var idleActivity = client.Activity{
+	Details:    "Browsing Music",
 	State:      "Idle",
-	Details:    "Browsing music",
 	LargeImage: "ytmgo-logo",
 	LargeText:  "ytmgo — Terminal YouTube Music",
 }
@@ -74,7 +74,7 @@ func Update(track queue.Track, state player.State, position float64) {
 
 	activity := client.Activity{
 		Details:    track.Title,
-		State:      "by " + track.Artist,
+		State:      track.Artist,
 		LargeImage: "ytmgo-logo",
 		LargeText:  "ytmgo — Terminal YouTube Music",
 	}

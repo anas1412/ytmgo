@@ -107,17 +107,25 @@ func (p *Player) Play(filePath string) error {
 	return nil
 }
 
-// Pause toggles pause
-func (p *Player) Pause() {
+// Pause toggles pause. Returns true on success, false if the IPC command
+// failed (mpv didn't actually pause/resume).
+func (p *Player) Pause() bool {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	if p.state == StatePlaying {
-		p.sendCommand([]interface{}{"set_property", "pause", true})
+		if err := p.sendCommand([]interface{}{"set_property", "pause", true}); err != nil {
+			return false
+		}
 		p.state = StatePaused
+		return true
 	} else if p.state == StatePaused {
-		p.sendCommand([]interface{}{"set_property", "pause", false})
+		if err := p.sendCommand([]interface{}{"set_property", "pause", false}); err != nil {
+			return false
+		}
 		p.state = StatePlaying
+		return true
 	}
+	return false
 }
 
 // Stop kills mpv completely
@@ -127,11 +135,12 @@ func (p *Player) Stop() {
 	p.stopInternal()
 }
 
-// Seek seeks by delta seconds (can be negative)
+// Seek seeks by delta seconds (can be negative). Errors are silently
+// ignored since seeking is best-effort.
 func (p *Player) Seek(delta float64) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	p.sendCommand([]interface{}{"seek", delta, "relative"})
+	_ = p.sendCommand([]interface{}{"seek", delta, "relative"})
 }
 
 // SetVolume sets volume 0-100
@@ -145,7 +154,7 @@ func (p *Player) SetVolume(v int) {
 		v = 100
 	}
 	p.volume = v
-	p.sendCommand([]interface{}{"set_property", "volume", v})
+	_ = p.sendCommand([]interface{}{"set_property", "volume", v})
 }
 
 // Volume returns current volume
@@ -213,21 +222,24 @@ func (p *Player) pollPosition(stop <-chan struct{}) {
 	}
 }
 
-func (p *Player) sendCommand(args []interface{}) {
+func (p *Player) sendCommand(args []interface{}) error {
 	msg := map[string]interface{}{"command": args}
 	data, err := json.Marshal(msg)
 	if err != nil {
-		return
+		return fmt.Errorf("sendCommand marshal: %w", err)
 	}
 	data = append(data, '\n')
 
-	conn, err := net.DialTimeout("unix", p.socketPath, 200*time.Millisecond)
+	conn, err := net.DialTimeout("unix", p.socketPath, 2*time.Second)
 	if err != nil {
-		return
+		return fmt.Errorf("sendCommand dial: %w", err)
 	}
 	defer conn.Close()
-	conn.SetDeadline(time.Now().Add(200 * time.Millisecond))
-	conn.Write(data)
+	conn.SetDeadline(time.Now().Add(2 * time.Second))
+	if _, err := conn.Write(data); err != nil {
+		return fmt.Errorf("sendCommand write: %w", err)
+	}
+	return nil
 }
 
 func (p *Player) getProperty(prop string) float64 {
