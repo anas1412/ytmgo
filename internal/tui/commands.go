@@ -4,12 +4,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"os"
 	"os/exec"
 	"path"
-	"path/filepath"
 	"time"
 
+	"ytmgo/internal/db"
 	"ytmgo/internal/downloader"
 	"ytmgo/internal/library"
 	"ytmgo/internal/player"
@@ -180,58 +179,90 @@ func playerTickCmd() tea.Cmd {
 
 // ─── Settings ───────────────────────────────────────────────────────────
 
-// saveSettingsCmd persists settings to disk in a goroutine.
-func saveSettingsCmd(s *settings.Settings) tea.Cmd {
+// saveSettingsCmd persists settings to the database in a goroutine.
+func saveSettingsCmd(database *db.DB, s *settings.Settings) tea.Cmd {
 	return func() tea.Msg {
-		if err := s.Save(); err != nil {
+		if database == nil {
+			return SettingsSavedMsg{Error: fmt.Errorf("db not ready")}
+		}
+		if err := database.SaveSettings(s); err != nil {
 			return SettingsSavedMsg{Error: err}
 		}
 		return SettingsSavedMsg{}
 	}
 }
 
+// ─── Database ──────────────────────────────────────────────────────────
+
+// initQueueFavoritesCmd loads queue + favorites from the already-open
+// database. The DB is opened synchronously in InitialModel so that
+// settings are available immediately — see model.go.
+func initQueueFavoritesCmd(database *db.DB) tea.Cmd {
+	return func() tea.Msg {
+		if database == nil {
+			return DbReadyMsg{Error: fmt.Errorf("db not initialized")}
+		}
+		tracks, shuffle, repeat, repeatAll, err := database.LoadQueue()
+		if err != nil {
+			return DbReadyMsg{Error: err}
+		}
+		favs, err := database.LoadFavorites()
+		if err != nil {
+			return DbReadyMsg{Error: err}
+		}
+		return DbReadyMsg{
+			QueueTracks: tracks,
+			Shuffle:     shuffle,
+			Repeat:      repeat,
+			RepeatAll:   repeatAll,
+			Favorites:   favs,
+		}
+	}
+}
+
+// recordPlayCmd records a play history entry in the background.
+func recordPlayCmd(database *db.DB, t queue.Track) tea.Cmd {
+	return func() tea.Msg {
+		if database == nil {
+			return nil
+		}
+		if err := database.RecordPlay(t); err != nil {
+			return PlayRecordedMsg{Error: err}
+		}
+		return PlayRecordedMsg{}
+	}
+}
+
 // ─── Queue persistence ─────────────────────────────────────────────────
 
-// queueStatePath returns the path to the queue state JSON file.
-func queueStatePath() (string, error) {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", err
-	}
-	dir := filepath.Join(home, ".config", "ytmgo")
-	if err := os.MkdirAll(dir, 0755); err != nil {
-		return "", err
-	}
-	return filepath.Join(dir, "queue-state.json"), nil
-}
-
-// saveQueueCmd persists the current queue to disk in a goroutine.
-// Returns nil on success — only fires a message on error (silent saves).
-func saveQueueCmd(q *queue.Queue) tea.Cmd {
+// saveQueueCmd persists the current queue to the database in a goroutine.
+// Returns nil on success (silent saves — only errors produce a message).
+func saveQueueCmd(database *db.DB, q *queue.Queue) tea.Cmd {
 	return func() tea.Msg {
-		path, err := queueStatePath()
-		if err != nil {
-			return QueueLoadedMsg{Error: err}
+		if database == nil {
+			return nil
 		}
-		if err := q.SaveState(path); err != nil {
-			return QueueLoadedMsg{Error: err}
+		tracks := q.Tracks()
+		if err := database.SaveQueue(tracks, q.CurrentIndex(), q.IsShuffle(), q.IsRepeat(), q.IsRepeatAll()); err != nil {
+			return nil // silent — queue is still in memory
 		}
-		return nil // success is silent
+		return nil
 	}
 }
 
-// loadQueueCmd reads queue state from disk into the queue.
-func loadQueueCmd(q *queue.Queue) tea.Cmd {
+// ─── Favorites persistence ─────────────────────────────────────────────
+
+// saveFavoritesCmd persists the favorites list to the database in a goroutine.
+// Returns nil on success (silent saves).
+func saveFavoritesCmd(database *db.DB, favorites []queue.Track) tea.Cmd {
 	return func() tea.Msg {
-		path, err := queueStatePath()
-		if err != nil {
-			return QueueLoadedMsg{Error: err}
+		if database == nil {
+			return nil
 		}
-		ok, err := q.LoadState(path)
-		if err != nil {
-			return QueueLoadedMsg{Error: err}
+		if err := database.SaveFavorites(favorites); err != nil {
+			return nil // silent — favorites still in memory
 		}
-		return QueueLoadedMsg{Loaded: ok}
+		return nil
 	}
 }
 

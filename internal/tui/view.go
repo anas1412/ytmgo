@@ -204,8 +204,9 @@ func (m Model) renderHeader() string {
 	}
 	tabs := []tabDef{
 		{"1", "Stream"},
-		{"2", "Library"},
-		{"3", "Settings"},
+		{"2", "Favs"},
+		{"3", "Library"},
+		{"4", "Settings"},
 	}
 	var renderedTabs []string
 	for i, t := range tabs {
@@ -270,18 +271,25 @@ func (m Model) renderPanels() string {
 	}
 
 	// Search panel title
+	fHint := styleKeyHint.Render("[f]")
 	panelLabel := "SEARCH RESULTS"
-	if m.activePage == PageLibrary {
+	switch m.activePage {
+	case PageFavorites:
 		dHint := styleKeyHint.Render("[d]")
-		panelLabel = "LIBRARY  " + dHint + " delete file"
+		panelLabel = "FAVORITES  " + fHint + " remove from fav  " + dHint + " remove"
+	case PageLibrary:
+		dHint := styleKeyHint.Render("[d]")
+		panelLabel = "LIBRARY  " + dHint + " delete  " + fHint + " add to fav"
 		q := m.searchInput.Value()
 		if q != "" {
-			panelLabel = "LIBRARY  🔍 \"" + q + "\"  " + dHint + " delete file"
+			panelLabel = "LIBRARY  🔍 \"" + q + "\"  " + dHint + " delete  " + fHint + " add to fav"
 		}
-	} else if m.showingRecommendations {
-		rHint := styleKeyHint.Render("[R]")
-		xHint := styleKeyHint.Render("[x]")
-		panelLabel = "RECOMMENDATIONS  " + rHint + " refresh  " + xHint + " download"
+	default:
+		if m.showingRecommendations {
+			rHint := styleKeyHint.Render("[R]")
+			xHint := styleKeyHint.Render("[x]")
+			panelLabel = "RECOMMENDATIONS  " + rHint + " refresh  " + xHint + " download  " + fHint + " add to fav"
+		}
 	}
 	searchTitle := stylePanelTitle.Render(panelLabel)
 
@@ -364,7 +372,10 @@ func (m Model) renderPanels() string {
 // ─── Search Results List ───────────────────────────────────────────
 
 func (m Model) renderSearchResults(width, height int) string {
-	if m.activePage == PageLibrary {
+	switch m.activePage {
+	case PageFavorites:
+		return m.renderFavorites(width, height)
+	case PageLibrary:
 		return m.renderLibrary(width, height)
 	}
 	if m.isSearching {
@@ -471,7 +482,11 @@ func (m Model) renderLibrary(width, height int) string {
 			dur = "0:00"
 		}
 		leftInfo := "   " + artist
-		rightInfo := dur + "  ✓"
+		heart := ""
+		if m.favoriteSet[t.ID] {
+			heart = "♥  "
+		}
+		rightInfo := heart + dur + "  ✓"
 		maxLeft := width - lipgloss.Width(rightInfo) - 2
 		if len(leftInfo) > maxLeft && maxLeft > 3 {
 			leftInfo = leftInfo[:maxLeft-1] + "…"
@@ -507,6 +522,79 @@ func (m Model) renderLibrary(width, height int) string {
 	return result
 }
 
+func (m Model) renderFavorites(width, height int) string {
+	tracks := m.favorites
+	if len(tracks) == 0 {
+		return styleEmpty.Width(width - 2).Height(height).Render(
+			"No favorites yet — press f on any track",
+		)
+	}
+
+	var lines []string
+	maxItems := (height - 1) / 2
+	if maxItems < 1 {
+		maxItems = 1
+	}
+	start := m.favOffset
+	end := start + maxItems
+	if end > len(tracks) {
+		end = len(tracks)
+	}
+
+	for i := start; i < end; i++ {
+		isSelected := !m.searchFocused && m.activePanel == PanelSearch && i == m.favCursor
+		t := tracks[i]
+		prefix := fmt.Sprintf("%d. ", i+1)
+		title := t.Title
+		maxTitle := width - len(prefix) - 2
+		if len(title) > maxTitle && maxTitle > 3 {
+			title = title[:maxTitle-1] + "…"
+		}
+		line := prefix + title
+
+		artist := t.Artist
+		if artist == "" {
+			artist = "Unknown artist"
+		}
+		dur := t.Duration
+		if dur == "" {
+			dur = "0:00"
+		}
+		leftInfo := "   " + artist
+		rightInfo := "♥  " + dur
+		maxLeft := width - lipgloss.Width(rightInfo) - 2
+		if len(leftInfo) > maxLeft && maxLeft > 3 {
+			leftInfo = leftInfo[:maxLeft-1] + "…"
+		}
+		spacing := width - lipgloss.Width(leftInfo) - lipgloss.Width(rightInfo)
+		if spacing < 1 {
+			spacing = 1
+		}
+		info := leftInfo + strings.Repeat(" ", spacing) + rightInfo
+
+		lines = append(lines, renderListItemBlock(line, info, isSelected, false, width))
+	}
+
+	remaining := len(tracks) - end
+	if remaining > 0 {
+		scrollbar := fmt.Sprintf("  ↓ %d more  [cursor %d/%d]", remaining, m.favCursor+1, len(tracks))
+		lines = append(lines,
+			lipgloss.NewStyle().Foreground(colorTextDim).Italic(true).PaddingLeft(1).Render(scrollbar),
+		)
+	}
+
+	result := strings.Join(lines, "\n")
+	paddedW := max(1, width-2)
+	result = padToWidth(result, paddedW)
+	if cnt := strings.Count(result, "\n") + 1; cnt < height {
+		result += "\n" + strings.Join(
+			make([]string, height-cnt),
+			"\n"+strings.Repeat(" ", paddedW),
+		)
+	}
+	return result
+}
+
 func (m Model) formatResultRow(idx int, r search.Result, width int, isSelected bool) string {
 	title := r.Title
 	artist := r.Uploader
@@ -521,7 +609,11 @@ func (m Model) formatResultRow(idx int, r search.Result, width int, isSelected b
 
 	// Right-align track metadata details
 	leftInfo := "   " + artist
-	rightInfo := dur
+	heart := ""
+	if m.favoriteSet[r.ID] {
+		heart = "♥  "
+	}
+	rightInfo := heart + dur
 	maxLeft := width - len(rightInfo) - 2
 	if len(leftInfo) > maxLeft && maxLeft > 3 {
 		leftInfo = leftInfo[:maxLeft-1] + "…"
@@ -608,7 +700,11 @@ func (m Model) formatQueueRow(idx int, t queue.Track, width int) string {
 		dlIndicator = "  ✓"
 	}
 	leftInfo := "   " + t.Artist
-	rightInfo := t.Duration + dlIndicator
+	heart := ""
+	if m.favoriteSet[t.ID] {
+		heart = "♥  "
+	}
+	rightInfo := heart + t.Duration + dlIndicator
 	maxLeft := width - lipgloss.Width(rightInfo) - 2
 	if len(leftInfo) > maxLeft && maxLeft > 3 {
 		leftInfo = leftInfo[:maxLeft-1] + "…"

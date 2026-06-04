@@ -167,6 +167,29 @@ func (m *Model) clampLibraryOffset() {
 	}
 }
 
+// clampFavoritesOffset adjusts favOffset so the cursor is visible.
+func (m *Model) clampFavoritesOffset() {
+	vis := m.visibleItems()
+	n := len(m.favorites)
+	if n == 0 {
+		m.favCursor = 0
+		m.favOffset = 0
+		return
+	}
+	if m.favCursor >= n {
+		m.favCursor = n - 1
+	}
+	if m.favCursor < 0 {
+		m.favCursor = 0
+	}
+	if m.favCursor < m.favOffset {
+		m.favOffset = m.favCursor
+	}
+	if m.favCursor >= m.favOffset+vis {
+		m.favOffset = m.favCursor - vis + 1
+	}
+}
+
 // clampQueueOffset adjusts queueOffset so the cursor is visible.
 func (m *Model) clampQueueOffset() {
 	vis := m.queueVisibleItems()
@@ -222,6 +245,13 @@ func (m *Model) switchPage(page Page) {
 		m.activePanel = PanelSearch
 		m.searchCursor = 0
 		m.searchOffset = 0
+		m.settingsEditField = false
+	case PageFavorites:
+		m.searchInput.SetValue("")
+		m.searchInput.Placeholder = ""
+		m.activePanel = PanelSearch
+		m.favCursor = 0
+		m.favOffset = 0
 		m.settingsEditField = false
 	case PageLibrary:
 		m.searchInput.SetValue("")

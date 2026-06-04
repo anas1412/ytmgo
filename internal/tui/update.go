@@ -2,17 +2,16 @@ package tui
 
 import (
 	"fmt"
-
 	"ytmgo/internal/player"
 	ver "ytmgo/internal/version"
 
 	tea "github.com/charmbracelet/bubbletea"
 )
 
-// Init satisfies tea.Model. It starts the tick for progress animation
-// and fetches YouTube recommendations.
+// Init satisfies tea.Model. It starts the tick for progress animation,
+// opens the database, and fetches YouTube recommendations.
 func (m Model) Init() tea.Cmd {
-	return tea.Batch(tickCmd(), fetchQuoteCmd(m.quoteSeq), fetchRecommendationsCmd(m.recsSeq, m.settings.SearchLimit, m.settings.CookieBrowser, m.settings.UserAgent), scanLibraryCmd(m.downloadDir()), checkUpdateCmd(ver.Version), loadQueueCmd(m.queue))
+	return tea.Batch(tickCmd(), initQueueFavoritesCmd(m.db), fetchQuoteCmd(m.quoteSeq), fetchRecommendationsCmd(m.recsSeq, m.settings.SearchLimit, m.settings.CookieBrowser, m.settings.UserAgent), scanLibraryCmd(m.downloadDir()), checkUpdateCmd(ver.Version))
 }
 
 // Update satisfies tea.Model. It handles all messages without making
@@ -57,21 +56,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case UpdateResultMsg:
 		return m.handleUpdateResult(msg)
 
-	// ── Queue state loaded from disk ───────────────────────────
-	case QueueLoadedMsg:
-		if msg.Error != nil {
-			m.err = msg.Error
-			return m, nil
-		}
-		if msg.Loaded {
-			count := m.queue.Len()
-			if count > 0 {
-				m.queueCursor = max(0, min(m.queueCursor, count-1))
-				m.setStatus(fmt.Sprintf("Queue restored (%d tracks)", count))
-			}
-		}
-		return m, nil
-
 	// ── Random quote received ─────────────────────────────────
 	case QuoteMsg:
 		return m.handleQuote(msg)
@@ -79,6 +63,29 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// ── Settings saved ────────────────────────────────────────────
 	case SettingsSavedMsg:
 		return m.handleSettingsSaved(msg)
+
+	// ── Database ready (SQLite opened, queue + favorites loaded) ──
+	case DbReadyMsg:
+		if msg.Error != nil {
+			m.err = msg.Error
+			return m, nil
+		}
+		m.queue.LoadData(msg.QueueTracks, msg.Shuffle, msg.Repeat, msg.RepeatAll)
+		m.favorites = msg.Favorites
+		m.favoriteSet = make(map[string]bool, len(msg.Favorites))
+		for _, ft := range msg.Favorites {
+			m.favoriteSet[ft.ID] = true
+		}
+		m.setStatus(fmt.Sprintf("Loaded %d tracks and %d favorites",
+			len(msg.QueueTracks), len(msg.Favorites)))
+		return m, nil
+
+	// ── Play history recorded ───────────────────────────────────
+	case PlayRecordedMsg:
+		if msg.Error != nil {
+			m.err = msg.Error
+		}
+		return m, nil
 
 	// ── Download progress ────────────────────────────────────────
 	case DownloadProgressMsg:
@@ -110,9 +117,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 // playSelectedQueueItem plays the currently selected queue item,
 // supporting both downloaded (local file) and streamed (URL) playback.
-func (m *Model) playSelectedQueueItem() {
+// Returns the tea.Cmd from startTrackPlayback (which includes position,
+// ended, playerTick, and recordPlayCmd listeners) or nil if nothing
+// was played.
+func (m *Model) playSelectedQueueItem() tea.Cmd {
 	if m.queue.Len() == 0 {
-		return
+		return nil
 	}
 	// Clamp cursor
 	if m.queueCursor < 0 {
@@ -124,32 +134,21 @@ func (m *Model) playSelectedQueueItem() {
 	t := m.queue.Tracks()[m.queueCursor]
 	m.queue.SetCurrentIndex(m.queueCursor)
 
-	// PlayURL() returns the local file path when downloaded, else
-	// the streaming URL. A track with neither source is unplayable.
 	playURL := t.PlayURL()
 	if playURL == "" {
 		m.playerState = player.StateStopped
 		m.setStatus("Cannot play '" + t.Title + "': no file or URL")
-		return
+		return nil
 	}
 
-	// startTrackPlayback mirrors the player's authoritative state back to
-	// the model. We discard the returned cmd here because the caller of
-	// playSelectedQueueItem is responsible for attaching position/ended
-	// listeners (see the n/p/Enter handlers, which check
-	// m.playerState == StatePlaying to decide whether to batch them in).
-	//
 	// suppressAutoAdvance prevents the stale endedCmd from the PREVIOUS
 	// playback (which is still blocked on the old endCh) from calling
 	// Next() in the SongEnded handler when the old mpv is killed by
-	// the Play() call below. This is the key fix for the "press Enter
-	// on first queue item → skips to the 2nd" bug: without it, a stale
-	// SongEndedMsg arrives milliseconds after Play() and advances
-	// currentIndex past the track the user just selected.
+	// the Play() call below.
 	if m.playerState == player.StatePlaying {
 		m.suppressAutoAdvance = true
 	}
-	_ = m.startTrackPlayback(playURL, t.Title, t.DurationSec)
+	return m.startTrackPlayback(t.PlayURL(), t)
 }
 
 

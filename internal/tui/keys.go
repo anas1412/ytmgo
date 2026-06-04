@@ -18,6 +18,7 @@ type KeyMap struct {
 	VolumeUp     key.Binding
 	VolumeDown   key.Binding
 	Delete       key.Binding
+	Favorite     key.Binding
 	Shuffle      key.Binding
 	Repeat       key.Binding
 	ClearQueue   key.Binding
@@ -27,10 +28,11 @@ type KeyMap struct {
 	Recs         key.Binding
 	Open         key.Binding
 	Update       key.Binding
-	PageStream   key.Binding // 1
-	PageLibrary  key.Binding // 2
-	PageSettings key.Binding // 3
-	Escape       key.Binding
+	PageStream    key.Binding // 1
+	PageFavorites key.Binding // 2
+	PageLibrary   key.Binding // 3
+	PageSettings  key.Binding // 4
+	Escape        key.Binding
 }
 
 // Keys is the canonical keymap singleton.
@@ -91,6 +93,10 @@ var Keys = KeyMap{
 		key.WithKeys("d", "delete"),
 		key.WithHelp("d", "remove from queue"),
 	),
+	Favorite: key.NewBinding(
+		key.WithKeys("f"),
+		key.WithHelp("f", "toggle favorite"),
+	),
 	Shuffle: key.NewBinding(
 		key.WithKeys("s"),
 		key.WithHelp("s", "shuffle"),
@@ -131,13 +137,17 @@ var Keys = KeyMap{
 		key.WithKeys("1"),
 		key.WithHelp("1", "stream page"),
 	),
-	PageLibrary: key.NewBinding(
+	PageFavorites: key.NewBinding(
 		key.WithKeys("2"),
-		key.WithHelp("2", "library page"),
+		key.WithHelp("2", "favorites"),
+	),
+	PageLibrary: key.NewBinding(
+		key.WithKeys("3"),
+		key.WithHelp("3", "library page"),
 	),
 	PageSettings: key.NewBinding(
-		key.WithKeys("3"),
-		key.WithHelp("3", "settings page"),
+		key.WithKeys("4"),
+		key.WithHelp("4", "settings page"),
 	),
 	Escape: key.NewBinding(
 		key.WithKeys("esc"),
@@ -186,9 +196,11 @@ func (k KeyMap) FullHelp() [][]key.Binding {
 			k.Download,
 			k.Open,
 			k.Update,
+			k.Favorite,
 		},
 		{
 			k.PageStream,
+			k.PageFavorites,
 			k.PageLibrary,
 			k.PageSettings,
 			k.Recs,
@@ -207,6 +219,7 @@ func (k KeyMap) FullHelp() [][]key.Binding {
 func (k KeyMap) Globals() []key.Binding {
 	return []key.Binding{
 		k.PageStream,
+		k.PageFavorites,
 		k.PageLibrary,
 		k.PageSettings,
 		k.Recs,

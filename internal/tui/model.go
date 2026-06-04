@@ -3,6 +3,7 @@ package tui
 import (
 	"time"
 
+	"ytmgo/internal/db"
 	"ytmgo/internal/downloader"
 	"ytmgo/internal/player"
 	"ytmgo/internal/queue"
@@ -19,9 +20,10 @@ import (
 type Page int
 
 const (
-	PageStream   Page = iota // search / recommendations / queue / player
-	PageLibrary              // downloaded tracks + download queue
-	PageSettings             // configuration
+	PageStream    Page = iota // 0 — search / recommendations / queue / player
+	PageFavorites             // 1 — bookmarked tracks
+	PageLibrary               // 2 — downloaded tracks + download queue
+	PageSettings              // 3 — configuration
 )
 
 // Panel identifies which panel within a page has keyboard focus.
@@ -96,10 +98,19 @@ type (
 		Seq    int // generation counter; stale responses are skipped
 	}
 
-	// QueueLoadedMsg is sent after restoring queue state from disk.
-	QueueLoadedMsg struct {
-		Loaded bool
-		Error  error
+	// DbReadyMsg is sent after queue and favorites are loaded from the DB.
+	DbReadyMsg struct {
+		QueueTracks []queue.Track
+		Shuffle     bool
+		Repeat      bool
+		RepeatAll   bool
+		Favorites   []queue.Track
+		Error       error
+	}
+
+	// PlayRecordedMsg is sent after a play history entry is recorded.
+	PlayRecordedMsg struct {
+		Error error
 	}
 )
 
@@ -147,6 +158,15 @@ type Model struct {
 	libraryCursor int
 	libraryOffset int
 	libraryLoaded bool // true after the first directory scan completes
+
+	// ── Favorites (bookmarked tracks) ──
+	favorites   []queue.Track
+	favCursor   int
+	favOffset   int
+	favoriteSet map[string]bool // track ID → true, for O(1) lookup
+
+	// ── Database ──
+	db *db.DB
 
 	// ── Queue ──
 	queue       *queue.Queue
@@ -251,7 +271,16 @@ func InitialModel() Model {
 	sti.CharLimit = 200
 	sti.Width = 40
 
-	defSettings, _ := settings.Load()
+	// Open the database synchronously so settings are available immediately.
+	// Queue + favorites are loaded asynchronously via initQueueFavoritesCmd.
+	var database *db.DB
+	defSettings := settings.Defaults()
+	database, err := db.Open()
+	if err == nil {
+		if s, err := database.LoadSettings(); err == nil {
+			defSettings = s
+		}
+	}
 	if defSettings.DefaultVolume < 1 {
 		defSettings.DefaultVolume = 80
 	}
@@ -262,6 +291,8 @@ func InitialModel() Model {
 		activePanel:            PanelSearch,
 		searchInput:            ti,
 		results:                []search.Result{},
+		favorites:              []queue.Track{},
+		favoriteSet:            map[string]bool{},
 		queue:                  queue.New(),
 		playerState:            player.StateStopped,
 		volume:                 vol,
@@ -269,6 +300,7 @@ func InitialModel() Model {
 		settings:               defSettings,
 		settingsEditInput:      sti,
 		currentQuote:           fallbackQuotes[0],
+		db:                     database,
 	}
 }
 
@@ -280,13 +312,13 @@ func InitialModel() Model {
 // drift from what the player actually does (causing the play/pause icon
 // to stay stale until the user pressed Space to force a re-sync).
 //
-// Returns the tea.Cmd to attach (position + ended listeners) on success,
-// or nil on failure. Callers can combine this with their own commands
-// (e.g. downloadCmd) using tea.Batch.
-func (m *Model) startTrackPlayback(playURL, title string, durationSec int) tea.Cmd {
-	m.duration = float64(durationSec)
+// Returns the tea.Cmd to attach (position + ended + play history + queue save)
+// on success, or nil on failure. Callers can combine this with their own
+// commands (e.g. downloadCmd) using tea.Batch.
+func (m *Model) startTrackPlayback(playURL string, t queue.Track) tea.Cmd {
+	m.duration = float64(t.DurationSec)
 	m.position = 0
-	m.setStatus("Now playing: " + title)
+	m.setStatus("Now playing: " + t.Title)
 	// Seed the smooth-progress anchor at zero so the bar starts
 	// gliding from the correct origin on the first render.
 	m.lastPosition = 0
@@ -302,7 +334,12 @@ func (m *Model) startTrackPlayback(playURL, title string, durationSec int) tea.C
 	// playerTickCmd drives the 50ms redraws that make the progress
 	// bar glide instead of jumping. It self-perpetuates from within
 	// Update as long as playerState == StatePlaying.
-	return tea.Batch(positionCmd(m.player), endedCmd(m.player), playerTickCmd())
+	// recordPlayCmd logs this play in the database silently.
+	cmds := []tea.Cmd{positionCmd(m.player), endedCmd(m.player), playerTickCmd()}
+	if m.db != nil {
+		cmds = append(cmds, recordPlayCmd(m.db, t))
+	}
+	return tea.Batch(cmds...)
 }
 
 // ─── Fallback quotes (used when API fetch fails) ─────────────────────
@@ -376,6 +413,9 @@ func (m Model) Shutdown() {
 	}
 	if m.downloader != nil {
 		m.downloader.Close()
+	}
+	if m.db != nil {
+		m.db.Close()
 	}
 }
 

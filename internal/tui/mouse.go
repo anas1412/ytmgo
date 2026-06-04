@@ -45,14 +45,22 @@ func (m Model) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 		default:
 			switch m.activePanel {
 			case PanelSearch:
-				if m.activePage == PageLibrary {
+				switch m.activePage {
+				case PageFavorites:
+					if m.favCursor > 0 {
+						m.favCursor--
+						m.clampFavoritesOffset()
+					}
+				case PageLibrary:
 					if m.libraryCursor > 0 {
 						m.libraryCursor--
 						m.clampLibraryOffset()
 					}
-				} else if m.searchCursor > 0 {
-					m.searchCursor--
-					m.clampSearchOffset()
+				default:
+					if m.searchCursor > 0 {
+						m.searchCursor--
+						m.clampSearchOffset()
+					}
 				}
 			case PanelQueue:
 				if m.queueCursor > 0 {
@@ -73,15 +81,24 @@ func (m Model) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 		default:
 			switch m.activePanel {
 			case PanelSearch:
-				if m.activePage == PageLibrary {
+				switch m.activePage {
+				case PageFavorites:
+					maxIdx := len(m.favorites) - 1
+					if m.favCursor < maxIdx {
+						m.favCursor++
+						m.clampFavoritesOffset()
+					}
+				case PageLibrary:
 					maxIdx := len(m.filteredLibrary()) - 1
 					if m.libraryCursor < maxIdx {
 						m.libraryCursor++
 						m.clampLibraryOffset()
 					}
-				} else if m.searchCursor < len(m.results)-1 {
-					m.searchCursor++
-					m.clampSearchOffset()
+				default:
+					if m.searchCursor < len(m.results)-1 {
+						m.searchCursor++
+						m.clampSearchOffset()
+					}
 				}
 			case PanelQueue:
 				if m.queueCursor < m.queue.Len()-1 {
@@ -113,8 +130,9 @@ func (m Model) handleClick(x, y int) (Model, tea.Cmd) {
 		}
 		tabs := []tabDef{
 			{"1", "Stream"},
-			{"2", "Library"},
-			{"3", "Settings"},
+			{"2", "Favs"},
+			{"3", "Library"},
+			{"4", "Settings"},
 		}
 		var renderedTabs []string
 		var tabWidths []int
@@ -232,10 +250,20 @@ func (m Model) handleClick(x, y int) (Model, tea.Cmd) {
 
 		midX := m.width / 2
 		if x < midX {
-			// Left panel: search results / library
+			// Left panel: search results / library / favorites
 			m.activePanel = PanelSearch
 			idx := (y - clickItemOffsetY) / clickLinesPerItem
-			if m.activePage == PageLibrary {
+			switch m.activePage {
+			case PageFavorites:
+				idx += m.favOffset
+				switch {
+				case idx < 0:
+					idx = 0
+				case idx >= len(m.favorites):
+					idx = len(m.favorites) - 1
+				}
+				m.favCursor = idx
+			case PageLibrary:
 				tracks := m.filteredLibrary()
 				idx += m.libraryOffset
 				switch {
@@ -245,7 +273,7 @@ func (m Model) handleClick(x, y int) (Model, tea.Cmd) {
 					idx = len(tracks) - 1
 				}
 				m.libraryCursor = idx
-			} else {
+			default:
 				idx += m.searchOffset
 				switch {
 				case idx < 0:
@@ -397,9 +425,8 @@ func (m Model) handleControlsClick(x int) (Model, tea.Cmd) {
 				return m, nil
 			}
 			m.queueCursor = m.queue.CurrentIndex()
-			m.playSelectedQueueItem()
-			if m.playerState == player.StatePlaying {
-				return m, tea.Batch(positionCmd(m.player), endedCmd(m.player), playerTickCmd())
+			if playCmd := m.playSelectedQueueItem(); playCmd != nil {
+				return m, tea.Batch(playCmd, saveQueueCmd(m.db, m.queue))
 			}
 			return m, nil
 
@@ -425,9 +452,8 @@ func (m Model) handleControlsClick(x int) (Model, tea.Cmd) {
 				return m, nil
 			}
 			m.queueCursor = m.queue.CurrentIndex()
-			m.playSelectedQueueItem()
-			if m.playerState == player.StatePlaying {
-				return m, tea.Batch(positionCmd(m.player), endedCmd(m.player), playerTickCmd())
+			if playCmd := m.playSelectedQueueItem(); playCmd != nil {
+				return m, tea.Batch(playCmd, saveQueueCmd(m.db, m.queue))
 			}
 			return m, nil
 		}
@@ -544,6 +570,33 @@ func (m Model) handleControlsClick(x int) (Model, tea.Cmd) {
 // Called by double-click detection in handleClick.
 func (m Model) activateFocusedItem() (Model, tea.Cmd) {
 	switch m.activePage {
+	case PageFavorites:
+		if m.activePanel == PanelSearch {
+			if len(m.favorites) > 0 && m.favCursor >= 0 && m.favCursor < len(m.favorites) {
+				t := m.favorites[m.favCursor]
+				m.queue.Add(t)
+
+				if m.playerState == player.StateStopped {
+					m.queue.SetCurrentIndex(m.queue.Len() - 1)
+					m.queueCursor = m.queue.CurrentIndex()
+					m.clampQueueOffset()
+					if playCmd := m.startTrackPlayback(t.PlayURL(), t); playCmd != nil {
+						return m, playCmd
+					}
+				}
+
+				m.setStatus("Added to queue: " + t.Title)
+			}
+			return m, nil
+		}
+		if m.activePanel == PanelQueue {
+			if playCmd := m.playSelectedQueueItem(); playCmd != nil {
+				return m, tea.Batch(playCmd, saveQueueCmd(m.db, m.queue))
+			}
+			return m, nil
+		}
+		return m, nil
+
 	case PageLibrary:
 		if m.activePanel == PanelSearch {
 			tracks := m.filteredLibrary()
@@ -555,7 +608,7 @@ func (m Model) activateFocusedItem() (Model, tea.Cmd) {
 					m.queue.SetCurrentIndex(m.queue.Len() - 1)
 					m.queueCursor = m.queue.CurrentIndex()
 					m.clampQueueOffset()
-					if playCmd := m.startTrackPlayback(t.FilePath, t.Title, t.DurationSec); playCmd != nil {
+					if playCmd := m.startTrackPlayback(t.PlayURL(), t); playCmd != nil {
 						return m, playCmd
 					}
 				}
@@ -565,9 +618,8 @@ func (m Model) activateFocusedItem() (Model, tea.Cmd) {
 			return m, nil
 		}
 		if m.activePanel == PanelQueue {
-			m.playSelectedQueueItem()
-			if m.playerState == player.StatePlaying {
-				return m, tea.Batch(positionCmd(m.player), endedCmd(m.player), playerTickCmd())
+			if playCmd := m.playSelectedQueueItem(); playCmd != nil {
+				return m, tea.Batch(playCmd, saveQueueCmd(m.db, m.queue))
 			}
 			return m, nil
 		}
@@ -587,7 +639,7 @@ func (m Model) activateFocusedItem() (Model, tea.Cmd) {
 					m.queue.SetCurrentIndex(m.queue.Len() - 1)
 					m.queueCursor = m.queue.CurrentIndex()
 					m.clampQueueOffset()
-					if playCmd := m.startTrackPlayback(t.PlayURL(), t.Title, t.DurationSec); playCmd != nil {
+					if playCmd := m.startTrackPlayback(t.PlayURL(), t); playCmd != nil {
 						cmds = append(cmds, playCmd)
 					}
 				} else {
@@ -612,9 +664,8 @@ func (m Model) activateFocusedItem() (Model, tea.Cmd) {
 			return m, nil
 
 		case PanelQueue:
-			m.playSelectedQueueItem()
-			if m.playerState == player.StatePlaying {
-				return m, tea.Batch(positionCmd(m.player), endedCmd(m.player), playerTickCmd())
+			if playCmd := m.playSelectedQueueItem(); playCmd != nil {
+				return m, tea.Batch(playCmd, saveQueueCmd(m.db, m.queue))
 			}
 			return m, nil
 
@@ -640,12 +691,12 @@ func (m Model) activateSettingsItem() (Model, tea.Cmd) {
 		case 6: // User-Agent
 			m.settings.UserAgent = newVal
 		}
-		return m, tea.Batch(saveSettingsCmd(m.settings))
+		return m, tea.Batch(saveSettingsCmd(m.db, m.settings))
 	}
 	switch m.settingsCursor {
 	case 0: // Playback Mode (cycle)
 		m.settings.PlaybackMode = (m.settings.PlaybackMode + 1) % 3
-		return m, tea.Batch(saveSettingsCmd(m.settings))
+		return m, tea.Batch(saveSettingsCmd(m.db, m.settings))
 	case 1: // Show Quotes (boolean)
 		m.settings.ShowQuotes = !m.settings.ShowQuotes
 		m.tickCount = 0
@@ -655,7 +706,7 @@ func (m Model) activateSettingsItem() (Model, tea.Cmd) {
 		} else {
 			m.advanceTip()
 		}
-		return m, tea.Batch(saveSettingsCmd(m.settings))
+		return m, tea.Batch(saveSettingsCmd(m.db, m.settings))
 	case 2, 3: // Volume / Search Limit (numbers — Enter does nothing)
 		return m, nil
 	case 4, 5, 6: // Download Dir / Cookie Browser / User-Agent (strings)

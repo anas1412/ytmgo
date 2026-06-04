@@ -353,6 +353,25 @@ func (q *Queue) LoadState(path string) (ok bool, err error) {
 	return true, nil
 }
 
+// LoadData restores the queue state from in-memory data (loaded from SQLite).
+// currentIndex is always set to -1 — mpv isn't loaded after a restart, so
+// we must not show a phantom "now playing" track.
+func (q *Queue) LoadData(tracks []Track, shuffle, repeat, repeatAll bool) {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	q.tracks = tracks
+	q.currentIndex = -1
+	q.shuffle = shuffle
+	q.repeat = repeat
+	q.repeatAll = repeatAll
+	if q.shuffle && len(q.tracks) > 0 {
+		q.rebuildShuffleOrder()
+	}
+	if q.tracks == nil {
+		q.tracks = []Track{}
+	}
+}
+
 func (q *Queue) rebuildShuffleOrder() {
 	n := len(q.tracks)
 	order := make([]int, n)
