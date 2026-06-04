@@ -3,10 +3,12 @@
 #
 # Usage:
 #   curl -fsSL https://raw.githubusercontent.com/anas1412/ytmgo/main/install.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/anas1412/ytmgo/main/install.sh | bash -s -- --force
 #
 # Environment overrides (set before the pipe):
 #   YTMGO_VERSION=v0.2.0     # pin a specific version (default: latest)
 #   YTMGO_INSTALL_DIR=...   # override install dir (default: ~/.local/bin or /usr/local/bin if root)
+#   YTMGO_FORCE=true        # reinstall even if already up to date
 #
 # What this does:
 #   1. Detects your OS and CPU architecture
@@ -82,6 +84,23 @@ if [ -z "$VERSION" ]; then
   fi
 fi
 tag="v$VERSION"
+
+# ─── Version check (skip if already up to date) ──────────────────────
+FORCE="${YTMGO_FORCE:-}"
+if [ $# -gt 0 ]; then
+  for arg in "$@"; do
+    [ "$arg" = "--force" ] && FORCE="true"
+  done
+fi
+if [ -z "$FORCE" ] && command -v "$BINARY" >/dev/null 2>&1; then
+  installed_ver=$("$BINARY" --version 2>/dev/null | awk '{print $2}')
+  if [ "$installed_ver" = "$tag" ]; then
+    success "${BINARY} ${tag} is already installed — nothing to do."
+    echo ""
+    info "Run with YTMGO_FORCE=true (or pass --force) to reinstall."
+    exit 0
+  fi
+fi
 
 # ─── Download + verify ──────────────────────────────────────────────
 base_url="https://github.com/$REPO/releases/download/$tag"
