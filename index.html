@@ -15,6 +15,7 @@
 <meta name="twitter:title" content="ytmgo — Terminal YouTube Music">
 <meta name="twitter:description" content="Search, download, queue, and play music from your keyboard, inside your terminal. One-line install, auto-deps, static binary.">
 <meta name="twitter:image" content="https://raw.githubusercontent.com/anas1412/ytmgo/main/ytmgo.png">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=Outfit:wght@200;300;400;500;600;700;800&display=swap" rel="stylesheet">
@@ -92,11 +93,11 @@ body::after{content:'';position:fixed;inset:0;background:repeating-linear-gradie
 
 /* FEATURES */
 .features-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:2px;margin-top:60px;background:var(--border);border:1px solid var(--border);border-radius:12px;overflow:hidden}
-.feature-card{background:var(--bg-surface);padding:40px 32px;position:relative;transition:all .4s;cursor:default}
+.feature-card{background:var(--bg-surface);padding:40px 32px;position:relative;transition:all .4s;cursor:default;text-align:center}
 .feature-card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,var(--accent),transparent);opacity:0;transition:opacity .4s}
 .feature-card:hover{background:var(--bg-hover)}
 .feature-card:hover::before{opacity:1}
-.feature-icon{font-size:1.8rem;margin-bottom:20px;display:block}
+.feature-icon{font-size:1.8rem;margin-bottom:20px;display:flex;align-items:center;justify-content:center;height:2.4rem;color:var(--accent)}
 .feature-name{font-family:var(--font-display);font-size:1.15rem;font-weight:600;color:var(--white);margin-bottom:10px}
 .feature-desc{font-size:.9rem;color:var(--text-mid);line-height:1.6}
 
@@ -140,7 +141,7 @@ kbd{font-family:var(--font-mono);font-size:.75rem;background:var(--bg-panel);bor
 .arch-card::after{content:'';position:absolute;bottom:0;left:0;right:0;height:2px;background:var(--accent);transform:scaleX(0);transition:transform .3s}
 .arch-card:hover{border-color:var(--accent);transform:translateY(-4px);box-shadow:0 12px 40px rgba(0,0,0,.3)}
 .arch-card:hover::after{transform:scaleX(1)}
-.arch-icon{font-size:2rem;margin-bottom:16px;display:block}
+.arch-icon{font-size:2rem;margin-bottom:16px;display:flex;align-items:center;justify-content:center;height:2.6rem;color:var(--mint)}
 .arch-name{font-family:var(--font-mono);font-size:.9rem;font-weight:600;color:var(--white);margin-bottom:8px}
 .arch-desc{font-size:.8rem;color:var(--text-dim);line-height:1.5}
 
@@ -189,7 +190,7 @@ kbd{font-family:var(--font-mono);font-size:.75rem;background:var(--bg-panel);bor
   <h1 class="hero-title"><span class="thin">Your music.</span><br><span class="accent">Your terminal.</span></h1>
   <p class="hero-sub">Search YouTube, download audio, manage your queue, and play music &mdash; all from the keyboard, inside your terminal. No browser. No bloat. Just vibes.</p>
   <div class="install-section-hero">
-    <div class="install-label">Install &mdash; one line, zero config</div>
+    <div class="install-label">Install v0.2.0 &mdash; one line, zero config</div>
     <div class="install-bar">
       <div class="install-bar-content">
         <span class="ib-prompt">$</span><span class="ib-cmd">curl</span> <span class="ib-flag">-fsSL</span> <span class="ib-url">https://anas1412.github.io/ytmgo/install.sh</span> <span class="ib-pipe">|</span> <span class="ib-bash">bash</span><span class="install-bar-cursor"></span>
@@ -219,15 +220,15 @@ kbd{font-family:var(--font-mono);font-size:.75rem;background:var(--bg-panel);bor
   <div class="reveal">
     <div class="section-label">Features</div>
     <h2 class="section-title">Everything you need.<br>Nothing you don't.</h2>
-    <p class="section-desc">Built for people who live in the terminal. Every feature is keyboard-driven, fast, and stays out of your way.</p>
+    <p class="section-desc">Search, download, queue, and play music &mdash; all from your keyboard. No browser, no bloat, no nonsense.</p>
   </div>
   <div class="features-grid reveal">
-    <div class="feature-card"><span class="feature-icon">&#8981;</span><div class="feature-name">YouTube Search</div><div class="feature-desc">Search YouTube directly from your terminal via yt-dlp. No browser tab required.</div></div>
-    <div class="feature-card"><span class="feature-icon">&#11015;</span><div class="feature-name">Audio Download</div><div class="feature-desc">Download tracks as MP3s with real-time progress bars. Serial pipeline, one at a time.</div></div>
-    <div class="feature-card"><span class="feature-icon">&#9776;</span><div class="feature-name">Play Queue</div><div class="feature-desc">Full queue management: reorder, shuffle, repeat one or all. Thread-safe and blazing fast.</div></div>
-    <div class="feature-card"><span class="feature-icon">&#9654;</span><div class="feature-name">Audio Playback</div><div class="feature-desc">Plays through mpv with seek, volume control, and real-time progress tracking via IPC.</div></div>
-    <div class="feature-card"><span class="feature-icon">&#8984;</span><div class="feature-name">Keyboard + Mouse</div><div class="feature-desc">Full keyboard control plus mouse support. Click tabs, panels, the progress bar, settings, and controls.</div></div>
-    <div class="feature-card"><span class="feature-icon">&#9889;</span><div class="feature-name">Concurrency Safe</div><div class="feature-desc">Mutex-guarded queue, single-playback lock, serial download pipeline. No race conditions.</div></div>
+    <div class="feature-card"><span class="feature-icon"><i class="fa-brands fa-youtube"></i></span><div class="feature-name">Search from the terminal</div><div class="feature-desc">No browser, no YouTube tab. Search, pick, and queue — all without leaving your terminal.</div></div>
+    <div class="feature-card"><span class="feature-icon"><i class="fas fa-download"></i></span><div class="feature-name">Download in one key</div><div class="feature-desc">Press <kbd>x</kbd> on any track and it downloads as an MP3. Queue-friendly, one at a time.</div></div>
+    <div class="feature-card"><span class="feature-icon"><i class="fas fa-heart"></i></span><div class="feature-name">Favorites page</div><div class="feature-desc"><kbd>f</kbd> to bookmark. Dedicated page to browse them all. Heart shows on every favorited track.</div></div>
+    <div class="feature-card"><span class="feature-icon"><i class="fas fa-mouse"></i></span><div class="feature-name">Full mouse support</div><div class="feature-desc">Click tabs, click panels, click the progress bar to seek. Most terminal apps can't do this.</div></div>
+    <div class="feature-card"><span class="feature-icon"><i class="fa-brands fa-discord"></i></span><div class="feature-name">Discord Rich Presence</div><div class="feature-desc">Show what you're listening to — track, artist, play status — live on your Discord profile.</div></div>
+    <div class="feature-card"><span class="feature-icon"><i class="fas fa-feather"></i></span><div class="feature-name">Static binary, no bloat</div><div class="feature-desc">Pure Go, no Electron, no browser engine. Starts instantly, sips RAM, gets out of your way.</div></div>
   </div>
 </section>
 
@@ -250,12 +251,14 @@ kbd{font-family:var(--font-mono);font-size:.75rem;background:var(--bg-panel);bor
     <div class="key-row"><div class="key-combo"><kbd>+</kbd><kbd>-</kbd></div><div class="key-action">Volume up / down</div></div>
     <div class="key-row"><div class="key-combo"><kbd>d</kbd><kbd>Del</kbd></div><div class="key-action">Remove from queue</div></div>
     <div class="key-row"><div class="key-combo"><kbd>D</kbd></div><div class="key-action">Clear entire queue</div></div>
+    <div class="key-row"><div class="key-combo"><kbd>f</kbd></div><div class="key-action">Toggle favorite on selected track</div></div>
     <div class="key-row"><div class="key-combo"><kbd>s</kbd></div><div class="key-action">Toggle shuffle</div></div>
     <div class="key-row"><div class="key-combo"><kbd>r</kbd></div><div class="key-action">Cycle repeat: OFF &rarr; ONE &rarr; ALL</div></div>
     <div class="key-row"><div class="key-combo"><kbd>x</kbd></div><div class="key-action">Download selected track</div></div>
     <div class="key-row"><div class="key-combo"><kbd>R</kbd></div><div class="key-action">Refresh recommendations</div></div>
+    <div class="key-row"><div class="key-combo"><kbd>U</kbd></div><div class="key-action">Check for updates / confirm install</div></div>
     <div class="key-row"><div class="key-combo"><kbd>o</kbd></div><div class="key-action">Open download directory</div></div>
-    <div class="key-row"><div class="key-combo"><kbd>1</kbd><kbd>2</kbd><kbd>3</kbd></div><div class="key-action">Switch page: Stream / Library / Settings</div></div>
+    <div class="key-row"><div class="key-combo"><kbd>1</kbd><kbd>2</kbd><kbd>3</kbd><kbd>4</kbd></div><div class="key-action">Switch page: Stream / Favorites / Library / Settings</div></div>
     <div class="key-row"><div class="key-combo"><kbd>Ctrl+&uarr;</kbd><kbd>Ctrl+&darr;</kbd></div><div class="key-action">Move item in queue</div></div>
     <div class="key-row"><div class="key-combo"><kbd>?</kbd></div><div class="key-action">Show keyboard shortcuts</div></div>
     <div class="key-row"><div class="key-combo"><kbd>Esc</kbd></div><div class="key-action">Cancel / back</div></div>
@@ -267,13 +270,13 @@ kbd{font-family:var(--font-mono);font-size:.75rem;background:var(--bg-panel);bor
   <div class="reveal">
     <div class="section-label">Architecture</div>
     <h2 class="section-title">Engineered for reliability.</h2>
-    <p class="section-desc">Built on proven Go patterns. Concurrency-safe, serial pipelines, real-time IPC.</p>
+    <p class="section-desc">Go + Bubble Tea (Elm architecture). Mutex-guarded state, serial download pipeline, real-time mpv IPC polling, embedded SQLite via modernc.org/sqlite (zero CGO).</p>
   </div>
   <div class="arch-grid reveal">
-    <div class="arch-card"><span class="arch-icon">&#9654;</span><div class="arch-name">mpv</div><div class="arch-desc">Audio playback backend with IPC polling for real-time progress</div></div>
-    <div class="arch-card"><span class="arch-icon">&#8981;</span><div class="arch-name">yt-dlp</div><div class="arch-desc">YouTube search and audio downloading engine</div></div>
-    <div class="arch-card"><span class="arch-icon">&#9881;</span><div class="arch-name">Bubble Tea</div><div class="arch-desc">Elm-architecture TUI framework for Go</div></div>
-    <div class="arch-card"><span class="arch-icon">&#9889;</span><div class="arch-name">Lipgloss</div><div class="arch-desc">Declarative terminal styling with color palettes</div></div>
+    <div class="arch-card"><span class="arch-icon"><i class="fas fa-play"></i></span><div class="arch-name">mpv IPC</div><div class="arch-desc">JSON-based FIFO polling for real-time position, duration, and playback-state events</div></div>
+    <div class="arch-card"><span class="arch-icon"><i class="fas fa-music"></i></span><div class="arch-name">yt-dlp</div><div class="arch-desc">Subprocess invocation for YouTube search and audio extraction</div></div>
+    <div class="arch-card"><span class="arch-icon"><i class="fas fa-leaf"></i></span><div class="arch-name">Bubble Tea</div><div class="arch-desc">Elm-architecture TUI framework: Model-View-Update loop with composable tea.Cmd messages</div></div>
+    <div class="arch-card"><span class="arch-icon"><i class="fas fa-database"></i></span><div class="arch-name">SQLite</div><div class="arch-desc">modernc.org/sqlite — pure Go, no CGO. WAL mode, busy_timeout, immediate locking for crash safety</div></div>
   </div>
 </section>
 

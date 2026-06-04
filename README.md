@@ -1,9 +1,10 @@
 # ytmgo
 
-A terminal-based YouTube Music client written in Go. Search YouTube, download audio, manage a play queue, and play music — all from the keyboard, inside your terminal.
+A terminal-based YouTube Music client written in Go. Search YouTube, download audio, manage a play queue, bookmark favorites, and play music — all from the keyboard, inside your terminal.
 
 ![Go Version](https://img.shields.io/badge/go-1.22+-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
+![Version](https://img.shields.io/badge/version-v0.2.0-purple)
 
 ---
 
@@ -29,12 +30,12 @@ go build -o ytmgo .
 
 ## Features
 
-- **YouTube Search** — Search YouTube directly from the terminal via `yt-dlp`
-- **Audio Download** — Download tracks as MP3s with real-time progress
-- **Play Queue** — Full queue management: reorder, shuffle, repeat (one / all)
-- **Audio Playback** — Plays through `mpv` with seek, volume, and progress tracking
-- **Keyboard-driven TUI** — Tab-focused layout with vim navigation + mouse support (click tabs, panels, progress bar, and settings)
-- **Concurrency-safe** — Mutex-guarded queue, single-playback lock, serial download pipeline
+- **Search from the terminal** — No browser, no YouTube tab. Search, pick, and queue without leaving your terminal.
+- **Download in one key** — Press `x` on any track and it downloads as an MP3. Queue-friendly, one at a time.
+- **Favorites page** — `f` to bookmark. Dedicated page to browse them all. Heart shows on every favorited track.
+- **Full mouse support** — Click tabs, click panels, click the progress bar to seek. Most terminal apps can't do this.
+- **Discord Rich Presence** — Show what you're listening to — track, artist, play status — live on your Discord profile.
+- **Static binary, no bloat** — Pure Go, no Electron, no browser engine. Starts instantly, sips RAM, gets out of your way.
 
 ---
 
@@ -114,11 +115,13 @@ Tab cycles focus through: search input → result list → queue panel → setti
 | `-` / `_` | Volume down |
 | `d` / `Delete` | Remove from queue |
 | `D` | Clear entire queue |
+| `f` | Toggle favorite on selected track |
 | `s` | Toggle shuffle |
 | `r` | Cycle repeat: OFF → ONE → ALL |
 | `x` | Download selected track immediately |
 | `R` | Refresh recommendations |
-| `1` / `2` / `3` | Switch page: Stream / Library / Settings |
+| `U` | Check for updates / confirm install |
+| `1` / `2` / `3` / `4` | Switch page: Stream / Favorites / Library / Settings |
 | `Ctrl+↑` / `Ctrl+↓` | Move item up/down in queue |
 | `o` | Open download directory |
 | `?` | Show keyboard shortcuts |
@@ -134,6 +137,7 @@ Tab cycles focus through: search input → result list → queue panel → setti
 - [Lipgloss](https://github.com/charmbracelet/lipgloss) — Terminal styling
 - [mpv](https://mpv.io/) — Media player backend
 - [yt-dlp](https://github.com/yt-dlp/yt-dlp) — YouTube downloader
+- [modernc.org/sqlite](https://modernc.org/sqlite) — Embedded SQLite (no CGO)
 
 ---
 
