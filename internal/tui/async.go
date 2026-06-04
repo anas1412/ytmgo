@@ -2,6 +2,8 @@ package tui
 
 import (
 	"fmt"
+	"os"
+	"os/exec"
 	"time"
 
 	"ytmgo/internal/downloader"
@@ -95,6 +97,13 @@ func (m Model) handleUpdateResult(msg UpdateResultMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	m.setStatus("Update complete, restarting…")
+	// Launch the updated binary, then quit
+	exe, err := os.Executable()
+	if err != nil {
+		m.setStatus("✗ Cannot restart: " + err.Error())
+		return m, nil
+	}
+	exec.Command(exe).Start()
 	return m, tea.Quit
 }
 

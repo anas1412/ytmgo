@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"os"
 	"os/exec"
 	"path"
 	"time"
@@ -212,24 +211,14 @@ func downloadCmd(d *downloader.Downloader) tea.Cmd {
 	}
 }
 
-// runUpdateCmd runs the install script and then starts the new binary.
+// runUpdateCmd runs the install script via tea.ExecProcess so the user sees
+// curl's progress bar and install output in real time.
 func runUpdateCmd() tea.Cmd {
-	return func() tea.Msg {
-		install := exec.Command("bash", "-c", "curl -fsSL https://anas1412.github.io/ytmgo/install.sh | bash")
-		if out, err := install.CombinedOutput(); err != nil {
-			return UpdateResultMsg{Error: fmt.Errorf("update failed: %w\n%s", err, string(out))}
-		}
-
-		// Launch the updated binary
-		exe, err := os.Executable()
+	install := exec.Command("bash", "-c", "curl -fsSL https://anas1412.github.io/ytmgo/install.sh | bash")
+	return tea.ExecProcess(install, func(err error) tea.Msg {
 		if err != nil {
-			return UpdateResultMsg{Error: fmt.Errorf("cannot get executable path: %w", err)}
+			return UpdateResultMsg{Error: fmt.Errorf("update failed: %w", err)}
 		}
-		restart := exec.Command(exe)
-		if err := restart.Start(); err != nil {
-			return UpdateResultMsg{Error: fmt.Errorf("failed to restart: %w", err)}
-		}
-
 		return UpdateResultMsg{}
-	}
+	})
 }
