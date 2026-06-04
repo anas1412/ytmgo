@@ -60,6 +60,10 @@ func (m Model) handleRecommendations(msg RecommendationsMsg) (tea.Model, tea.Cmd
 
 func (m Model) handleUpdateCheck(msg UpdateCheckMsg) (tea.Model, tea.Cmd) {
 	if msg.LatestVersion == "" {
+		if m.updateCheckManual {
+			m.updateCheckManual = false
+			m.setStatus("Update check failed")
+		}
 		return m, nil // check failed/skipped, stay unknown
 	}
 	if msg.LatestVersion != ver.Version {
@@ -70,6 +74,15 @@ func (m Model) handleUpdateCheck(msg UpdateCheckMsg) (tea.Model, tea.Cmd) {
 		m.updateAvailable = msg.LatestVersion
 	} else {
 		m.updateAvailable = "latest"
+	}
+
+	if m.updateCheckManual {
+		m.updateCheckManual = false
+		if m.updateAvailable == "latest" {
+			m.setStatus("Already up to date (" + ver.Version + ")")
+		} else {
+			m.setStatus("Update " + m.updateAvailable + " available — press U")
+		}
 	}
 	return m, nil
 }

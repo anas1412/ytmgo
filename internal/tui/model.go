@@ -134,6 +134,7 @@ type Model struct {
 	showingRecommendations bool
 	recsSeq                int       // bumped each time R is pressed or a search starts
 	updateAvailable        string    // "" = unknown, "latest" = up to date, "v0.X.Y" = update
+	updateCheckManual      bool      // true when U was pressed to trigger the check
 
 	// ── Library (local downloaded files) ──
 	library       []queue.Track

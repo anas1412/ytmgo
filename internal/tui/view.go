@@ -142,8 +142,8 @@ func (m Model) renderSettingsPage() string {
 func (m Model) renderSettingsPanels() string {
 	outerWidth := (m.width - 2) / 2
 	panelWidth := outerWidth - 2
-	if panelWidth < 30 {
-		panelWidth = 30
+	if panelWidth < 10 {
+		panelWidth = 10
 	}
 	panelHeight := m.panelHeight()
 
@@ -243,11 +243,14 @@ func (m Model) renderHeader() string {
 // Both sub-panels are always rendered on both Stream and Library tabs.
 
 func (m Model) renderPanels() string {
-	// Dynamically calculate column widths to perfectly span the layout width
+	// Dynamically calculate column widths to span the layout width.
+	// The formula yields exactly 2 columns + 2 spare columns (one per side
+	// of the 1-char spacer), no matter the terminal width. Do NOT clamp
+	// to a hard minimum — that would overflow when the terminal is narrow.
 	outerWidth := (m.width - 2) / 2
 	panelWidth := outerWidth - 2
-	if panelWidth < 30 {
-		panelWidth = 30
+	if panelWidth < 10 {
+		panelWidth = 10
 	}
 
 	panelHeight := m.panelHeight()
@@ -795,9 +798,12 @@ func (m Model) renderSettingsList(panelWidth, panelHeight int) string {
 			cursor = "▶ "
 		}
 
-		label := styleSettingsLabel.Render(cursor + item.label)
-		value := styleSettingsValue.Render(item.value)
-		desc := styleSettingsDesc.Render(item.desc)
+		// Truncate each element to innerW so it never spills out of the
+		// bordered panel — descriptions like "… Offline (download first)"
+		// are particularly long and would overflow on narrow terminals.
+		label := styleSettingsLabel.Render(truncate(cursor+item.label, innerW))
+		value := styleSettingsValue.Render(truncate(item.value, innerW))
+		desc := styleSettingsDesc.Render(truncate(item.desc, innerW))
 
 		// Show an inline [Open] button when the cursor is on the Download
 		// Dir row and we're not editing — makes the 'o' shortcut discoverable.
@@ -812,20 +818,20 @@ func (m Model) renderSettingsList(panelWidth, panelHeight int) string {
 		}
 
 		lines = append(lines, label)
-		lines = append(lines, "  "+value)
+		lines = append(lines, "  "+truncate(value, innerW))
 		lines = append(lines, desc)
 		lines = append(lines, "")
 	}
 
 	// Scroll indicator
 	if end < len(settingsItems) {
-		lines = append(lines, styleSettingsDesc.Render("  ↓ more items below"))
+		lines = append(lines, styleSettingsDesc.Render(truncate("  ↓ more items below", innerW)))
 	} else if offset > 0 {
-		lines = append(lines, styleSettingsDesc.Render("  ↑ more items above"))
+		lines = append(lines, styleSettingsDesc.Render(truncate("  ↑ more items above", innerW)))
 	}
 
 	// Help text at bottom
-	lines = append(lines, styleSettingsDesc.Render("↑↓ navigate · Enter toggle/edit · Esc cancel edit · 1/2/3 switch page"))
+	lines = append(lines, styleSettingsDesc.Render(truncate("↑↓ navigate · Enter toggle/edit · Esc cancel edit · 1/2/3 switch page", innerW)))
 
 	// Pad/truncate each line to full width and full height — overwrites
 	// any stale content from prior taller frames.

@@ -6,6 +6,7 @@ import (
 
 	"ytmgo/internal/player"
 	"ytmgo/internal/settings"
+	ver "ytmgo/internal/version"
 
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
@@ -639,20 +640,23 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case "U":
-		if m.updateAvailable == "" || m.updateAvailable == "latest" {
+		if m.updateAvailable != "" && m.updateAvailable != "latest" {
+			// Update already known — start confirmation immediately
+			m.startConfirm(confirmUpdate, m.updateAvailable)
+			// Styled confirmation: orange bullet, white action, mint Enter, pink Esc
+			bullet := lipgloss.NewStyle().Foreground(colorWarning).Render("●")
+			action := lipgloss.NewStyle().Foreground(colorText).Bold(true).Render("Update to")
+			verStr := lipgloss.NewStyle().Foreground(colorAccent2).Bold(true).Render(m.updateAvailable + "?")
+			enterKey := lipgloss.NewStyle().Foreground(colorAccent2).Bold(true).Render("[Enter]")
+			enterDesc := lipgloss.NewStyle().Foreground(colorTextDim).Render("yes")
+			escKey := lipgloss.NewStyle().Foreground(colorAccent3).Bold(true).Render("[Esc]")
+			escDesc := lipgloss.NewStyle().Foreground(colorTextDim).Render("no")
+			m.setStatus(bullet + " " + action + " " + verStr + "  " + enterKey + " " + enterDesc + "  " + escKey + " " + escDesc)
 			return m, nil
 		}
-		m.startConfirm(confirmUpdate, m.updateAvailable)
-		// Styled confirmation: orange bullet, white action, mint Enter, pink Esc
-		bullet := lipgloss.NewStyle().Foreground(colorWarning).Render("●")
-		action := lipgloss.NewStyle().Foreground(colorText).Bold(true).Render("Update to")
-		ver := lipgloss.NewStyle().Foreground(colorAccent2).Bold(true).Render(m.updateAvailable + "?")
-		enterKey := lipgloss.NewStyle().Foreground(colorAccent2).Bold(true).Render("[Enter]")
-		enterDesc := lipgloss.NewStyle().Foreground(colorTextDim).Render("yes")
-		escKey := lipgloss.NewStyle().Foreground(colorAccent3).Bold(true).Render("[Esc]")
-		escDesc := lipgloss.NewStyle().Foreground(colorTextDim).Render("no")
-		m.setStatus(bullet + " " + action + " " + ver + "  " + enterKey + " " + enterDesc + "  " + escKey + " " + escDesc)
-		return m, nil
+		m.updateCheckManual = true
+		m.setStatus("Checking for updates…")
+		return m, checkUpdateCmd(ver.Version)
 
 	case "s":
 		m.queue.ToggleShuffle()

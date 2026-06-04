@@ -95,11 +95,23 @@ func (m Model) panelHeight() int {
 	return h
 }
 
-// visibleItems returns how many list rows fit in the panel.
-// Must stay in sync with renderSearchResults / renderLibrary / renderQueue
-// which use (height - 1) / 2 where height = panelHeight - 2.
+// visibleItems returns how many list rows fit in the search-results / library
+// panel. Must stay in sync with renderSearchResults / renderLibrary, which
+// receive height = panelHeight - 3 and then compute
+// maxItems = (height - 1) / 2 = (panelHeight - 4) / 2.
 func (m Model) visibleItems() int {
-	n := (m.panelHeight() - 3) / 2
+	n := (m.panelHeight() - 4) / 2
+	if n < 1 {
+		n = 1
+	}
+	return n
+}
+
+// queueVisibleItems returns how many list rows fit in the queue sub-panel.
+// The queue sub-panel receives height = queueContentH = (panelHeight - 6) / 2,
+// then computes maxItems = (height - 1) / 2 = (panelHeight - 8) / 4.
+func (m Model) queueVisibleItems() int {
+	n := (m.panelHeight() - 8) / 4
 	if n < 1 {
 		n = 1
 	}
@@ -157,7 +169,7 @@ func (m *Model) clampLibraryOffset() {
 
 // clampQueueOffset adjusts queueOffset so the cursor is visible.
 func (m *Model) clampQueueOffset() {
-	vis := m.visibleItems()
+	vis := m.queueVisibleItems()
 	n := m.queue.Len()
 	if n == 0 {
 		m.queueCursor = 0
