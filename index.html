@@ -39,10 +39,10 @@ body::before{content:'';position:fixed;inset:0;background-image:url("data:image/
 body::after{content:'';position:fixed;inset:0;background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.03) 2px,rgba(0,0,0,0.03) 4px);pointer-events:none;z-index:9998}
 
 /* NAV */
-.nav{position:fixed;top:0;left:0;right:0;z-index:1000;padding:20px 40px;display:flex;align-items:center;justify-content:space-between;backdrop-filter:blur(20px);background:rgba(10,10,15,0.7);border-bottom:1px solid rgba(42,42,62,0.3)}
-.nav-logo{font-family:var(--font-mono);font-weight:700;font-size:1.3rem;color:var(--mint);letter-spacing:-0.5px;display:flex;align-items:center;gap:10px}
-.nav-logo .dot{width:8px;height:8px;background:var(--mint);border-radius:50%;box-shadow:0 0 12px var(--mint-glow),0 0 24px var(--mint-glow);animation:pulse-dot 2s ease-in-out infinite}
-@keyframes pulse-dot{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.6;transform:scale(.8)}}
+.nav{position:fixed;top:0;left:0;right:0;z-index:1000;padding:20px 40px;backdrop-filter:blur(20px);background:rgba(10,10,15,0.7);border-bottom:1px solid rgba(42,42,62,0.3)}
+.nav-inner{max-width:1200px;margin:0 auto;display:flex;align-items:center;justify-content:space-between}
+.nav-logo{display:flex;align-items:center}
+.nav-logo-img{height:32px;width:auto;display:block}
 .nav-links{display:flex;gap:32px;align-items:center}
 .nav-links a{font-size:.9rem;font-weight:400;color:var(--text-mid);transition:color .2s;letter-spacing:.3px}
 .nav-links a:hover{color:var(--white)}
@@ -174,12 +174,14 @@ kbd{font-family:var(--font-mono);font-size:.75rem;background:var(--bg-panel);bor
 <body>
 
 <nav class="nav">
-  <a href="#" class="nav-logo"><span class="dot"></span>ytmgo</a>
-  <div class="nav-links">
-    <a href="#features">Features</a>
-    <a href="#keys">Keybindings</a>
-    <a href="#arch">Architecture</a>
-    <a href="https://github.com/anas1412/ytmgo" class="nav-cta"><span>&#9733; Star on GitHub</span></a>
+  <div class="nav-inner">
+    <a href="#" class="nav-logo"><img src="ytmgo-logo.png" alt="ytmgo" class="nav-logo-img"></a>
+    <div class="nav-links">
+      <a href="#features">Features</a>
+      <a href="#keys">Keybindings</a>
+      <a href="#arch">Architecture</a>
+      <a href="https://github.com/anas1412/ytmgo" class="nav-cta"><span>&#9733; Star on GitHub</span></a>
+    </div>
   </div>
 </nav>
 

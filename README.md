@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="ytmgo-logo.png" alt="ytmgo" width="400">
+</p>
+
 # ytmgo
 
 A terminal-based YouTube Music client written in Go. Search YouTube, download audio, manage a play queue, bookmark favorites, and play music — all from the keyboard, inside your terminal.
