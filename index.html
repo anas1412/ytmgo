@@ -3,17 +3,17 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>ytmgo — Terminal YouTube Music</title>
+<title>ytmgo — YT Music from Terminal</title>
 <meta name="description" content="A terminal-based YouTube Music client. Search, download, queue, and play music — all from the keyboard, inside your terminal.">
-<meta property="og:title" content="ytmgo — Terminal YouTube Music">
-<meta property="og:description" content="Search, download, queue, and play music from your keyboard, inside your terminal. One-line install, auto-deps, static binary.">
+<meta property="og:title" content="ytmgo — YT Music from Terminal">
+<meta property="og:description" content="Search music, download audio, queue, and play music from your keyboard, inside your terminal. One-line install, static binary.">
 <meta property="og:image" content="https://raw.githubusercontent.com/anas1412/ytmgo/main/ytmgo.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta property="og:type" content="website">
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="ytmgo — Terminal YouTube Music">
-<meta name="twitter:description" content="Search, download, queue, and play music from your keyboard, inside your terminal. One-line install, auto-deps, static binary.">
+<meta name="twitter:title" content="ytmgo — YT Music from Terminal">
+<meta name="twitter:description" content="Search music, download audio, queue, and play music from your keyboard, inside your terminal. One-line install, static binary.">
 <meta name="twitter:image" content="https://raw.githubusercontent.com/anas1412/ytmgo/main/ytmgo.png">
 <link rel="icon" type="image/png" href="ytmgo-icon.png">
 <link rel="apple-touch-icon" href="ytmgo-icon.png">
@@ -145,7 +145,7 @@ kbd{font-family:var(--font-mono);font-size:.75rem;background:var(--bg-panel);bor
 .key-action{font-size:.85rem;color:var(--text-mid)}
 
 /* ARCHITECTURE */
-.arch-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-top:50px}
+.arch-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:16px;margin-top:50px}
 .arch-card{background:var(--bg-surface);border:1px solid var(--border);border-radius:10px;padding:28px 24px;text-align:center;transition:all .3s;position:relative;overflow:hidden}
 .arch-card::after{content:'';position:absolute;bottom:0;left:0;right:0;height:2px;background:var(--accent);transform:scaleX(0);transition:transform .3s}
 .arch-card:hover{border-color:var(--accent);transform:translateY(-4px);box-shadow:0 12px 40px rgba(0,0,0,.3)}
@@ -262,7 +262,7 @@ kbd{font-family:var(--font-mono);font-size:.75rem;background:var(--bg-panel);bor
   <div class="hero-glow hero-glow--mint"></div>
   <div class="hero-glow hero-glow--pink"></div>
   <h1 class="hero-title"><span class="thin">Your music.</span><br><span class="accent">Your terminal.</span></h1>
-  <p class="hero-sub">Search YouTube, download audio, manage your queue, and play music &mdash; all from the keyboard, inside your terminal. No browser. No bloat. Just vibes.</p>
+  <p class="hero-sub">Search music, download audio, manage your queue, and play music &mdash; all from the keyboard, inside your terminal. No browser. No bloat. Just vibes.</p>
   <div class="install-section-hero">
     <div class="install-label">one line, zero config</div>
     <div class="install-bar">
@@ -294,11 +294,11 @@ kbd{font-family:var(--font-mono);font-size:.75rem;background:var(--bg-panel);bor
   <div class="reveal">
     <div class="section-label">Features</div>
     <h2 class="section-title">Everything you need.<br>Nothing you don't.</h2>
-    <p class="section-desc">Search, download, queue, and play music &mdash; all from your keyboard. No browser, no bloat, no nonsense.</p>
+    <p class="section-desc">Search, download, queue, and play &mdash; all from your keyboard. No browser, no bloat, no nonsense.</p>
   </div>
   <div class="features-grid reveal">
-    <div class="feature-card"><span class="feature-icon"><i class="fa-brands fa-youtube"></i></span><div class="feature-name">Search from the terminal</div><div class="feature-desc">No browser, no YouTube tab. Search, pick, and queue — all without leaving your terminal.</div></div>
-    <div class="feature-card"><span class="feature-icon"><i class="fas fa-download"></i></span><div class="feature-name">Download in one key</div><div class="feature-desc">Press <kbd>x</kbd> on any track and it downloads as an MP3. Queue-friendly, one at a time.</div></div>
+    <div class="feature-card"><span class="feature-icon"><i class="fas fa-music"></i></span><div class="feature-name">Search from the terminal</div><div class="feature-desc">No browser, no tabs. Search, pick, and queue — all without leaving your terminal.</div></div>
+    <div class="feature-card"><span class="feature-icon"><i class="fas fa-download"></i></span><div class="feature-name">Download in one key</div><div class="feature-desc">Press <kbd>x</kbd> on any track and it downloads. Queue-friendly, one at a time, with progress feedback.</div></div>
     <div class="feature-card"><span class="feature-icon"><i class="fas fa-heart"></i></span><div class="feature-name">Favorites page</div><div class="feature-desc"><kbd>f</kbd> to bookmark. Dedicated page to browse them all. Heart shows on every favorited track.</div></div>
     <div class="feature-card"><span class="feature-icon"><i class="fas fa-mouse"></i></span><div class="feature-name">Full mouse support</div><div class="feature-desc">Click tabs, click panels, click the progress bar to seek. Most terminal apps can't do this.</div></div>
     <div class="feature-card"><span class="feature-icon"><i class="fa-brands fa-discord"></i></span><div class="feature-name">Discord Rich Presence</div><div class="feature-desc">Show what you're listening to — track, artist, play status — live on your Discord profile.</div></div>
@@ -344,11 +344,12 @@ kbd{font-family:var(--font-mono);font-size:.75rem;background:var(--bg-panel);bor
   <div class="reveal">
     <div class="section-label">Architecture</div>
     <h2 class="section-title">Engineered for reliability.</h2>
-    <p class="section-desc">Go + Bubble Tea (Elm architecture). Mutex-guarded state, serial download pipeline, real-time mpv IPC polling, embedded SQLite via modernc.org/sqlite (zero CGO).</p>
+    <p class="section-desc">Go + Bubble Tea (Elm architecture). Mutex-guarded state, yt-dlp download pipeline, real-time mpv IPC polling, embedded SQLite via modernc.org/sqlite (zero CGO).</p>
   </div>
   <div class="arch-grid reveal">
     <div class="arch-card"><span class="arch-icon"><i class="fas fa-play"></i></span><div class="arch-name">mpv IPC</div><div class="arch-desc">JSON-based FIFO polling for real-time position, duration, and playback-state events</div></div>
-    <div class="arch-card"><span class="arch-icon"><i class="fas fa-music"></i></span><div class="arch-name">yt-dlp</div><div class="arch-desc">Subprocess invocation for YouTube search and audio extraction</div></div>
+    <div class="arch-card"><span class="arch-icon"><i class="fas fa-search"></i></span><div class="arch-name">Search Engine</div><div class="arch-desc">Music catalog search via community API proxy — type-ahead, recommendations, and track metadata</div></div>
+    <div class="arch-card"><span class="arch-icon"><i class="fas fa-cloud"></i></span><div class="arch-name">yt-dlp</div><div class="arch-desc">Streaming URL resolution and audio downloads via yt-dlp search on YouTube Music</div></div>
     <div class="arch-card"><span class="arch-icon"><i class="fas fa-leaf"></i></span><div class="arch-name">Bubble Tea</div><div class="arch-desc">Elm-architecture TUI framework: Model-View-Update loop with composable tea.Cmd messages</div></div>
     <div class="arch-card"><span class="arch-icon"><i class="fas fa-database"></i></span><div class="arch-name">SQLite</div><div class="arch-desc">modernc.org/sqlite — pure Go, no CGO. WAL mode, busy_timeout, immediate locking for crash safety</div></div>
   </div>
@@ -357,7 +358,7 @@ kbd{font-family:var(--font-mono);font-size:.75rem;background:var(--bg-panel);bor
 <section class="cta-section">
   <div class="reveal">
     <h2 class="cta-title">Ready to take control?</h2>
-    <p class="cta-desc">One line. Installs the binary, mpv, yt-dlp, and ffmpeg. No browser, no Electron, no nonsense.</p>
+    <p class="cta-desc">One line. Installs the binary and mpv. No browser, no Electron, no nonsense.</p>
     <div class="cta-actions">
       <button class="btn-primary" onclick="window.open('https://github.com/anas1412/ytmgo','_blank')"><span>&#9733; Star on GitHub</span></button>
       <button class="btn-secondary" onclick="window.open('https://github.com/anas1412/ytmgo','_blank')"><span>View Source &rarr;</span></button>

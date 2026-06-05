@@ -2,9 +2,9 @@
   <img src="ytmgo-logo.png" alt="ytmgo" width="400">
 </p>
 
-# ytmgo
+# ytmgo — YT Music from Terminal
 
-A terminal-based YouTube Music client written in Go. Search YouTube, download audio, manage a play queue, bookmark favorites, and play music — all from the keyboard, inside your terminal.
+A terminal-based YouTube Music client written in Go. Search music, download audio, manage a play queue, bookmark favorites, and play music — all from the keyboard, inside your terminal.
 
 ![Go Version](https://img.shields.io/badge/go-1.22+-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
@@ -14,7 +14,7 @@ A terminal-based YouTube Music client written in Go. Search YouTube, download au
 
 ## Install
 
-One line does everything — grabs the static binary for your OS/arch, installs it, and auto-installs `mpv`/`yt-dlp`/`ffmpeg` if they're missing (using `sudo` for system package managers):
+One line does everything — grabs the static binary for your OS/arch, installs it, and auto-installs `mpv` if it's missing (using `sudo` for system package managers):
 
 ```bash
 curl -fsSL https://anas1412.github.io/ytmgo/install.sh | bash
@@ -23,7 +23,7 @@ curl -fsSL https://anas1412.github.io/ytmgo/install.sh | bash
 > Override the version: `YTMGO_VERSION=v0.2.0 curl ... | bash`
 > Override the install dir: `YTMGO_INSTALL_DIR=/opt/bin curl ... | bash`
 
-Or build from source (after installing `mpv`/`yt-dlp`/`ffmpeg` yourself):
+Or build from source (after installing `mpv` yourself):
 
 ```bash
 go build -o ytmgo .
@@ -34,8 +34,8 @@ go build -o ytmgo .
 
 ## Features
 
-- **Search from the terminal** — No browser, no YouTube tab. Search, pick, and queue without leaving your terminal.
-- **Download in one key** — Press `x` on any track and it downloads as an MP3. Queue-friendly, one at a time.
+- **Search from the terminal** — No browser, no tabs. Search, pick, and queue without leaving your terminal.
+- **Download in one key** — Press `x` on any track and it downloads. Queue-friendly, one at a time, with progress feedback.
 - **Favorites page** — `f` to bookmark. Dedicated page to browse them all. Heart shows on every favorited track.
 - **Full mouse support** — Click tabs, click panels, click the progress bar to seek. Most terminal apps can't do this.
 - **Discord Rich Presence** — Show what you're listening to — track, artist, play status — live on your Discord profile.
@@ -53,21 +53,25 @@ go build -o ytmgo .
 
 - **Go** 1.22+
 - **mpv** — audio playback backend
-- **yt-dlp** — YouTube search and audio downloading
-- **Brave** / **Firefox** / **Chrome** *(optional)* — for cookie extraction to access age-restricted content; configurable in Settings
+- **yt-dlp** — YouTube / YouTube Music streaming URL resolution and downloads
+- **ffmpeg** — audio extraction for downloads (yt-dlp dependency)
 
 ### Install system dependencies
 
+These are required for playback and downloads:
+
 ```bash
 # Debian / Ubuntu
-sudo apt install mpv yt-dlp
+sudo apt install mpv yt-dlp ffmpeg
 
 # macOS
-brew install mpv yt-dlp
+brew install mpv yt-dlp ffmpeg
 
 # Arch Linux
-sudo pacman -S mpv yt-dlp
+sudo pacman -S mpv yt-dlp ffmpeg
 ```
+
+> yt-dlp is the core download engine — it searches YouTube Music for the track and streams/downloads the audio. ffmpeg is used by yt-dlp for audio extraction.
 
 ---
 
@@ -140,7 +144,8 @@ Tab cycles focus through: search input → result list → queue panel → setti
 - [Bubbles](https://github.com/charmbracelet/bubbles) — TUI components
 - [Lipgloss](https://github.com/charmbracelet/lipgloss) — Terminal styling
 - [mpv](https://mpv.io/) — Media player backend
-- [yt-dlp](https://github.com/yt-dlp/yt-dlp) — YouTube downloader
+- [yt-dlp](https://github.com/yt-dlp/yt-dlp) — YouTube Music streaming and downloads
+- [ffmpeg](https://ffmpeg.org/) — Audio extraction for downloads
 - [modernc.org/sqlite](https://modernc.org/sqlite) — Embedded SQLite (no CGO)
 
 ---

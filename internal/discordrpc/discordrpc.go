@@ -157,7 +157,7 @@ func sendActivity(name, details, state, largeImage, largeText string, activityTy
 }
 
 // ShowIdle sets the presence to a default idle state (no track playing).
-// Shows "Listening to Browsing Music" with the ytmgo logo.
+// Discord shows "Listening to Browsing Music" with the ytmgo logo.
 func ShowIdle() {
 	mu.Lock()
 	logged := loggedIn
@@ -165,11 +165,11 @@ func ShowIdle() {
 	if !logged {
 		return
 	}
-	sendActivity("Browsing Music", "Browsing Music", "", "ytmgo-logo", "ytmgo — Terminal YouTube Music", 2, nil)
+	sendActivity("Browsing Music", "", "", "ytmgo-logo", "ytmgo – YT Music from Terminal", 2, nil)
 }
 
 // Update sets the Rich Presence to reflect the currently playing track.
-// The activity name is set to the track title so Discord shows
+// The activity name is the track title so Discord shows
 // "Listening to Song Title" with a headphone icon.
 func Update(track queue.Track, state player.State, position float64) {
 	mu.Lock()
@@ -185,5 +185,5 @@ func Update(track queue.Track, state player.State, position float64) {
 		start = &t
 	}
 
-	sendActivity(track.Title, track.Title, track.Artist, "ytmgo-logo", "ytmgo — Terminal YouTube Music", 2, start)
+	sendActivity(track.Title, track.Artist, "", "ytmgo-logo", "ytmgo – YT Music from Terminal", 2, start)
 }
