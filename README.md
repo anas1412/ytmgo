@@ -31,6 +31,49 @@ go build -o ytmgo .
 
 ---
 
+## Uninstall
+
+Remove ytmgo and all its data in one command:
+
+```bash
+curl -fsSL https://anas1412.github.io/ytmgo/install.sh | bash -s -- --yes
+```
+
+Wait — that's the install script. For uninstall:
+
+```bash
+curl -fsSL https://anas1412.github.io/ytmgo/uninstall.sh | bash
+```
+
+This will prompt you with three confirmations:
+
+1. **Remove binary** — deletes `~/.local/bin/ytmgo` (or `/usr/local/bin/ytmgo`)
+2. **Remove user data** — deletes `~/.config/ytmgo/` (settings, favorites, play history, queue)
+3. **Remove downloads** — deletes `~/.local/share/ytmgo/downloads/` (all your downloaded files)
+
+### Flags
+
+| Flag | Behavior |
+|------|----------|
+| `-y` / `--yes` | Skip all prompts, remove **everything** |
+| `--keep-downloads` | Keep your downloaded audio files |
+| `--keep-user-data` | Keep your config database (settings, favorites, history) |
+
+```bash
+# Silent full removal
+curl -fsSL https://anas1412.github.io/ytmgo/uninstall.sh | bash -s -- -y
+
+# Remove binary + config, keep your music files
+curl -fsSL https://anas1412.github.io/ytmgo/uninstall.sh | bash -s -- -y --keep-downloads
+
+# Remove binary + files, keep your favorites and settings
+curl -fsSL https://anas1412.github.io/ytmgo/uninstall.sh | bash -s -- -y --keep-user-data
+```
+
+System dependencies (mpv, yt-dlp, ffmpeg) are **not** touched — they may be used by other applications.
+
+---
+
 ## Features
 
 - **Search from the terminal** — No browser, no tabs. Search, pick, and queue without leaving your terminal.
