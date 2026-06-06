@@ -14,7 +14,9 @@ A terminal-based YouTube Music client written in Go. Search music, download audi
 
 ## Install
 
-One line does everything — grabs the static binary for your OS/arch, installs it, and auto-installs `mpv` if it's missing (using `sudo` for system package managers):
+### Quick install (Linux / macOS)
+
+One line does everything — grabs the static binary for your OS/arch, installs it, and auto-installs `mpv` if it's missing:
 
 ```bash
 curl -fsSL https://anas1412.github.io/ytmgo/install.sh | bash
@@ -22,7 +24,17 @@ curl -fsSL https://anas1412.github.io/ytmgo/install.sh | bash
 
 > Override the install dir: `YTMGO_INSTALL_DIR=/opt/bin curl ... | bash`
 
-Or build from source (after installing `mpv` yourself):
+### Arch Linux (AUR)
+
+```bash
+yay -S ytmgo
+# or
+paru -S ytmgo
+```
+
+After installing, run `ytmgo` from your terminal.
+
+### Build from source
 
 ```bash
 go build -o ytmgo .
