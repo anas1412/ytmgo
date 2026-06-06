@@ -208,7 +208,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "down", "j":
 		// Settings page: navigate settings list
 		if m.activePage == PageSettings && !m.settingsEditField {
-			if m.settingsCursor < 7 { // 8 items indexed 0-7
+			if m.settingsCursor < 8 { // 9 items indexed 0-8
 				m.settingsCursor++
 				m.clampSettingsOffset()
 			}
@@ -259,12 +259,12 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.settingsEditField = false
 				m.settingsEditInput.Blur()
 				switch m.settingsCursor {
-				case 5: // Download Dir
+				case 6: // Download Dir
 					m.settings.DownloadDir = newVal
-				case 6: // TIDAL Proxy URL
+				case 7: // TIDAL Proxy URL
 					m.settings.TidalProxyURL = newVal
 					m.reinitTidalClient()
-				case 7: // Download Format (should not reach here, cycles on Enter)
+				case 8: // Download Format (should not reach here, cycles on Enter)
 					// no-op; format is cycled, not typed
 				}
 				return m, tea.Batch(saveSettingsCmd(m.db, m.settings))
@@ -289,12 +289,15 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.settings.DiscordRPCEnabled = !m.settings.DiscordRPCEnabled
 				m.reinitDiscordRPC()
 				return m, tea.Batch(saveSettingsCmd(m.db, m.settings))
-			case 3, 4: // Volume / Search Limit (numbers — Enter does nothing, use +/-)
+			case 3: // Autoplay (boolean)
+				m.settings.AutoplayEnabled = !m.settings.AutoplayEnabled
+				return m, tea.Batch(saveSettingsCmd(m.db, m.settings))
+			case 4, 5: // Volume / Search Limit (numbers — Enter does nothing, use +/-)
 				return m, nil
-			case 5, 6: // Download Dir / TIDAL Proxy URL (strings)
+			case 6, 7: // Download Dir / TIDAL Proxy URL (strings)
 				m.startSettingsEdit()
 				return m, nil
-			case 7: // Download Format (cycle)
+			case 8: // Download Format (cycle)
 				switch m.settings.DownloadFormat {
 				case settings.FormatM4A:
 					m.settings.DownloadFormat = settings.FormatMP3

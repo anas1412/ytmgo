@@ -43,17 +43,17 @@ UI considerations:
 ---
 
 ### Radio / Autoplay Mode
-**Status:** ❌ Not started  
+**Status:** 🟢 Active  
 **Effort:** Medium  
 **Depends on:** Player module (existing)  
 
-When the queue is exhausted or the user enables autoplay, the application should automatically enqueue suggested tracks based on the last played song or artist.
+When the queue is exhausted, the application automatically enqueues suggested tracks based on recent listening history.
 
-- Fetch YouTube Music "radio" / "mix" suggestions for a given track or artist
-- Intelligent continuation: queue should never run dry during autoplay
-- Explicit opt-in: user toggles autoplay via keybinding or settings
-- Visual indicator in the TUI when autoplay is active
-- Repeat modes (OFF / ONE / ALL) should compose naturally with autoplay
+- Fetches TIDAL recommendations when queue runs dry
+- Explicit opt-in: Settings page toggle (default: ON)
+- Repeat modes (OFF / ONE / ALL) compose naturally: autoplay only kicks in when ALL is OFF and queue is truly exhausted
+- Status bar shows "Autoplay fetching suggestions…" while loading
+- Does not interrupt if user manually adds tracks before suggestions arrive
 
 ---
 
@@ -235,4 +235,4 @@ Move all keybindings into a user-editable config so power users can remap to the
 
 ---
 
-*Last updated: 2026-06-04*
+*Last updated: 2026-06-06*

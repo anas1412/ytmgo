@@ -73,7 +73,8 @@ CREATE TABLE IF NOT EXISTS settings (
     tidal_proxy_url     TEXT NOT NULL DEFAULT 'https://eu-central.monochrome.tf',
     download_format     TEXT NOT NULL DEFAULT 'm4a',
     show_quotes         INTEGER NOT NULL DEFAULT 1,
-    discord_rpc_enabled INTEGER NOT NULL DEFAULT 1
+    discord_rpc_enabled INTEGER NOT NULL DEFAULT 1,
+    autoplay_enabled    INTEGER NOT NULL DEFAULT 1
 );
 `
 
@@ -103,6 +104,7 @@ func Open() (*DB, error) {
 	// Migrations for existing databases — each ADD COLUMN safely errors
 	// out if the column already exists.
 	db.Exec(`ALTER TABLE settings ADD COLUMN discord_rpc_enabled INTEGER NOT NULL DEFAULT 1`)
+	db.Exec(`ALTER TABLE settings ADD COLUMN autoplay_enabled INTEGER NOT NULL DEFAULT 1`)
 	db.Exec(`ALTER TABLE settings ADD COLUMN tidal_proxy_url TEXT NOT NULL DEFAULT 'https://eu-central.monochrome.tf'`)
 	db.Exec(`ALTER TABLE settings ADD COLUMN download_format TEXT NOT NULL DEFAULT 'm4a'`)
 	db.Exec(`ALTER TABLE favorites ADD COLUMN cover_url TEXT NOT NULL DEFAULT ''`)

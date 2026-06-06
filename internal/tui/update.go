@@ -103,6 +103,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case SongEndedMsg:
 		return m.handleSongEnded(msg)
 
+	// ── Autoplay results (queue was empty, suggestions arrived) ──
+	case AutoplayResultsMsg:
+		return m.handleAutoplayResults(msg)
+
 	// ── Periodic tick (progress bar animation) ───────────────────
 	case tickMsg:
 		return m.handleTick(msg)

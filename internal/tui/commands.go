@@ -85,6 +85,40 @@ func fetchRecommendationsCmd(seq, limit int, tc *tidal.Client, db *db.DB) tea.Cm
 	}
 }
 
+// fetchAutoplayCmd fetches recommendations to fill the queue when autoplay
+// is enabled and the queue runs dry. Uses the same recommendation pipeline
+// as fetchRecommendationsCmd but returns AutoplayResultsMsg instead.
+func fetchAutoplayCmd(limit int, tc *tidal.Client, db *db.DB) tea.Cmd {
+	return func() tea.Msg {
+		var historyIDs []int
+		if db != nil {
+			entries, err := db.LoadPlayHistory(50, 0)
+			if err == nil {
+				seen := make(map[string]bool)
+				for _, e := range entries {
+					if seen[e.TrackID] {
+						continue
+					}
+					seen[e.TrackID] = true
+					id, parseErr := strconv.Atoi(e.TrackID)
+					if parseErr == nil {
+						historyIDs = append(historyIDs, id)
+					}
+				}
+			}
+		}
+		results, err := search.FetchRecommendations(limit, tc, historyIDs)
+		if err != nil || len(results) == 0 {
+			return nil // silent — no results to autoplay
+		}
+		tracks := make([]queue.Track, len(results))
+		for i, r := range results {
+			tracks[i] = r.ToTrack()
+		}
+		return AutoplayResultsMsg{Tracks: tracks}
+	}
+}
+
 // ─── Update check ─────────────────────────────────────────────────────────
 
 // checkUpdateCmd fetches the latest release tag from GitHub by following

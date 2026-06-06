@@ -239,7 +239,7 @@ func (m *Model) clampQueueOffset() {
 // clampSettingsOffset adjusts settingsOffset so the cursor is visible.
 func (m *Model) clampSettingsOffset() {
 	vis := m.settingsVisibleItems()
-	maxItem := 7 // 8 items indexed 0-7
+	maxItem := 8 // 9 items indexed 0-8
 
 	if m.settingsCursor > maxItem {
 		m.settingsCursor = maxItem
@@ -305,9 +305,9 @@ func (m *Model) switchPage(page Page) {
 func (m *Model) startSettingsEdit() {
 	m.settingsEditField = true
 	current := ""
-	if m.settingsCursor == 5 {
+	if m.settingsCursor == 6 {
 		current = m.settings.DownloadDir
-	} else if m.settingsCursor == 6 {
+	} else if m.settingsCursor == 7 {
 		current = m.settings.TidalProxyURL
 	}
 	m.settingsEditInput.SetValue(current)

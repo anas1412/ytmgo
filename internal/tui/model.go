@@ -130,6 +130,12 @@ type (
 		Error error
 	}
 
+	// AutoplayResultsMsg is sent when autoplay fetches recommendations
+	// after the queue has been exhausted.
+	AutoplayResultsMsg struct {
+		Tracks []queue.Track
+	}
+
 )
 
 // tickMsg triggers periodic UI updates (progress bar animation).

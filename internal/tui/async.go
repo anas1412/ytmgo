@@ -297,6 +297,19 @@ func (m Model) handleSongEnded(msg SongEndedMsg) (tea.Model, tea.Cmd) {
 	for {
 		t, ok := m.queue.Next()
 		if !ok {
+			// Queue empty — try autoplay if enabled
+			if m.settings.AutoplayEnabled {
+				m.playerState = player.StateStopped
+				m.player.Stop()
+				m.position = 0
+				m.duration = 0
+				m.lastPosition = 0
+				m.lastPositionAt = time.Time{}
+				m.updateDiscordRPC()
+				m.setStatus("Autoplay fetching suggestions…")
+				return m, fetchAutoplayCmd(m.settings.SearchLimit, m.tidalClient, m.db)
+			}
+
 			m.playerState = player.StateStopped
 			m.player.Stop()
 			m.position = 0
@@ -320,4 +333,38 @@ func (m Model) handleSongEnded(msg SongEndedMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, tea.Batch(playCmd, saveQueueCmd(m.db, m.queue))
 	}
+}
+
+// ── Autoplay results received ────────────────────────────────────────────
+
+func (m Model) handleAutoplayResults(msg AutoplayResultsMsg) (tea.Model, tea.Cmd) {
+	if len(msg.Tracks) == 0 {
+		if m.playerState != player.StatePlaying {
+			m.updateDiscordRPC()
+		}
+		m.setStatus("Autoplay: no suggestions available")
+		return m, nil
+	}
+
+	// Add all autoplay tracks to the end of the queue
+	for _, t := range msg.Tracks {
+		m.queue.Add(t)
+	}
+
+	// If player is already running (user queued something while autoplay
+	// was loading), don't interrupt — just leave tracks in the queue.
+	if m.playerState == player.StatePlaying {
+		m.setStatus(fmt.Sprintf("Autoplay: %d suggestions added to queue", len(msg.Tracks)))
+		return m, tea.Batch(saveQueueCmd(m.db, m.queue))
+	}
+
+	// Play the first autoplay track
+	cmds := []tea.Cmd{saveQueueCmd(m.db, m.queue)}
+	playCmd := m.resolveAndPlayCmd(msg.Tracks[0])
+	if playCmd != nil {
+		cmds = append(cmds, playCmd)
+	}
+
+	m.setStatus("Autoplay: playing suggestions")
+	return m, tea.Batch(cmds...)
 }
