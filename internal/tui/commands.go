@@ -89,7 +89,7 @@ func fetchRecommendationsCmd(seq, limit int, tc *tidal.Client, db *db.DB) tea.Cm
 // playback when the queue runs dry. Uses a fixed small limit so autoplay
 // never floods the queue with dozens of tracks.
 func fetchAutoplayCmd(tc *tidal.Client, db *db.DB) tea.Cmd {
-	const autoplayBatch = 3
+	const autoplayBatch = 1
 	return func() tea.Msg {
 		var historyIDs []int
 		if db != nil {
@@ -127,7 +127,13 @@ func fetchAutoplayCmd(tc *tidal.Client, db *db.DB) tea.Cmd {
 // Unlike resolveURLCmd this never triggers playback — the resolved URL
 // just populates the cache for instant play when the track is reached.
 func prefetchURLCmd(trackID, artist, title string) tea.Cmd {
-	return func() tea.Msg {
+	return func() (msg tea.Msg) {
+		defer func() {
+			if r := recover(); r != nil {
+				// Silent — a failed prefetch just means the track
+				// will be resolved on demand when it's played.
+			}
+		}()
 		url, err := ytresolve.ResolveURL(artist, title)
 		if err != nil || url == "" {
 			return nil // silent — no cache entry, will resolve on demand
@@ -216,7 +222,8 @@ func scanLibraryCmd(dir string) tea.Cmd {
 
 // positionCmd reads one position update from the mpv IPC poller.
 func positionCmd(p *player.Player) tea.Cmd {
-	return func() tea.Msg {
+	return func() (msg tea.Msg) {
+		defer func() { recover() }()
 		pos, ok := <-p.Positions()
 		if !ok {
 			return nil
@@ -227,7 +234,8 @@ func positionCmd(p *player.Player) tea.Cmd {
 
 // endedCmd waits for mpv to finish playing the current track.
 func endedCmd(p *player.Player) tea.Cmd {
-	return func() tea.Msg {
+	return func() (msg tea.Msg) {
+		defer func() { recover() }()
 		<-p.Ended()
 		return SongEndedMsg{}
 	}
@@ -297,7 +305,8 @@ func initQueueFavoritesCmd(database *db.DB) tea.Cmd {
 
 // recordPlayCmd records a play history entry in the background.
 func recordPlayCmd(database *db.DB, t queue.Track) tea.Cmd {
-	return func() tea.Msg {
+	return func() (msg tea.Msg) {
+		defer func() { recover() }()
 		if database == nil {
 			return nil
 		}
@@ -313,7 +322,8 @@ func recordPlayCmd(database *db.DB, t queue.Track) tea.Cmd {
 // saveQueueCmd persists the current queue to the database in a goroutine.
 // Returns nil on success (silent saves — only errors produce a message).
 func saveQueueCmd(database *db.DB, q *queue.Queue) tea.Cmd {
-	return func() tea.Msg {
+	return func() (msg tea.Msg) {
+		defer func() { recover() }()
 		if database == nil {
 			return nil
 		}
@@ -330,7 +340,8 @@ func saveQueueCmd(database *db.DB, q *queue.Queue) tea.Cmd {
 // saveFavoritesCmd persists the favorites list to the database in a goroutine.
 // Returns nil on success (silent saves).
 func saveFavoritesCmd(database *db.DB, favorites []queue.Track) tea.Cmd {
-	return func() tea.Msg {
+	return func() (msg tea.Msg) {
+		defer func() { recover() }()
 		if database == nil {
 			return nil
 		}
@@ -346,7 +357,8 @@ func saveFavoritesCmd(database *db.DB, favorites []queue.Track) tea.Cmd {
 // downloadCmd returns a command that reads one progress event from the
 // downloader channel and forwards it as a DownloadProgressMsg.
 func downloadCmd(d *downloader.Downloader) tea.Cmd {
-	return func() tea.Msg {
+	return func() (msg tea.Msg) {
+		defer func() { recover() }()
 		evt, ok := <-d.Progress()
 		if !ok {
 			return nil
@@ -368,7 +380,20 @@ func downloadCmd(d *downloader.Downloader) tea.Cmd {
 // result back as an URLResolvedMsg. The caller must set m.pendingResolve
 // before calling this.
 func resolveURLCmd(artist, title string, pr *pendingDownloadResolve) tea.Cmd {
-	return func() tea.Msg {
+	return func() (msg tea.Msg) {
+		// Recover from any panic in yt-dlp / ytresolve so the TUI
+		// doesn't crash — the caller sees a friendly error instead.
+		defer func() {
+			if r := recover(); r != nil {
+				msg = URLResolvedMsg{
+					Error:   fmt.Errorf("resolve panic: %v", r),
+					Action:  pr.Action,
+					TrackID: pr.TrackID,
+					Title:   pr.Title,
+					Track:   pr.Track,
+				}
+			}
+		}()
 		url, err := ytresolve.ResolveURL(artist, title)
 		return URLResolvedMsg{
 			URL:      url,

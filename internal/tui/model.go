@@ -442,12 +442,14 @@ func (m *Model) startTrackPlayback(playURL string, t queue.Track) tea.Cmd {
 func (m *Model) resolveAndPlayCmd(t queue.Track) tea.Cmd {
 	if t.Downloaded && t.FilePath != "" {
 		if _, err := os.Stat(t.FilePath); err == nil {
+			m.pendingResolve = nil
 			return m.startTrackPlayback(t.FilePath, t)
 		}
 	}
 
 	// Check in-memory URL cache.
 	if url, ok := m.resolvedURLs[t.ID]; ok && url != "" {
+		m.pendingResolve = nil
 		return m.startTrackPlayback(url, t)
 	}
 
@@ -456,6 +458,7 @@ func (m *Model) resolveAndPlayCmd(t queue.Track) tea.Cmd {
 		url, err := m.db.LoadCachedURL(t.ID)
 		if err == nil && url != "" {
 			m.resolvedURLs[t.ID] = url
+			m.pendingResolve = nil
 			return m.startTrackPlayback(url, t)
 		}
 	}
