@@ -636,7 +636,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 					CoverURL: r.CoverURL,
 					Action:   "download",
 				}
-				m.setStatus("Fetching URL from YouTube…")
+				m.setStatus("Fetching URL…")
 				return m, resolveURLCmd(t.Artist, t.Title, m.pendingResolve)
 			}
 			m.downloader.Enqueue(t.ID, t.Title, r.Uploader, t.URL, m.downloadDir(), r.CoverURL)
@@ -666,7 +666,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 					CoverURL: t.CoverURL,
 					Action:   "download",
 				}
-				m.setStatus("Fetching URL from YouTube…")
+				m.setStatus("Fetching URL…")
 				return m, resolveURLCmd(t.Artist, t.Title, m.pendingResolve)
 			}
 			m.downloader.Enqueue(t.ID, t.Title, t.Artist, t.URL, m.downloadDir(), t.CoverURL)
@@ -696,7 +696,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 					CoverURL: t.CoverURL,
 					Action:   "download",
 				}
-				m.setStatus("Fetching URL from YouTube…")
+				m.setStatus("Fetching URL…")
 				return m, resolveURLCmd(t.Artist, t.Title, m.pendingResolve)
 			}
 			m.downloader.Enqueue(t.ID, t.Title, t.Artist, t.URL, m.downloadDir(), t.CoverURL)
@@ -725,7 +725,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				CoverURL: e.CoverURL,
 				Action:   "download",
 			}
-			m.setStatus("Fetching URL from YouTube…")
+			m.setStatus("Fetching URL…")
 			return m, resolveURLCmd(e.Artist, e.Title, m.pendingResolve)
 		}
 		return m, nil

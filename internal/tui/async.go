@@ -292,7 +292,7 @@ func (m Model) handleSongEnded(msg SongEndedMsg) (tea.Model, tea.Cmd) {
 
 	// Auto-advance: play the next track. Uses resolveAndPlayCmd
 	// so already-downloaded tracks play immediately while streaming
-	// tracks first show "Fetching URL from YouTube…" while the
+	// tracks first show "Fetching URL…" while the
 	// YouTube URL is resolved asynchronously.
 	for {
 		t, ok := m.queue.Next()

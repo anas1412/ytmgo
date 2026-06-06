@@ -398,7 +398,7 @@ func (m *Model) startTrackPlayback(playURL string, t queue.Track) tea.Cmd {
 // resolveAndPlayCmd resolves the playback URL for a track and starts
 // playback. If the track is already downloaded (local file exists), it
 // plays directly and returns the startTrackPlayback command. Otherwise
-// it sets "Fetching URL from YouTube…" status, stores the pending
+// it sets "Fetching URL…" status, stores the pending
 // resolve context, and returns a resolveURLCmd that will start
 // playback when the URL comes back.
 //
@@ -415,7 +415,7 @@ func (m *Model) resolveAndPlayCmd(t queue.Track) tea.Cmd {
 		Title:  t.Title,
 		Action: "play",
 	}
-	m.setStatus("Fetching URL from YouTube…")
+	m.setStatus("Fetching URL…")
 	return resolveURLCmd(t.Artist, t.Title, m.pendingResolve)
 }
 
