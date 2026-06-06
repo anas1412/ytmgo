@@ -283,6 +283,15 @@ func (d *DB) LoadPlayHistory(limit, offset int) ([]PlayHistoryEntry, error) {
 	return entries, nil
 }
 
+// ClearPlayHistory deletes all play history entries.
+func (d *DB) ClearPlayHistory() error {
+	_, err := d.Exec(`DELETE FROM play_history`)
+	if err != nil {
+		return fmt.Errorf("clear play history: %w", err)
+	}
+	return nil
+}
+
 // ─── Settings ────────────────────────────────────────────────────────────
 
 // LoadSettings reads the single settings row from the database.

@@ -277,7 +277,8 @@ func (m Model) renderPanels() string {
 	panelLabel := "SEARCH RESULTS"
 	switch m.activePage {
 	case PageHistory:
-		panelLabel = "HISTORY  " + xHint + " download"
+		cHint := styleKeyHint.Render("[C]")
+		panelLabel = "HISTORY  " + xHint + " download  " + cHint + " clear"
 	case PageFavorites:
 		panelLabel = "FAVORITES  " + fHint + " unfav  " + xHint + " download"
 	case PageLibrary:

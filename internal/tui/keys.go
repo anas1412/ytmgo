@@ -28,6 +28,7 @@ type KeyMap struct {
 	Recs         key.Binding
 	Open         key.Binding
 	Update       key.Binding
+	ClearHistory key.Binding
 	PageStream    key.Binding // 1
 	PageFavorites key.Binding // 2
 	PageLibrary   key.Binding // 3
@@ -134,6 +135,10 @@ var Keys = KeyMap{
 		key.WithKeys("U"),
 		key.WithHelp("U", "update ytmgo"),
 	),
+	ClearHistory: key.NewBinding(
+		key.WithKeys("C"),
+		key.WithHelp("C", "clear history"),
+	),
 	PageStream: key.NewBinding(
 		key.WithKeys("1"),
 		key.WithHelp("1", "stream page"),
@@ -196,6 +201,7 @@ func (k KeyMap) FullHelp() [][]key.Binding {
 		{
 			k.Delete,
 			k.ClearQueue,
+			k.ClearHistory,
 			k.MoveUp,
 			k.MoveDown,
 			k.Download,

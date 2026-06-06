@@ -85,24 +85,13 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 
 	// When confirming a destructive action, route the key press.
-	// Navigation keys 1/2/3 cancel and pass through.
+	// All confirmations follow the same pattern: Enter to confirm,
+	// Esc to cancel. Page-nav keys (1/2/3) cancel the confirmation
+	// and fall through to their usual page-switch handler. Every
+	// other key is ignored so the prompt stays visible.
 	if m.isConfirming() {
 		key := msg.String()
-		// Check if the pressed key confirms the pending action
-		confirmed := false
-		switch m.confirmAction {
-		case confirmClearQueue:
-			confirmed = key == "D"
-		case confirmDeleteTrack:
-			// Delete-track uses status-bar confirmation: Enter to confirm,
-			// Esc to cancel, all other keys ignored so the prompt persists.
-			confirmed = key == "enter"
-		case confirmUpdate:
-			// Update uses status-bar confirmation: Enter to confirm,
-			// Esc to cancel, all other keys ignored so the prompt persists.
-			confirmed = key == "enter"
-		}
-
+		confirmed := key == "enter"
 		switch {
 		case confirmed:
 			return m.executeConfirmedAction()
@@ -111,16 +100,10 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.setStatus("Cancelled")
 			return m, nil
 		case key == "1" || key == "2" || key == "3":
-			// Cancel confirmation and let navigation key fall through
 			m.clearConfirm()
-		case m.confirmAction == confirmDeleteTrack || m.confirmAction == confirmUpdate:
-			// Keep the status-bar prompt visible until Enter or Esc
-			return m, nil
+			// fall through — let the global page-nav handler run
 		default:
-			// For other confirmations, any key cancels
-			m.clearConfirm()
-			m.setStatus("Cancelled")
-			return m, nil
+			return m, nil // keep prompt visible
 		}
 	}
 
@@ -780,21 +763,15 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		if !m.isConfirming() {
 			m.startConfirm(confirmClearQueue, "")
-			m.setStatus("Press D again to clear the entire queue")
+			bullet := lipgloss.NewStyle().Foreground(colorWarning).Render("●")
+			action := lipgloss.NewStyle().Foreground(colorText).Bold(true).Render("Clear queue?")
+			enterKey := lipgloss.NewStyle().Foreground(colorAccent2).Bold(true).Render("[Enter]")
+			enterDesc := lipgloss.NewStyle().Foreground(colorTextDim).Render("yes")
+			escKey := lipgloss.NewStyle().Foreground(colorAccent3).Bold(true).Render("[Esc]")
+			escDesc := lipgloss.NewStyle().Foreground(colorTextDim).Render("no")
+			m.setStatus(bullet + " " + action + "  " + enterKey + " " + enterDesc + "  " + escKey + " " + escDesc)
 			return m, nil
 		}
-		// Already confirmed — execute
-		m.clearConfirm()
-		m.queue.Clear()
-		m.queueCursor = 0
-		m.playerState = player.StateStopped
-		m.position = 0
-		m.duration = 0
-		if m.player != nil {
-			m.player.Stop()
-		}
-		m.updateDiscordRPC()
-		m.setStatus("Queue cleared")
 		return m, nil
 
 	case "U":
@@ -815,6 +792,23 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.updateCheckManual = true
 		m.setStatus("Checking for updates…")
 		return m, checkUpdateCmd(ver.Version)
+
+	case "C":
+		if m.activePage != PageHistory || len(m.history) == 0 {
+			return m, nil
+		}
+		if !m.isConfirming() {
+			m.startConfirm(confirmClearHistory, "")
+			bullet := lipgloss.NewStyle().Foreground(colorWarning).Render("●")
+			action := lipgloss.NewStyle().Foreground(colorText).Bold(true).Render("Clear history?")
+			enterKey := lipgloss.NewStyle().Foreground(colorAccent2).Bold(true).Render("[Enter]")
+			enterDesc := lipgloss.NewStyle().Foreground(colorTextDim).Render("yes")
+			escKey := lipgloss.NewStyle().Foreground(colorAccent3).Bold(true).Render("[Esc]")
+			escDesc := lipgloss.NewStyle().Foreground(colorTextDim).Render("no")
+			m.setStatus(bullet + " " + action + "  " + enterKey + " " + enterDesc + "  " + escKey + " " + escDesc)
+			return m, nil
+		}
+		return m, nil
 
 	case "s":
 		m.queue.ToggleShuffle()

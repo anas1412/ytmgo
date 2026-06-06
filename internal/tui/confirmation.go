@@ -12,10 +12,11 @@ import (
 
 // confirmAction values
 const (
-	confirmNone        = ""
-	confirmClearQueue  = "clear-queue"
-	confirmDeleteTrack = "delete-track"
-	confirmUpdate      = "update"
+	confirmNone         = ""
+	confirmClearQueue   = "clear-queue"
+	confirmDeleteTrack  = "delete-track"
+	confirmUpdate       = "update"
+	confirmClearHistory = "clear-history"
 )
 
 // isConfirming returns true when a destructive action is awaiting confirmation.
@@ -83,6 +84,20 @@ func (m *Model) executeConfirmedAction() (tea.Model, tea.Cmd) {
 	case confirmUpdate:
 		m.setStatus("⬇  Updating ytmgo…")
 		return m, runUpdateCmd()
+
+	case confirmClearHistory:
+		if m.db != nil {
+			if err := m.db.ClearPlayHistory(); err != nil {
+				m.err = err
+				m.setStatus("Failed to clear history")
+				return m, nil
+			}
+		}
+		m.history = nil
+		m.historyLoaded = false
+		m.loadPlayHistory()
+		m.setStatus("History cleared")
+		return m, nil
 	}
 
 	return m, nil
