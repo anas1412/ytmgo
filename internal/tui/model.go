@@ -465,9 +465,10 @@ func (m *Model) resolveAndPlayCmd(t queue.Track) tea.Cmd {
 
 	// No cache hit — resolve the YouTube URL asynchronously.
 	m.pendingResolve = &pendingDownloadResolve{
-		Track:  t,
-		Title:  t.Title,
-		Action: "play",
+		TrackID: t.ID,
+		Track:   t,
+		Title:   t.Title,
+		Action:  "play",
 	}
 	m.setStatus("Fetching URL…")
 	return resolveURLCmd(t.Artist, t.Title, m.pendingResolve)
