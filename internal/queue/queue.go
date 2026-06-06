@@ -373,6 +373,77 @@ func (q *Queue) LoadData(tracks []Track, shuffle, repeat, repeatAll bool) {
 	}
 }
 
+// IsLastTrack returns true when the current track is the last one —
+// calling Next() will exhaust the queue (return false) unless repeat
+// or repeatAll is active.  Handles shuffle, repeat, and linear modes.
+func (q *Queue) IsLastTrack() bool {
+	q.mu.RLock()
+	defer q.mu.RUnlock()
+	if len(q.tracks) == 0 || q.currentIndex < 0 {
+		return false
+	}
+	if q.repeat || q.repeatAll {
+		return false // queue never empties
+	}
+	if q.shuffle && len(q.shuffleOrder) > 0 {
+		for si, ti := range q.shuffleOrder {
+			if ti == q.currentIndex {
+				return si >= len(q.shuffleOrder)-1
+			}
+		}
+		return false // current not in shuffle order (shouldn't happen)
+	}
+	return q.currentIndex >= len(q.tracks)-1
+}
+
+// PeekNext returns the track that would play after the current one
+// without advancing the queue.  Returns ok=false when:
+//   - repeat-one is active (the same track repeats — no "next")
+//   - the current track is the last and repeatAll is off
+//   - the queue is empty or nothing is playing
+func (q *Queue) PeekNext() (Track, bool) {
+	q.mu.RLock()
+	defer q.mu.RUnlock()
+	if len(q.tracks) == 0 || q.currentIndex < 0 {
+		return Track{}, false
+	}
+	if q.repeat {
+		// repeat-one: the current track will play again, no "next"
+		return Track{}, false
+	}
+
+	var nextIdx int
+	if q.shuffle && len(q.shuffleOrder) > 0 {
+		for si, ti := range q.shuffleOrder {
+			if ti == q.currentIndex {
+				next := si + 1
+				if next >= len(q.shuffleOrder) {
+					if q.repeatAll {
+						next = 0
+					} else {
+						return Track{}, false
+					}
+				}
+				nextIdx = q.shuffleOrder[next]
+				goto found
+			}
+		}
+		return Track{}, false
+	}
+
+	nextIdx = q.currentIndex + 1
+	if nextIdx >= len(q.tracks) {
+		if q.repeatAll {
+			nextIdx = 0
+		} else {
+			return Track{}, false
+		}
+	}
+
+found:
+	return q.tracks[nextIdx], true
+}
+
 func (q *Queue) rebuildShuffleOrder() {
 	n := len(q.tracks)
 	order := make([]int, n)

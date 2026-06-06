@@ -64,6 +64,12 @@ CREATE TABLE IF NOT EXISTS queue_state (
 	    played_at    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
 	);
 
+CREATE TABLE IF NOT EXISTS url_cache (
+    track_id     TEXT PRIMARY KEY,
+    url          TEXT NOT NULL,
+    resolved_at  TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
 CREATE TABLE IF NOT EXISTS settings (
     id                  INTEGER PRIMARY KEY CHECK (id = 1),
     playback_mode       INTEGER NOT NULL DEFAULT 0,
@@ -320,6 +326,33 @@ func (d *DB) SaveSettings(s *settings.Settings) error {
 		return fmt.Errorf("save settings: %w", err)
 	}
 	return nil
+}
+
+// ─── URL Cache ───────────────────────────────────────────────────────────
+
+// SaveCachedURL stores a resolved YouTube URL for a track, keyed by
+// the track's internal ID.  The cache persists across restarts so
+// previously-played tracks start instantly without a fresh yt-dlp call.
+func (d *DB) SaveCachedURL(trackID, url string) error {
+	_, err := d.Exec(`INSERT OR REPLACE INTO url_cache (track_id, url, resolved_at) VALUES (?, ?, datetime('now'))`, trackID, url)
+	if err != nil {
+		return fmt.Errorf("save cached URL: %w", err)
+	}
+	return nil
+}
+
+// LoadCachedURL reads a previously-resolved YouTube URL for a track.
+// Returns ("", nil) when no cache entry exists.
+func (d *DB) LoadCachedURL(trackID string) (string, error) {
+	var url string
+	err := d.QueryRow(`SELECT url FROM url_cache WHERE track_id = ?`, trackID).Scan(&url)
+	if err == sql.ErrNoRows {
+		return "", nil
+	}
+	if err != nil {
+		return "", fmt.Errorf("load cached URL: %w", err)
+	}
+	return url, nil
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────

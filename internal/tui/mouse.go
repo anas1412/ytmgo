@@ -612,6 +612,7 @@ func (m Model) activateFocusedItem() (Model, tea.Cmd) {
 		if m.activePanel == PanelSearch {
 			if len(m.favorites) > 0 && m.favCursor >= 0 && m.favCursor < len(m.favorites) {
 				t := m.favorites[m.favCursor]
+				m.autoplayFired = false
 				m.queue.Add(t)
 
 				if m.playerState == player.StateStopped {
@@ -640,6 +641,7 @@ func (m Model) activateFocusedItem() (Model, tea.Cmd) {
 			tracks := m.filteredLibrary()
 			if len(tracks) > 0 && m.libraryCursor >= 0 && m.libraryCursor < len(tracks) {
 				t := tracks[m.libraryCursor]
+				m.autoplayFired = false
 				m.queue.Add(t)
 
 				if m.playerState == player.StateStopped {
@@ -669,6 +671,7 @@ func (m Model) activateFocusedItem() (Model, tea.Cmd) {
 			if len(m.results) > 0 && m.searchCursor >= 0 && m.searchCursor < len(m.results) {
 				r := m.results[m.searchCursor]
 				t := m.resolveTrack(r)
+				m.autoplayFired = false
 				m.queue.Add(t)
 
 				var cmds []tea.Cmd

@@ -30,6 +30,7 @@ func (r Result) ToTrack() queue.Track {
 		Duration:    formatDuration(r.Duration),
 		DurationSec: r.Duration,
 		URL:         r.URL,
+		CoverURL:    r.CoverURL,
 	}
 }
 

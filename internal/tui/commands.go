@@ -85,10 +85,11 @@ func fetchRecommendationsCmd(seq, limit int, tc *tidal.Client, db *db.DB) tea.Cm
 	}
 }
 
-// fetchAutoplayCmd fetches recommendations to fill the queue when autoplay
-// is enabled and the queue runs dry. Uses the same recommendation pipeline
-// as fetchRecommendationsCmd but returns AutoplayResultsMsg instead.
-func fetchAutoplayCmd(limit int, tc *tidal.Client, db *db.DB) tea.Cmd {
+// fetchAutoplayCmd fetches a small batch of recommendations to continue
+// playback when the queue runs dry. Uses a fixed small limit so autoplay
+// never floods the queue with dozens of tracks.
+func fetchAutoplayCmd(tc *tidal.Client, db *db.DB) tea.Cmd {
+	const autoplayBatch = 3
 	return func() tea.Msg {
 		var historyIDs []int
 		if db != nil {
@@ -107,7 +108,7 @@ func fetchAutoplayCmd(limit int, tc *tidal.Client, db *db.DB) tea.Cmd {
 				}
 			}
 		}
-		results, err := search.FetchRecommendations(limit, tc, historyIDs)
+		results, err := search.FetchRecommendations(autoplayBatch, tc, historyIDs)
 		if err != nil || len(results) == 0 {
 			return nil // silent — no results to autoplay
 		}
@@ -116,6 +117,22 @@ func fetchAutoplayCmd(limit int, tc *tidal.Client, db *db.DB) tea.Cmd {
 			tracks[i] = r.ToTrack()
 		}
 		return AutoplayResultsMsg{Tracks: tracks}
+	}
+}
+
+// ─── URL prefetch (background cache) ─────────────────────────────────
+
+// prefetchURLCmd resolves a YouTube URL for the given track in the
+// background and sends a URLPrefetchedMsg so the result is cached.
+// Unlike resolveURLCmd this never triggers playback — the resolved URL
+// just populates the cache for instant play when the track is reached.
+func prefetchURLCmd(trackID, artist, title string) tea.Cmd {
+	return func() tea.Msg {
+		url, err := ytresolve.ResolveURL(artist, title)
+		if err != nil || url == "" {
+			return nil // silent — no cache entry, will resolve on demand
+		}
+		return URLPrefetchedMsg{TrackID: trackID, URL: url}
 	}
 }
 

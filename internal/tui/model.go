@@ -75,6 +75,15 @@ type (
 		Track    queue.Track // populated for play action
 	}
 
+	// URLPrefetchedMsg is sent when a background URL prefetch completes.
+	// Unlike URLResolvedMsg (which triggers playback), this just populates
+	// the in-memory + database URL caches so playback starts instantly
+	// when the track is actually reached in the queue.
+	URLPrefetchedMsg struct {
+		TrackID string
+		URL     string
+	}
+
 	// SearchResultsMsg carries results back from a TIDAL search.
 	SearchResultsMsg struct {
 		Results []search.Result
@@ -245,6 +254,14 @@ type Model struct {
 	// advances past the track the user just selected.
 	suppressAutoAdvance bool
 
+	// autoplayFired prevents duplicate autoplay fetches while one
+	// is already in-flight. Set true when fetchAutoplayCmd fires,
+	// reset false when handleAutoplayResults processes the response
+	// (both success and failure). The manual resets in keyboard.go
+	// and mouse.go serve as a safety valve when a fetch fails
+	// silently (returned nil — no AutoplayResultsMsg sent).
+	autoplayFired bool
+
 	// ── Mouse double-click tracking ──
 	lastClickAt    time.Time
 	lastClickY     int
@@ -259,6 +276,12 @@ type Model struct {
 	// URLResolvedMsg handler runs. Only one resolve can be pending at
 	// a time — the most recent one wins.
 	pendingResolve *pendingDownloadResolve
+
+	// resolvedURLs caches resolved YouTube URLs (track ID → URL) so
+	// repeated plays of the same track skip the yt-dlp call. Populated
+	// by handleURLResolved / handleURLPrefetched and seeded from the
+	// SQLite url_cache table on first access.
+	resolvedURLs map[string]string
 
 	// ── TIDAL API Client ──
 	tidalClient *tidal.Client
@@ -359,6 +382,7 @@ func InitialModel() Model {
 		currentQuote:           fallbackQuotes[0],
 		db:                     database,
 		tidalClient:            tc,
+		resolvedURLs:           map[string]string{},
 	}
 }
 
@@ -398,15 +422,21 @@ func (m *Model) startTrackPlayback(playURL string, t queue.Track) tea.Cmd {
 	if m.db != nil {
 		cmds = append(cmds, recordPlayCmd(m.db, t))
 	}
+	// Prefetch the URL for the next track in the queue so playback
+	// of that track starts instantly (no "Fetching URL…" delay).
+	if next, ok := m.queue.PeekNext(); ok {
+		if cmd := m.prefetchCmd(next); cmd != nil {
+			cmds = append(cmds, cmd)
+		}
+	}
 	return tea.Batch(cmds...)
 }
 
 // resolveAndPlayCmd resolves the playback URL for a track and starts
 // playback. If the track is already downloaded (local file exists), it
-// plays directly and returns the startTrackPlayback command. Otherwise
-// it sets "Fetching URL…" status, stores the pending
-// resolve context, and returns a resolveURLCmd that will start
-// playback when the URL comes back.
+// plays directly. Otherwise it checks the in-memory URL cache, then the
+// database cache, and only falls back to an async yt-dlp resolve if
+// neither cache has the URL.
 //
 // Returns nil if the track cannot be played (empty queue, etc.).
 func (m *Model) resolveAndPlayCmd(t queue.Track) tea.Cmd {
@@ -415,7 +445,22 @@ func (m *Model) resolveAndPlayCmd(t queue.Track) tea.Cmd {
 			return m.startTrackPlayback(t.FilePath, t)
 		}
 	}
-	// No local file — resolve the YouTube URL asynchronously.
+
+	// Check in-memory URL cache.
+	if url, ok := m.resolvedURLs[t.ID]; ok && url != "" {
+		return m.startTrackPlayback(url, t)
+	}
+
+	// Check database cache (seeds the in-memory cache for this session).
+	if m.db != nil {
+		url, err := m.db.LoadCachedURL(t.ID)
+		if err == nil && url != "" {
+			m.resolvedURLs[t.ID] = url
+			return m.startTrackPlayback(url, t)
+		}
+	}
+
+	// No cache hit — resolve the YouTube URL asynchronously.
 	m.pendingResolve = &pendingDownloadResolve{
 		Track:  t,
 		Title:  t.Title,
@@ -423,6 +468,29 @@ func (m *Model) resolveAndPlayCmd(t queue.Track) tea.Cmd {
 	}
 	m.setStatus("Fetching URL…")
 	return resolveURLCmd(t.Artist, t.Title, m.pendingResolve)
+}
+
+// prefetchCmd returns a command that resolves the YouTube URL for the
+// given track and caches it, or nil if no resolution is needed (track is
+// already downloaded, URL already cached, or yt-dlp would be wasted).
+func (m *Model) prefetchCmd(t queue.Track) tea.Cmd {
+	if t.Downloaded && t.FilePath != "" {
+		// Track has a local file — no URL needed.
+		return nil
+	}
+	// Check in-memory cache.
+	if _, ok := m.resolvedURLs[t.ID]; ok {
+		return nil
+	}
+	// Check database cache and populate in-memory cache.
+	if m.db != nil {
+		url, err := m.db.LoadCachedURL(t.ID)
+		if err == nil && url != "" {
+			m.resolvedURLs[t.ID] = url
+			return nil
+		}
+	}
+	return prefetchURLCmd(t.ID, t.Artist, t.Title)
 }
 
 // reinitTidalClient creates a new TIDAL client with the current proxy URL.

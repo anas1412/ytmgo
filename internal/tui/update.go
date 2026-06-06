@@ -107,6 +107,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case AutoplayResultsMsg:
 		return m.handleAutoplayResults(msg)
 
+	// ── URL prefetched (background cache populate) ──────────────
+	case URLPrefetchedMsg:
+		return m.handleURLPrefetched(msg)
+
 	// ── Periodic tick (progress bar animation) ───────────────────
 	case tickMsg:
 		return m.handleTick(msg)

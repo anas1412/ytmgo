@@ -238,6 +238,14 @@ func (m Model) handleURLResolved(msg URLResolvedMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
+	// Cache the resolved URL so future plays skip the yt-dlp call.
+	if msg.URL != "" && msg.TrackID != "" {
+		m.resolvedURLs[msg.TrackID] = msg.URL
+		if m.db != nil {
+			_ = m.db.SaveCachedURL(msg.TrackID, msg.URL) // non-fatal
+		}
+	}
+
 	switch msg.Action {
 	case "download":
 		// Proceed with the enqueue now that we have the URL.
@@ -257,6 +265,19 @@ func (m Model) handleURLResolved(msg URLResolvedMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+// ── URL prefetched (background cache populated) ─────────────────────
+
+func (m Model) handleURLPrefetched(msg URLPrefetchedMsg) (tea.Model, tea.Cmd) {
+	if msg.URL == "" || msg.TrackID == "" {
+		return m, nil // sanity check
+	}
+	m.resolvedURLs[msg.TrackID] = msg.URL
+	if m.db != nil {
+		_ = m.db.SaveCachedURL(msg.TrackID, msg.URL) // non-fatal
+	}
+	return m, nil
+}
+
 // ── Player position update (from mpv IPC) ────────────────────────────
 
 func (m Model) handlePosition(msg PositionMsg) (tea.Model, tea.Cmd) {
@@ -268,9 +289,29 @@ func (m Model) handlePosition(msg PositionMsg) (tea.Model, tea.Cmd) {
 	// from this point forward based on time.Now() in renderPlayerBar.
 	m.lastPosition = msg.Position
 	m.lastPositionAt = time.Now()
+
+	// Pre-fetch autoplay recommendations 30 s before the current track
+	// ends so the suggestions are already in the queue by the time the
+	// song finishes — seamless playback.
+	var autoplayCmd tea.Cmd
+	if m.settings.AutoplayEnabled &&
+		!m.autoplayFired &&
+		m.playerState == player.StatePlaying &&
+		m.duration > 0 &&
+		m.duration-m.position <= 30 &&
+		m.queue.IsLastTrack() {
+		m.autoplayFired = true
+		m.setStatus("Autoplay fetching suggestions…")
+		autoplayCmd = fetchAutoplayCmd(m.tidalClient, m.db)
+	}
+
 	// Keep listening
 	if m.player != nil {
-		return m, positionCmd(m.player)
+		cmds := []tea.Cmd{positionCmd(m.player)}
+		if autoplayCmd != nil {
+			cmds = append(cmds, autoplayCmd)
+		}
+		return m, tea.Batch(cmds...)
 	}
 	return m, nil
 }
@@ -297,8 +338,11 @@ func (m Model) handleSongEnded(msg SongEndedMsg) (tea.Model, tea.Cmd) {
 	for {
 		t, ok := m.queue.Next()
 		if !ok {
-			// Queue empty — try autoplay if enabled
-			if m.settings.AutoplayEnabled {
+			// Queue empty — try autoplay if enabled and not already triggered
+			// (prevents infinite re-trigger loops when autoplay-added
+			// tracks finish and the queue runs dry again).
+			if m.settings.AutoplayEnabled && !m.autoplayFired {
+				m.autoplayFired = true
 				m.playerState = player.StateStopped
 				m.player.Stop()
 				m.position = 0
@@ -307,7 +351,22 @@ func (m Model) handleSongEnded(msg SongEndedMsg) (tea.Model, tea.Cmd) {
 				m.lastPositionAt = time.Time{}
 				m.updateDiscordRPC()
 				m.setStatus("Autoplay fetching suggestions…")
-				return m, fetchAutoplayCmd(m.settings.SearchLimit, m.tidalClient, m.db)
+				return m, fetchAutoplayCmd(m.tidalClient, m.db)
+			}
+
+			// Pre-fetch already in progress (handlePosition fired
+			// fetchAutoplayCmd 30s before the track ended but results
+			// haven't arrived yet).  Wait for handleAutoplayResults.
+			if m.settings.AutoplayEnabled && m.autoplayFired {
+				m.playerState = player.StateStopped
+				m.player.Stop()
+				m.position = 0
+				m.duration = 0
+				m.lastPosition = 0
+				m.lastPositionAt = time.Time{}
+				m.updateDiscordRPC()
+				m.setStatus("Autoplay loading suggestions…")
+				return m, nil
 			}
 
 			m.playerState = player.StateStopped
@@ -338,6 +397,12 @@ func (m Model) handleSongEnded(msg SongEndedMsg) (tea.Model, tea.Cmd) {
 // ── Autoplay results received ────────────────────────────────────────────
 
 func (m Model) handleAutoplayResults(msg AutoplayResultsMsg) (tea.Model, tea.Cmd) {
+	// Reset the latch so the *next* batch can fire when the queue runs dry
+	// again — infinite autoplay.  (This also unblocks if the user added a
+	// manual track while the fetch was in-flight; the stale results simply
+	// get enqueued and the next empty-queue detection works as expected.)
+	m.autoplayFired = false
+
 	if len(msg.Tracks) == 0 {
 		if m.playerState != player.StatePlaying {
 			m.updateDiscordRPC()
@@ -358,7 +423,15 @@ func (m Model) handleAutoplayResults(msg AutoplayResultsMsg) (tea.Model, tea.Cmd
 		return m, tea.Batch(saveQueueCmd(m.db, m.queue))
 	}
 
-	// Play the first autoplay track
+	// Play the first autoplay track.  Set the queue's currentIndex so
+	// that PeekNext() (for URL prefetch) and handleSongEnded's Next()
+	// (for auto-advance) correctly point to autoplay tracks rather than
+	// stale positions from the now-exhausted previous queue.
+	firstIdx := m.queue.Len() - len(msg.Tracks)
+	if firstIdx >= 0 {
+		m.queue.SetCurrentIndex(firstIdx)
+		m.queueCursor = firstIdx
+	}
 	cmds := []tea.Cmd{saveQueueCmd(m.db, m.queue)}
 	playCmd := m.resolveAndPlayCmd(msg.Tracks[0])
 	if playCmd != nil {

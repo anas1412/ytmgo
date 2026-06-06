@@ -318,6 +318,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			if m.activePanel == PanelSearch && !m.searchFocused {
 			if len(m.favorites) > 0 && m.favCursor >= 0 && m.favCursor < len(m.favorites) {
 				t := m.favorites[m.favCursor]
+				m.autoplayFired = false
 				m.queue.Add(t)
 
 				if m.playerState == player.StateStopped {
@@ -353,6 +354,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				tracks := m.filteredLibrary()
 				if len(tracks) > 0 && m.libraryCursor >= 0 && m.libraryCursor < len(tracks) {
 					t := tracks[m.libraryCursor]
+					m.autoplayFired = false
 					m.queue.Add(t)
 
 					if m.playerState == player.StateStopped {
@@ -388,11 +390,12 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 					// that already exists on disk plays the local file
 					// instead of re-streaming from YouTube.
 				t := m.resolveTrack(r)
-					m.queue.Add(t)
+				m.autoplayFired = false
+				m.queue.Add(t)
 
-					cmds := []tea.Cmd{saveQueueCmd(m.db, m.queue)}
+				cmds := []tea.Cmd{saveQueueCmd(m.db, m.queue)}
 
-					// Auto-play only if nothing was playing (smart start).
+				// Auto-play only if nothing was playing (smart start).
 					if m.playerState == player.StateStopped {
 						m.queue.SetCurrentIndex(m.queue.Len() - 1)
 						m.queueCursor = m.queue.CurrentIndex()
