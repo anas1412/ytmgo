@@ -2,6 +2,7 @@ name: release
 
 # Build static binaries for 4 OS/arch combos and attach them to a
 # GitHub Release whenever you push a tag like `v0.2.0`.
+# Also publishes the updated PKGBUILD to the Arch User Repository (AUR).
 #
 # Asset naming follows the convention expected by install.sh:
 #   ytmgo_Linux_x86_64.tar.gz
@@ -96,3 +97,54 @@ jobs:
           files: |
             ytmgo_${{ matrix.asset_os }}_${{ matrix.arch }}.tar.gz
             ytmgo_${{ matrix.asset_os }}_${{ matrix.arch }}.tar.gz.sha256
+
+  # ───────────────────────────────────────────────────────────────────
+  # Publish to Arch User Repository
+  # ───────────────────────────────────────────────────────────────────
+  aur:
+    name: publish to AUR
+    runs-on: ubuntu-latest
+    needs: [build]
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Generate PKGBUILD + .SRCINFO
+        run: |
+          bash dist/arch/generate-pkgbuild.sh "${{ github.ref_name }}" --out /tmp/aur-pkg
+
+      - name: Install SSH key
+        uses: shimataro/ssh-key-action@v2
+        with:
+          key: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+          known_hosts: |
+            aur.archlinux.org ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEuUGuZy2RbB1rMsh7U7e5M22nbeCJ9yf0o7rOhLMO8p
+          name: aur
+
+      - name: Push to AUR
+        run: |
+          set -euo pipefail
+
+          # Configure git
+          git config --global user.name  "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
+          # Clone AUR repo
+          git clone ssh://aur@aur.archlinux.org/ytmgo.git /tmp/aur-repo
+          cd /tmp/aur-repo
+
+          # Update files
+          cp /tmp/aur-pkg/PKGBUILD .
+          cp /tmp/aur-pkg/.SRCINFO .
+
+          # Commit and push
+          git add PKGBUILD .SRCINFO
+          if ! git diff --cached --quiet; then
+            git commit -m "Update to ${{ github.ref_name }}"
+            git push origin master
+            echo "✓ AUR updated to ${{ github.ref_name }}"
+          else
+            echo "No changes — AUR already up to date."
+          fi
