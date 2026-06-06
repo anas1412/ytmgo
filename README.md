@@ -33,19 +33,11 @@ go build -o ytmgo .
 
 ## Uninstall
 
-Remove ytmgo and all its data in one command:
-
-```bash
-curl -fsSL https://anas1412.github.io/ytmgo/install.sh | bash -s -- --yes
-```
-
-Wait — that's the install script. For uninstall:
-
 ```bash
 curl -fsSL https://anas1412.github.io/ytmgo/uninstall.sh | bash
 ```
 
-This will prompt you with three confirmations:
+Prompts you with three confirmations:
 
 1. **Remove binary** — deletes `~/.local/bin/ytmgo` (or `/usr/local/bin/ytmgo`)
 2. **Remove user data** — deletes `~/.config/ytmgo/` (settings, favorites, play history, queue)
