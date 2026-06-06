@@ -169,8 +169,12 @@ func ShowIdle() {
 }
 
 // Update sets the Rich Presence to reflect the currently playing track.
-// The activity name is the track title so Discord shows
-// "Listening to Song Title" with a headphone icon.
+// Discord shows:
+//
+//	🎧 Listening to {track.Title}
+//	{track.Title}
+//	{track.Artist}
+//	{cover art or ytmgo logo}
 func Update(track queue.Track, state player.State, position float64) {
 	mu.Lock()
 	logged := loggedIn
@@ -185,5 +189,12 @@ func Update(track queue.Track, state player.State, position float64) {
 		start = &t
 	}
 
-	sendActivity(track.Title, track.Artist, "", "ytmgo-logo", "ytmgo – YT Music from Terminal", 2, start)
+	// Use TIDAL cover art as the large image when available (from DB or
+	// search results). Fall back to the ytmgo logo otherwise.
+	largeImage := "ytmgo-logo"
+	if track.CoverURL != "" {
+		largeImage = track.CoverURL
+	}
+
+	sendActivity(track.Title, track.Title, track.Artist, largeImage, "ytmgo – YT Music from Terminal", 2, start)
 }

@@ -20,6 +20,7 @@ func searchResultToTrack(r search.Result) queue.Track {
 		Duration:    fmt.Sprintf("%d:%02d", m, s),
 		DurationSec: d,
 		URL:         r.URL,
+		CoverURL:    r.CoverURL,
 	}
 }
 

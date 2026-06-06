@@ -45,22 +45,24 @@ CREATE TABLE IF NOT EXISTS queue_state (
     repeat_all  INTEGER NOT NULL DEFAULT 0
 );
 
-CREATE TABLE IF NOT EXISTS favorites (
-    id           INTEGER PRIMARY KEY AUTOINCREMENT,
-    track_id     TEXT NOT NULL UNIQUE,
-    title        TEXT NOT NULL,
-    artist       TEXT NOT NULL DEFAULT '',
-    duration     TEXT NOT NULL DEFAULT '',
-    duration_sec INTEGER NOT NULL DEFAULT 0
-);
+	CREATE TABLE IF NOT EXISTS favorites (
+	    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+	    track_id     TEXT NOT NULL UNIQUE,
+	    title        TEXT NOT NULL,
+	    artist       TEXT NOT NULL DEFAULT '',
+	    duration     TEXT NOT NULL DEFAULT '',
+	    duration_sec INTEGER NOT NULL DEFAULT 0,
+	    cover_url    TEXT NOT NULL DEFAULT ''
+	);
 
-CREATE TABLE IF NOT EXISTS play_history (
-    id           INTEGER PRIMARY KEY AUTOINCREMENT,
-    track_id     TEXT NOT NULL,
-    title        TEXT NOT NULL,
-    artist       TEXT NOT NULL DEFAULT '',
-    played_at    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
-);
+	CREATE TABLE IF NOT EXISTS play_history (
+	    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+	    track_id     TEXT NOT NULL,
+	    title        TEXT NOT NULL,
+	    artist       TEXT NOT NULL DEFAULT '',
+	    cover_url    TEXT NOT NULL DEFAULT '',
+	    played_at    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+	);
 
 CREATE TABLE IF NOT EXISTS settings (
     id                  INTEGER PRIMARY KEY CHECK (id = 1),
@@ -68,15 +70,15 @@ CREATE TABLE IF NOT EXISTS settings (
     default_volume      INTEGER NOT NULL DEFAULT 80,
     search_limit        INTEGER NOT NULL DEFAULT 20,
     download_dir        TEXT NOT NULL DEFAULT 'downloads',
-    cookie_browser      TEXT NOT NULL DEFAULT 'brave',
-    user_agent          TEXT NOT NULL DEFAULT '',
+    tidal_proxy_url     TEXT NOT NULL DEFAULT 'https://eu-central.monochrome.tf',
+    download_format     TEXT NOT NULL DEFAULT 'm4a',
     show_quotes         INTEGER NOT NULL DEFAULT 1,
     discord_rpc_enabled INTEGER NOT NULL DEFAULT 1
 );
 `
 
 const insertDefaultQueueState = `INSERT OR IGNORE INTO queue_state (id, tracks, current_idx, shuffle, repeat, repeat_all) VALUES (1, '[]', -1, 0, 0, 0);`
-const insertDefaultSettings = `INSERT OR IGNORE INTO settings (id, playback_mode, default_volume, search_limit, download_dir, cookie_browser, user_agent, show_quotes, discord_rpc_enabled) VALUES (1, 0, 80, 20, 'downloads', 'brave', '', 1, 1);`
+const insertDefaultSettings = `INSERT OR IGNORE INTO settings (id, playback_mode, default_volume, search_limit, download_dir, tidal_proxy_url, download_format, show_quotes, discord_rpc_enabled) VALUES (1, 0, 80, 20, 'downloads', 'https://eu-central.monochrome.tf', 'm4a', 1, 1);`
 
 // Open opens (or creates) the SQLite database, runs migrations, and
 // returns a DB handle. The database is opened with WAL journal mode,
@@ -98,11 +100,13 @@ func Open() (*DB, error) {
 		return nil, fmt.Errorf("db: create schema: %w", err)
 	}
 
-	// Migration: add discord_rpc_enabled column for databases created before
-	// the Discord RPC feature was added. Must run before any INSERT that
-	// references the column, or existing databases will fail with
-	// "table settings has no column named discord_rpc_enabled".
+	// Migrations for existing databases — each ADD COLUMN safely errors
+	// out if the column already exists.
 	db.Exec(`ALTER TABLE settings ADD COLUMN discord_rpc_enabled INTEGER NOT NULL DEFAULT 1`)
+	db.Exec(`ALTER TABLE settings ADD COLUMN tidal_proxy_url TEXT NOT NULL DEFAULT 'https://eu-central.monochrome.tf'`)
+	db.Exec(`ALTER TABLE settings ADD COLUMN download_format TEXT NOT NULL DEFAULT 'm4a'`)
+	db.Exec(`ALTER TABLE favorites ADD COLUMN cover_url TEXT NOT NULL DEFAULT ''`)
+	db.Exec(`ALTER TABLE play_history ADD COLUMN cover_url TEXT NOT NULL DEFAULT ''`)
 
 	if _, err := db.Exec(insertDefaultQueueState); err != nil {
 		db.Close()
@@ -165,7 +169,7 @@ func (d *DB) SaveQueue(tracks []queue.Track, currentIndex int, shuffle, repeat, 
 // LoadFavorites reads all favorited tracks from the database, ordered
 // most-recent-first (descending by id).
 func (d *DB) LoadFavorites() ([]queue.Track, error) {
-	rows, err := d.Query(`SELECT track_id, title, artist, duration, duration_sec FROM favorites ORDER BY id DESC`)
+	rows, err := d.Query(`SELECT track_id, title, artist, duration, duration_sec, cover_url FROM favorites ORDER BY id DESC`)
 	if err != nil {
 		return nil, fmt.Errorf("load favorites: %w", err)
 	}
@@ -174,7 +178,7 @@ func (d *DB) LoadFavorites() ([]queue.Track, error) {
 	var favs []queue.Track
 	for rows.Next() {
 		var t queue.Track
-		if err := rows.Scan(&t.ID, &t.Title, &t.Artist, &t.Duration, &t.DurationSec); err != nil {
+		if err := rows.Scan(&t.ID, &t.Title, &t.Artist, &t.Duration, &t.DurationSec, &t.CoverURL); err != nil {
 			return nil, fmt.Errorf("load favorites: scan: %w", err)
 		}
 		favs = append(favs, t)
@@ -200,14 +204,14 @@ func (d *DB) SaveFavorites(tracks []queue.Track) error {
 		return fmt.Errorf("save favorites: delete: %w", err)
 	}
 
-	stmt, err := tx.Prepare(`INSERT INTO favorites (track_id, title, artist, duration, duration_sec) VALUES (?, ?, ?, ?, ?)`)
+	stmt, err := tx.Prepare(`INSERT INTO favorites (track_id, title, artist, duration, duration_sec, cover_url) VALUES (?, ?, ?, ?, ?, ?)`)
 	if err != nil {
 		return fmt.Errorf("save favorites: prepare: %w", err)
 	}
 	defer stmt.Close()
 
 	for _, t := range tracks {
-		if _, err := stmt.Exec(t.ID, t.Title, t.Artist, t.Duration, t.DurationSec); err != nil {
+		if _, err := stmt.Exec(t.ID, t.Title, t.Artist, t.Duration, t.DurationSec, t.CoverURL); err != nil {
 			return fmt.Errorf("save favorites: insert %q: %w", t.ID, err)
 		}
 	}
@@ -220,15 +224,48 @@ func (d *DB) SaveFavorites(tracks []queue.Track) error {
 
 // ─── Play history ───────────────────────────────────────────────────────
 
+// PlayHistoryEntry is a single row from the play_history table.
+type PlayHistoryEntry struct {
+	ID       int    `json:"id"`
+	TrackID  string `json:"track_id"`
+	Title    string `json:"title"`
+	Artist   string `json:"artist"`
+	CoverURL string `json:"cover_url"`
+	PlayedAt string `json:"played_at"` // ISO 8601 timestamp
+}
+
 // RecordPlay inserts a play history entry for the given track.
 // The played_at timestamp is automatically set by SQLite.
 func (d *DB) RecordPlay(t queue.Track) error {
-	_, err := d.Exec(`INSERT INTO play_history (track_id, title, artist) VALUES (?, ?, ?)`,
-		t.ID, t.Title, t.Artist)
+	_, err := d.Exec(`INSERT INTO play_history (track_id, title, artist, cover_url) VALUES (?, ?, ?, ?)`,
+		t.ID, t.Title, t.Artist, t.CoverURL)
 	if err != nil {
 		return fmt.Errorf("record play: %w", err)
 	}
 	return nil
+}
+
+// LoadPlayHistory returns the most recent play history entries.
+// limit caps the number of rows; offset enables pagination.
+func (d *DB) LoadPlayHistory(limit, offset int) ([]PlayHistoryEntry, error) {
+	rows, err := d.Query(`SELECT id, track_id, title, artist, cover_url, played_at FROM play_history ORDER BY id DESC LIMIT ? OFFSET ?`, limit, offset)
+	if err != nil {
+		return nil, fmt.Errorf("load play history: %w", err)
+	}
+	defer rows.Close()
+
+	var entries []PlayHistoryEntry
+	for rows.Next() {
+		var e PlayHistoryEntry
+		if err := rows.Scan(&e.ID, &e.TrackID, &e.Title, &e.Artist, &e.CoverURL, &e.PlayedAt); err != nil {
+			return nil, fmt.Errorf("load play history scan: %w", err)
+		}
+		entries = append(entries, e)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("load play history rows: %w", err)
+	}
+	return entries, nil
 }
 
 // ─── Settings ────────────────────────────────────────────────────────────
@@ -238,8 +275,8 @@ func (d *DB) RecordPlay(t queue.Track) error {
 func (d *DB) LoadSettings() (*settings.Settings, error) {
 	var s settings.Settings
 	var showQuotes, discordRPC int
-	row := d.QueryRow(`SELECT playback_mode, default_volume, search_limit, download_dir, cookie_browser, user_agent, show_quotes, discord_rpc_enabled FROM settings WHERE id = 1`)
-	if err := row.Scan(&s.PlaybackMode, &s.DefaultVolume, &s.SearchLimit, &s.DownloadDir, &s.CookieBrowser, &s.UserAgent, &showQuotes, &discordRPC); err != nil {
+	row := d.QueryRow(`SELECT playback_mode, default_volume, search_limit, download_dir, tidal_proxy_url, download_format, show_quotes, discord_rpc_enabled FROM settings WHERE id = 1`)
+	if err := row.Scan(&s.PlaybackMode, &s.DefaultVolume, &s.SearchLimit, &s.DownloadDir, &s.TidalProxyURL, &s.DownloadFormat, &showQuotes, &discordRPC); err != nil {
 		return settings.Defaults(), fmt.Errorf("load settings: %w", err)
 	}
 	s.ShowQuotes = showQuotes != 0
@@ -250,8 +287,8 @@ func (d *DB) LoadSettings() (*settings.Settings, error) {
 // SaveSettings writes settings to the database.
 func (d *DB) SaveSettings(s *settings.Settings) error {
 	_, err := d.Exec(
-		`UPDATE settings SET playback_mode = ?, default_volume = ?, search_limit = ?, download_dir = ?, cookie_browser = ?, user_agent = ?, show_quotes = ?, discord_rpc_enabled = ? WHERE id = 1`,
-		s.PlaybackMode, s.DefaultVolume, s.SearchLimit, s.DownloadDir, s.CookieBrowser, s.UserAgent, boolInt(s.ShowQuotes), boolInt(s.DiscordRPCEnabled),
+		`UPDATE settings SET playback_mode = ?, default_volume = ?, search_limit = ?, download_dir = ?, tidal_proxy_url = ?, download_format = ?, show_quotes = ?, discord_rpc_enabled = ? WHERE id = 1`,
+		s.PlaybackMode, s.DefaultVolume, s.SearchLimit, s.DownloadDir, s.TidalProxyURL, s.DownloadFormat, boolInt(s.ShowQuotes), boolInt(s.DiscordRPCEnabled),
 	)
 	if err != nil {
 		return fmt.Errorf("save settings: %w", err)

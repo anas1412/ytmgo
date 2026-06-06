@@ -16,7 +16,7 @@ type Track = queue.Track
 
 // ScanDir scans a directory for audio files and extracts metadata.
 // Each file's duration is read via ffprobe; title/artist are parsed from
-// the filename (since yt-dlp doesn't embed tags by default without
+// the filename (since TIDAL downloads are tracked by track ID in
 // --embed-metadata, and existing files won't have them retroactively).
 func ScanDir(dir string) ([]Track, error) {
 	entries, err := os.ReadDir(dir)

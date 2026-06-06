@@ -130,7 +130,7 @@ Implement the MPRIS D-Bus interface (media-player2 specification) so ytmgo appea
 
 Enhance the search panel with scoped and filtered queries:
 
-- **Type filter** — restrict search to Songs / Albums / Artists / Playlists / Videos (when yt-dlp supports it)
+- **Type filter** — restrict search to Songs / Albums / Artists / Playlists / Videos
 - **Sort** — relevance, date, view count, rating
 - **Date range** — filter by upload date (last hour, day, week, year)
 - **Inline hints** — show available filter syntax in the search input placeholder (like `type:album`)

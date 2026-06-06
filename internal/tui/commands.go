@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os/exec"
 	"path"
+	"strconv"
 	"time"
 
 	"ytmgo/internal/db"
@@ -15,6 +16,8 @@ import (
 	"ytmgo/internal/queue"
 	"ytmgo/internal/search"
 	"ytmgo/internal/settings"
+	"ytmgo/internal/tidal"
+	"ytmgo/internal/ytresolve"
 
 	tea "github.com/charmbracelet/bubbletea"
 )
@@ -32,10 +35,10 @@ const playerTickInterval = 50 * time.Millisecond
 
 // ─── Search ─────────────────────────────────────────────────────────────
 
-// searchCmd fires a yt-dlp search in a goroutine and sends results back.
-func searchCmd(query string, limit int, cookieBrowser, userAgent string) tea.Cmd {
+// searchCmd fires a TIDAL search in a goroutine and sends results back.
+func searchCmd(query string, limit int, tc *tidal.Client) tea.Cmd {
 	return func() tea.Msg {
-		results, err := search.Search(query, limit, cookieBrowser, userAgent)
+		results, err := search.Search(query, limit, tc)
 		if err != nil {
 			return SearchResultsMsg{Error: err}
 		}
@@ -46,11 +49,32 @@ func searchCmd(query string, limit int, cookieBrowser, userAgent string) tea.Cmd
 	}
 }
 
-// fetchRecommendationsCmd fires a request for YouTube home page recommendations.
+// fetchRecommendationsCmd fires a request for TIDAL recommendations
+// seeded from the user's listening history.
 // seq is the generation counter — stale responses are ignored.
-func fetchRecommendationsCmd(seq, limit int, cookieBrowser, userAgent string) tea.Cmd {
+func fetchRecommendationsCmd(seq, limit int, tc *tidal.Client, db *db.DB) tea.Cmd {
 	return func() tea.Msg {
-		results, err := search.FetchRecommendations(limit, cookieBrowser, userAgent)
+		// Load recent listening history for seeding recommendations
+		var historyIDs []int
+		if db != nil {
+			entries, err := db.LoadPlayHistory(50, 0)
+			if err == nil {
+				// Deduplicate by track ID, keep order
+				seen := make(map[string]bool)
+				for _, e := range entries {
+					if seen[e.TrackID] {
+						continue
+					}
+					seen[e.TrackID] = true
+					// Parse track ID (some may be strings, some ints)
+					id, parseErr := strconv.Atoi(e.TrackID)
+					if parseErr == nil {
+						historyIDs = append(historyIDs, id)
+					}
+				}
+			}
+		}
+		results, err := search.FetchRecommendations(limit, tc, historyIDs)
 		if err != nil {
 			return RecommendationsMsg{Error: err, Seq: seq}
 		}
@@ -285,6 +309,25 @@ func downloadCmd(d *downloader.Downloader) tea.Cmd {
 			Done:     evt.Status == downloader.StatusDone || evt.Status == downloader.StatusSkipped,
 			FilePath: evt.FilePath,
 			Error:    evt.Err,
+		}
+	}
+}
+
+// resolveURLCmd runs ytresolve.ResolveURL in a goroutine and sends the
+// result back as an URLResolvedMsg. The caller must set m.pendingResolve
+// before calling this.
+func resolveURLCmd(artist, title string, pr *pendingDownloadResolve) tea.Cmd {
+	return func() tea.Msg {
+		url, err := ytresolve.ResolveURL(artist, title)
+		return URLResolvedMsg{
+			URL:      url,
+			Error:    err,
+			Action:   pr.Action,
+			TrackID:  pr.TrackID,
+			Title:    pr.Title,
+			Uploader: pr.Uploader,
+			CoverURL: pr.CoverURL,
+			Track:    pr.Track,
 		}
 	}
 }

@@ -199,9 +199,9 @@ func (m Model) handleDownloadProgress(msg DownloadProgressMsg) (tea.Model, tea.C
 				if t.ID == msg.TrackID && t.Downloaded && t.FilePath != "" {
 					m.queue.SetCurrentIndex(i)
 					m.queueCursor = i
-					playCmd := m.startTrackPlayback(t.PlayURL(), t)
+					playCmd := m.resolveAndPlayCmd(t)
 					if playCmd == nil {
-						// startTrackPlayback already set m.err / m.playerState.
+						// resolveAndPlayCmd already set m.err / m.playerState.
 						return m, tea.Batch(downloadCmd(m.downloader), saveQueueCmd(m.db, m.queue))
 					}
 					return m, tea.Batch(downloadCmd(m.downloader), playCmd, saveQueueCmd(m.db, m.queue))
@@ -214,6 +214,47 @@ func (m Model) handleDownloadProgress(msg DownloadProgressMsg) (tea.Model, tea.C
 	// stays in sync. Failed downloads (msg.Error != nil) are surfaced
 	// in the Failed section of the sub-panel.
 	return m, downloadCmd(m.downloader)
+}
+
+// ── Async YouTube URL resolution ─────────────────────────────────────
+
+func (m Model) handleURLResolved(msg URLResolvedMsg) (tea.Model, tea.Cmd) {
+	// Check if this resolve result is still relevant — a newer resolve
+	// may have been triggered since this one was dispatched.
+	if m.pendingResolve == nil {
+		return m, nil
+	}
+	m.pendingResolve = nil
+
+	if msg.Error != nil {
+		switch msg.Action {
+		case "play":
+			m.err = fmt.Errorf("failed to resolve stream URL: %w", msg.Error)
+			m.playerState = player.StateStopped
+			m.setStatus("Cannot play '" + msg.Title + "': " + msg.Error.Error())
+		case "download":
+			m.setStatus("No URL available for: " + msg.Title)
+		}
+		return m, nil
+	}
+
+	switch msg.Action {
+	case "download":
+		// Proceed with the enqueue now that we have the URL.
+		m.ensureDownloader()
+		m.downloader.Enqueue(msg.TrackID, msg.Title, msg.Uploader, msg.URL, m.downloadDir(), msg.CoverURL)
+		m.setStatus("Download queued: " + msg.Title)
+		return m, downloadCmd(m.downloader)
+
+	case "play":
+		t := msg.Track
+		if playCmd := m.startTrackPlayback(msg.URL, t); playCmd != nil {
+			return m, playCmd
+		}
+		return m, nil
+	}
+
+	return m, nil
 }
 
 // ── Player position update (from mpv IPC) ────────────────────────────
@@ -249,9 +290,10 @@ func (m Model) handleSongEnded(msg SongEndedMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	// Auto-advance: play the next track. PlayURL() returns the
-	// local file when downloaded, otherwise the original YouTube
-	// URL. Tracks with neither source are skipped.
+	// Auto-advance: play the next track. Uses resolveAndPlayCmd
+	// so already-downloaded tracks play immediately while streaming
+	// tracks first show "Fetching URL from YouTube…" while the
+	// YouTube URL is resolved asynchronously.
 	for {
 		t, ok := m.queue.Next()
 		if !ok {
@@ -265,14 +307,17 @@ func (m Model) handleSongEnded(msg SongEndedMsg) (tea.Model, tea.Cmd) {
 			m.setStatus("Queue empty")
 			return m, nil
 		}
-		playURL := t.PlayURL()
-		if playURL == "" {
-			continue // skip — nothing to play
-		}
 
 		// Single source of truth: cursor follows the playing track.
 		m.queueCursor = m.queue.CurrentIndex()
 		m.clampQueueOffset()
-		return m, tea.Batch(m.startTrackPlayback(playURL, t), saveQueueCmd(m.db, m.queue))
+
+		playCmd := m.resolveAndPlayCmd(t)
+		if playCmd == nil {
+			// resolveAndPlayCmd returns nil only when the track
+			// can't be played locally — which we take as "skip".
+			continue
+		}
+		return m, tea.Batch(playCmd, saveQueueCmd(m.db, m.queue))
 	}
 }

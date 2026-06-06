@@ -9,9 +9,9 @@ import (
 )
 
 // Init satisfies tea.Model. It starts the tick for progress animation,
-// opens the database, and fetches YouTube recommendations.
+// opens the database, and fetches TIDAL recommendations.
 func (m Model) Init() tea.Cmd {
-	return tea.Batch(tickCmd(), initQueueFavoritesCmd(m.db), fetchQuoteCmd(m.quoteSeq), fetchRecommendationsCmd(m.recsSeq, m.settings.SearchLimit, m.settings.CookieBrowser, m.settings.UserAgent), scanLibraryCmd(m.downloadDir()), checkUpdateCmd(ver.Version), discordRPCInitCmd(m.settings.DiscordRPCEnabled))
+	return tea.Batch(tickCmd(), initQueueFavoritesCmd(m.db), fetchQuoteCmd(m.quoteSeq), fetchRecommendationsCmd(m.recsSeq, m.settings.SearchLimit, m.tidalClient, m.db), scanLibraryCmd(m.downloadDir()), checkUpdateCmd(ver.Version), discordRPCInitCmd(m.settings.DiscordRPCEnabled))
 }
 
 // Update satisfies tea.Model. It handles all messages without making
@@ -87,6 +87,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
+	// ── Async YouTube URL resolution ─────────────────────────────
+	case URLResolvedMsg:
+		return m.handleURLResolved(msg)
+
 	// ── Download progress ────────────────────────────────────────
 	case DownloadProgressMsg:
 		return m.handleDownloadProgress(msg)
@@ -117,9 +121,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 // playSelectedQueueItem plays the currently selected queue item,
 // supporting both downloaded (local file) and streamed (URL) playback.
-// Returns the tea.Cmd from startTrackPlayback (which includes position,
-// ended, playerTick, and recordPlayCmd listeners) or nil if nothing
-// was played.
+// Returns the tea.Cmd (which may be a resolveURLCmd for async URL
+// resolution) or nil if nothing was played.
 func (m *Model) playSelectedQueueItem() tea.Cmd {
 	if m.queue.Len() == 0 {
 		return nil
@@ -134,13 +137,6 @@ func (m *Model) playSelectedQueueItem() tea.Cmd {
 	t := m.queue.Tracks()[m.queueCursor]
 	m.queue.SetCurrentIndex(m.queueCursor)
 
-	playURL := t.PlayURL()
-	if playURL == "" {
-		m.playerState = player.StateStopped
-		m.setStatus("Cannot play '" + t.Title + "': no file or URL")
-		return nil
-	}
-
 	// suppressAutoAdvance prevents the stale endedCmd from the PREVIOUS
 	// playback (which is still blocked on the old endCh) from calling
 	// Next() in the SongEnded handler when the old mpv is killed by
@@ -148,7 +144,8 @@ func (m *Model) playSelectedQueueItem() tea.Cmd {
 	if m.playerState == player.StatePlaying {
 		m.suppressAutoAdvance = true
 	}
-	return m.startTrackPlayback(t.PlayURL(), t)
+
+	return m.resolveAndPlayCmd(t)
 }
 
 

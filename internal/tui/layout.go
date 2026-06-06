@@ -20,7 +20,7 @@ func (m *Model) ensurePlayer() {
 // ensureDownloader creates the downloader if it doesn't exist yet.
 func (m *Model) ensureDownloader() {
 	if m.downloader == nil {
-		m.downloader = downloader.New(m.downloadDir(), m.settings.CookieBrowser, m.settings.UserAgent)
+		m.downloader = downloader.New(m.downloadDir(), m.settings.DownloadFormat)
 	}
 }
 
@@ -190,6 +190,29 @@ func (m *Model) clampFavoritesOffset() {
 	}
 }
 
+// clampHistoryOffset adjusts historyOffset so the cursor is visible.
+func (m *Model) clampHistoryOffset() {
+	vis := m.visibleItems()
+	n := len(m.history)
+	if n == 0 {
+		m.historyCursor = 0
+		m.historyOffset = 0
+		return
+	}
+	if m.historyCursor >= n {
+		m.historyCursor = n - 1
+	}
+	if m.historyCursor < 0 {
+		m.historyCursor = 0
+	}
+	if m.historyCursor < m.historyOffset {
+		m.historyOffset = m.historyCursor
+	}
+	if m.historyCursor >= m.historyOffset+vis {
+		m.historyOffset = m.historyCursor - vis + 1
+	}
+}
+
 // clampQueueOffset adjusts queueOffset so the cursor is visible.
 func (m *Model) clampQueueOffset() {
 	vis := m.queueVisibleItems()
@@ -261,6 +284,14 @@ func (m *Model) switchPage(page Page) {
 		m.libraryCursor = 0
 		m.libraryOffset = 0
 		m.settingsEditField = false
+	case PageHistory:
+		m.searchInput.SetValue("")
+		m.searchInput.Placeholder = ""
+		m.activePanel = PanelSearch
+		m.historyCursor = 0
+		m.historyOffset = 0
+		m.settingsEditField = false
+		m.historyLoaded = false
 	case PageSettings:
 		m.searchInput.Blur()
 		m.activePanel = PanelSearch
@@ -274,13 +305,10 @@ func (m *Model) switchPage(page Page) {
 func (m *Model) startSettingsEdit() {
 	m.settingsEditField = true
 	current := ""
-	switch m.settingsCursor {
-	case 5:
+	if m.settingsCursor == 5 {
 		current = m.settings.DownloadDir
-	case 6:
-		current = m.settings.CookieBrowser
-	case 7:
-		current = m.settings.UserAgent
+	} else if m.settingsCursor == 6 {
+		current = m.settings.TidalProxyURL
 	}
 	m.settingsEditInput.SetValue(current)
 	m.settingsEditInput.Focus()

@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"os"
 	"time"
 
 	"ytmgo/internal/db"
@@ -10,6 +11,7 @@ import (
 	"ytmgo/internal/queue"
 	"ytmgo/internal/search"
 	"ytmgo/internal/settings"
+	"ytmgo/internal/tidal"
 
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
@@ -24,7 +26,8 @@ const (
 	PageStream    Page = iota // 0 — search / recommendations / queue / player
 	PageFavorites             // 1 — bookmarked tracks
 	PageLibrary               // 2 — downloaded tracks + download queue
-	PageSettings              // 3 — configuration
+	PageHistory               // 3 — listening history
+	PageSettings              // 4 — configuration
 )
 
 // Panel identifies which panel within a page has keyboard focus.
@@ -59,7 +62,20 @@ type (
 		Error    error
 	}
 
-	// SearchResultsMsg carries results back from a yt-dlp search.
+	// URLResolvedMsg is sent when an async YouTube URL resolution completes.
+	// The Action field tells the handler what to do with the resolved URL.
+	URLResolvedMsg struct {
+		URL      string
+		Error    error
+		TrackID  string
+		Title    string
+		Uploader string
+		CoverURL string
+		Action   string // "play" or "download"
+		Track    queue.Track // populated for play action
+	}
+
+	// SearchResultsMsg carries results back from a TIDAL search.
 	SearchResultsMsg struct {
 		Results []search.Result
 		Error   error
@@ -113,6 +129,7 @@ type (
 	PlayRecordedMsg struct {
 		Error error
 	}
+
 )
 
 // tickMsg triggers periodic UI updates (progress bar animation).
@@ -123,6 +140,19 @@ type tickMsg struct{}
 // The model does nothing with it — only View reads time.Now() against
 // lastPositionAt to render a gliding bar. Stops firing when paused.
 type playerTickMsg struct{}
+
+// pendingDownloadReserve stores the context needed to continue after an
+// async YouTube URL resolution completes. Set by callers before firing
+// resolveURLCmd, read by the URLResolvedMsg handler.
+type pendingDownloadResolve struct {
+	TrackID     string
+	Title       string
+	Uploader    string
+	CoverURL    string
+	DownloadDir string
+	Track       queue.Track // populated for play action
+	Action      string      // "play" or "download"
+}
 
 // ─── Model ──────────────────────────────────────────────────────────
 
@@ -165,6 +195,12 @@ type Model struct {
 	favCursor   int
 	favOffset   int
 	favoriteSet map[string]bool // track ID → true, for O(1) lookup
+
+	// ── History (listening history) ──
+	history       []db.PlayHistoryEntry
+	historyCursor int
+	historyOffset int
+	historyLoaded bool // true after the first history load completes
 
 	// ── Database ──
 	db *db.DB
@@ -210,6 +246,16 @@ type Model struct {
 
 	// ── Downloads ──
 	downloader *downloader.Downloader
+
+	// ── Async URL resolution ──
+	// pendingResolve stores the context of an in-flight YouTube URL
+	// resolution. Set before returning resolveURLCmd, cleared when the
+	// URLResolvedMsg handler runs. Only one resolve can be pending at
+	// a time — the most recent one wins.
+	pendingResolve *pendingDownloadResolve
+
+	// ── TIDAL API Client ──
+	tidalClient *tidal.Client
 
 	// ── Settings ──
 	settings          *settings.Settings
@@ -287,6 +333,9 @@ func InitialModel() Model {
 	}
 	vol := defSettings.DefaultVolume
 
+	// Initialize TIDAL API client
+	tc := tidal.New(defSettings.TidalProxyURL, "LOSSLESS")
+
 	return Model{
 		activePage:             PageStream,
 		activePanel:            PanelSearch,
@@ -294,6 +343,7 @@ func InitialModel() Model {
 		results:                []search.Result{},
 		favorites:              []queue.Track{},
 		favoriteSet:            map[string]bool{},
+		history:                []db.PlayHistoryEntry{},
 		queue:                  queue.New(),
 		playerState:            player.StateStopped,
 		volume:                 vol,
@@ -302,6 +352,7 @@ func InitialModel() Model {
 		settingsEditInput:      sti,
 		currentQuote:           fallbackQuotes[0],
 		db:                     database,
+		tidalClient:            tc,
 	}
 }
 
@@ -342,6 +393,36 @@ func (m *Model) startTrackPlayback(playURL string, t queue.Track) tea.Cmd {
 		cmds = append(cmds, recordPlayCmd(m.db, t))
 	}
 	return tea.Batch(cmds...)
+}
+
+// resolveAndPlayCmd resolves the playback URL for a track and starts
+// playback. If the track is already downloaded (local file exists), it
+// plays directly and returns the startTrackPlayback command. Otherwise
+// it sets "Fetching URL from YouTube…" status, stores the pending
+// resolve context, and returns a resolveURLCmd that will start
+// playback when the URL comes back.
+//
+// Returns nil if the track cannot be played (empty queue, etc.).
+func (m *Model) resolveAndPlayCmd(t queue.Track) tea.Cmd {
+	if t.Downloaded && t.FilePath != "" {
+		if _, err := os.Stat(t.FilePath); err == nil {
+			return m.startTrackPlayback(t.FilePath, t)
+		}
+	}
+	// No local file — resolve the YouTube URL asynchronously.
+	m.pendingResolve = &pendingDownloadResolve{
+		Track:  t,
+		Title:  t.Title,
+		Action: "play",
+	}
+	m.setStatus("Fetching URL from YouTube…")
+	return resolveURLCmd(t.Artist, t.Title, m.pendingResolve)
+}
+
+// reinitTidalClient creates a new TIDAL client with the current proxy URL.
+// Call this after changing TidalProxyURL.
+func (m *Model) reinitTidalClient() {
+	m.tidalClient = tidal.New(m.settings.TidalProxyURL, "LOSSLESS")
 }
 
 // updateDiscordRPC syncs the current playback state to Discord Rich

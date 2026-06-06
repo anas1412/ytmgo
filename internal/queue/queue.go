@@ -18,6 +18,7 @@ type Track struct {
 	FilePath    string `json:"file_path"`    // local path once downloaded
 	Downloaded  bool   `json:"downloaded"`
 	URL         string `json:"url"`          // original youtube URL/query
+	CoverURL    string `json:"cover_url"`    // TIDAL album art URL (empty = use YouTube thumbnail)
 }
 
 // PlayURL returns the source that playback should use for this track:

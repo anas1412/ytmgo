@@ -14,7 +14,7 @@
 #   1. Detects your OS and CPU architecture
 #   2. Downloads the matching static binary from the GitHub Release
 #   3. Installs it to a directory on PATH (or prints the export command)
-#   4. Auto-installs any missing system deps (mpv, yt-dlp, ffmpeg) via
+#   4. Auto-installs any missing system deps (mpv, ffmpeg) via
 #      your package manager — uses sudo for system PMs, no sudo for brew.
 #      You'll see the exact command before it runs.
 

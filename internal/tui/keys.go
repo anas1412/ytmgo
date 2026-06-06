@@ -31,7 +31,8 @@ type KeyMap struct {
 	PageStream    key.Binding // 1
 	PageFavorites key.Binding // 2
 	PageLibrary   key.Binding // 3
-	PageSettings  key.Binding // 4
+	PageHistory   key.Binding // 4
+	PageSettings  key.Binding // 5
 	Escape        key.Binding
 }
 
@@ -145,9 +146,13 @@ var Keys = KeyMap{
 		key.WithKeys("3"),
 		key.WithHelp("3", "library page"),
 	),
-	PageSettings: key.NewBinding(
+	PageHistory: key.NewBinding(
 		key.WithKeys("4"),
-		key.WithHelp("4", "settings page"),
+		key.WithHelp("4", "history"),
+	),
+	PageSettings: key.NewBinding(
+		key.WithKeys("5"),
+		key.WithHelp("5", "settings page"),
 	),
 	Escape: key.NewBinding(
 		key.WithKeys("esc"),
@@ -202,6 +207,7 @@ func (k KeyMap) FullHelp() [][]key.Binding {
 			k.PageStream,
 			k.PageFavorites,
 			k.PageLibrary,
+			k.PageHistory,
 			k.PageSettings,
 			k.Recs,
 		},
@@ -221,6 +227,7 @@ func (k KeyMap) Globals() []key.Binding {
 		k.PageStream,
 		k.PageFavorites,
 		k.PageLibrary,
+		k.PageHistory,
 		k.PageSettings,
 		k.Recs,
 		k.Open,
