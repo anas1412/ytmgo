@@ -234,10 +234,25 @@ type PlayHistoryEntry struct {
 	PlayedAt string `json:"played_at"` // ISO 8601 timestamp
 }
 
-// RecordPlay inserts a play history entry for the given track.
-// The played_at timestamp is automatically set by SQLite.
+// RecordPlay records a play history entry for the given track.
+// If the most recent entry is the same track, it updates the timestamp
+// instead of duplicating the entry (avoids stacking the same track
+// when playing it repeatedly).
 func (d *DB) RecordPlay(t queue.Track) error {
-	_, err := d.Exec(`INSERT INTO play_history (track_id, title, artist, cover_url) VALUES (?, ?, ?, ?)`,
+	// Check if the latest played track is the same one.
+	var lastTrackID string
+	err := d.DB.QueryRow(`SELECT track_id FROM play_history ORDER BY id DESC LIMIT 1`).Scan(&lastTrackID)
+	if err == nil && lastTrackID == t.ID {
+		// Same track played again — bump the timestamp on the latest entry.
+		_, err := d.Exec(`UPDATE play_history SET played_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now') WHERE id = (SELECT MAX(id) FROM play_history)`)
+		if err != nil {
+			return fmt.Errorf("update play history: %w", err)
+		}
+		return nil
+	}
+
+	// Different track (or no history yet) — insert a new record.
+	_, err = d.Exec(`INSERT INTO play_history (track_id, title, artist, cover_url) VALUES (?, ?, ?, ?)`,
 		t.ID, t.Title, t.Artist, t.CoverURL)
 	if err != nil {
 		return fmt.Errorf("record play: %w", err)
