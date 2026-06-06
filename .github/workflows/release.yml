@@ -115,23 +115,38 @@ jobs:
         run: |
           bash dist/arch/generate-pkgbuild.sh "${{ github.ref_name }}" --out /tmp/aur-pkg
 
-      - name: Install SSH key
-        uses: shimataro/ssh-key-action@v2
-        with:
-          key: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
-          known_hosts: |
-            aur.archlinux.org ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEuBKrPzbawxA/k2g6NcyV5jmqwJ2s+zpgZGZ7tpLIcN
-          name: aur
-
       - name: Push to AUR
+        env:
+          AUR_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
         run: |
           set -euo pipefail
+
+          # Write SSH key
+          mkdir -p ~/.ssh
+          echo "$AUR_KEY" > ~/.ssh/aur
+          chmod 600 ~/.ssh/aur
+
+          # Add AUR host key
+          ssh-keyscan aur.archlinux.org >> ~/.ssh/known_hosts 2>/dev/null
+
+          # Use the key for AUR
+          cat >> ~/.ssh/config << 'CONFIG'
+          Host aur.archlinux.org
+            IdentityFile ~/.ssh/aur
+            IdentitiesOnly yes
+            StrictHostKeyChecking accept-new
+          CONFIG
+
+          # Verify SSH works
+          echo ">>> Testing SSH connection..."
+          ssh -T aur@aur.archlinux.org 2>&1 || true
 
           # Configure git
           git config --global user.name  "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
 
           # Clone AUR repo
+          echo ">>> Cloning AUR repo..."
           git clone ssh://aur@aur.archlinux.org/ytmgo.git /tmp/aur-repo
           cd /tmp/aur-repo
 
@@ -143,6 +158,7 @@ jobs:
           git add PKGBUILD .SRCINFO
           if ! git diff --cached --quiet; then
             git commit -m "Update to ${{ github.ref_name }}"
+            echo ">>> Pushing to AUR..."
             git push origin master
             echo "✓ AUR updated to ${{ github.ref_name }}"
           else
