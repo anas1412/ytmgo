@@ -8,7 +8,6 @@ A terminal-based YouTube Music client written in Go. Search music, download audi
 
 ![Go Version](https://img.shields.io/badge/go-1.22+-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
-![Version](https://img.shields.io/badge/version-v0.3.0-purple)
 
 ---
 
@@ -20,7 +19,6 @@ One line does everything — grabs the static binary for your OS/arch, installs 
 curl -fsSL https://anas1412.github.io/ytmgo/install.sh | bash
 ```
 
-> Override the version: `YTMGO_VERSION=v0.3.0 curl ... | bash`
 > Override the install dir: `YTMGO_INSTALL_DIR=/opt/bin curl ... | bash`
 
 Or build from source (after installing `mpv` yourself):
