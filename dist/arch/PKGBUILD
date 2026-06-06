@@ -4,8 +4,8 @@
 # https://aur.archlinux.org/packages/ytmgo
 
 pkgname=ytmgo
-pkgver=0.3.0
-pkgrel=1
+pkgver=0.3.1
+pkgrel=2
 pkgdesc="A terminal-based YouTube Music client — search, download, queue, and play music from the keyboard"
 arch=('x86_64' 'aarch64')
 url="https://github.com/anas1412/ytmgo"
@@ -30,7 +30,7 @@ check() {
 package() {
   cd "$srcdir/$pkgname-$pkgver"
   install -Dm755 ytmgo "$pkgdir/usr/bin/ytmgo"
-  install -Dm644 ytmgo-logo.png "$pkgdir/usr/share/pixmaps/ytmgo.png"
+  install -Dm644 ytmgo-icon.png "$pkgdir/usr/share/pixmaps/ytmgo.png"
 
   # Desktop entry for terminal launchers
   install -Dm644 /dev/stdin "$pkgdir/usr/share/applications/ytmgo.desktop" <<EOF
