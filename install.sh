@@ -5,6 +5,8 @@
 #   curl -fsSL https://raw.githubusercontent.com/anas1412/ytmgo/main/install.sh | bash
 #   curl -fsSL https://raw.githubusercontent.com/anas1412/ytmgo/main/install.sh | bash -s -- --force
 #
+# To uninstall: curl -fsSL https://raw.githubusercontent.com/anas1412/ytmgo/main/uninstall.sh | bash
+#
 # Environment overrides (set before the pipe):
 #   YTMGO_VERSION=v0.2.0     # pin a specific version (default: latest)
 #   YTMGO_INSTALL_DIR=...   # override install dir (default: ~/.local/bin or /usr/local/bin if root)
@@ -211,3 +213,6 @@ fi
 # ─── Done ───────────────────────────────────────────────────────────
 echo ""
 success "Run: ytmgo"
+echo ""
+info "To uninstall later:"
+echo "  curl -fsSL https://raw.githubusercontent.com/anas1412/ytmgo/main/uninstall.sh | bash"
