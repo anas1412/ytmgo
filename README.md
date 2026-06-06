@@ -195,6 +195,7 @@ Tab cycles focus through: search input → result list → queue panel → setti
 - [mpv](https://mpv.io/) — Media player backend
 - [yt-dlp](https://github.com/yt-dlp/yt-dlp) — YouTube Music streaming and downloads
 - [ffmpeg](https://ffmpeg.org/) — Audio extraction for downloads
+- [TIDAL HiFi Proxy API](https://github.com/ungstein/OG-TIDAL-API) — Track search and recommendations
 - [modernc.org/sqlite](https://modernc.org/sqlite) — Embedded SQLite (no CGO)
 
 ---
