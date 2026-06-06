@@ -206,7 +206,8 @@ func (m Model) renderHeader() string {
 		{"1", "Stream"},
 		{"2", "Favs"},
 		{"3", "Library"},
-		{"4", "Settings"},
+		{"4", "History"},
+		{"5", "Settings"},
 	}
 	var renderedTabs []string
 	for i, t := range tabs {
@@ -272,11 +273,13 @@ func (m Model) renderPanels() string {
 
 	// Search panel title
 	fHint := styleKeyHint.Render("[f]")
+	xHint := styleKeyHint.Render("[x]")
 	panelLabel := "SEARCH RESULTS"
 	switch m.activePage {
+	case PageHistory:
+		panelLabel = "HISTORY  " + xHint + " download"
 	case PageFavorites:
-		dHint := styleKeyHint.Render("[d]")
-		panelLabel = "FAVORITES  " + fHint + " remove from fav  " + dHint + " remove"
+		panelLabel = "FAVORITES  " + fHint + " unfav  " + xHint + " download"
 	case PageLibrary:
 		dHint := styleKeyHint.Render("[d]")
 		panelLabel = "LIBRARY  " + dHint + " delete  " + fHint + " add to fav"
@@ -377,6 +380,8 @@ func (m Model) renderSearchResults(width, height int) string {
 		return m.renderFavorites(width, height)
 	case PageLibrary:
 		return m.renderLibrary(width, height)
+	case PageHistory:
+		return m.renderHistory(width, height)
 	}
 	if m.isSearching {
 		return styleEmpty.Width(width - 2).Height(height).Render(
@@ -595,6 +600,81 @@ func (m Model) renderFavorites(width, height int) string {
 	return result
 }
 
+func (m Model) renderHistory(width, height int) string {
+	entries := m.history
+	if len(entries) == 0 {
+		if !m.historyLoaded {
+			return styleEmpty.Width(width - 2).Height(height).Render(
+				"⏳  Loading history…",
+			)
+		}
+		return styleEmpty.Width(width - 2).Height(height).Render(
+			"No history yet — play some tracks!",
+		)
+	}
+
+	var lines []string
+	maxItems := (height - 1) / 2
+	if maxItems < 1 {
+		maxItems = 1
+	}
+	start := m.historyOffset
+	end := start + maxItems
+	if end > len(entries) {
+		end = len(entries)
+	}
+
+	for i := start; i < end; i++ {
+		isSelected := !m.searchFocused && m.activePanel == PanelSearch && i == m.historyCursor
+		e := entries[i]
+
+		prefix := fmt.Sprintf("%d. ", i+1)
+		title := e.Title
+		maxTitle := width - len(prefix) - 2
+		if len(title) > maxTitle && maxTitle > 3 {
+			title = title[:maxTitle-1] + "…"
+		}
+		line := prefix + title
+
+		artist := e.Artist
+		if artist == "" {
+			artist = "Unknown artist"
+		}
+		timeAgo := relativeTime(e.PlayedAt)
+		leftInfo := "   " + artist
+		maxLeft := width - lipgloss.Width(timeAgo) - 2
+		if len(leftInfo) > maxLeft && maxLeft > 3 {
+			leftInfo = leftInfo[:maxLeft-1] + "…"
+		}
+		spacing := width - lipgloss.Width(leftInfo) - lipgloss.Width(timeAgo)
+		if spacing < 1 {
+			spacing = 1
+		}
+		info := leftInfo + strings.Repeat(" ", spacing) + timeAgo
+
+		lines = append(lines, renderListItemBlock(line, info, isSelected, false, width))
+	}
+
+	remaining := len(entries) - end
+	if remaining > 0 {
+		scrollbar := fmt.Sprintf("  ↓ %d more  [cursor %d/%d]", remaining, m.historyCursor+1, len(entries))
+		lines = append(lines,
+			lipgloss.NewStyle().Foreground(colorTextDim).Italic(true).PaddingLeft(1).Render(scrollbar),
+		)
+	}
+
+	result := strings.Join(lines, "\n")
+	paddedW := max(1, width-2)
+	result = padToWidth(result, paddedW)
+	if cnt := strings.Count(result, "\n") + 1; cnt < height {
+		result += "\n" + strings.Join(
+			make([]string, height-cnt),
+			"\n"+strings.Repeat(" ", paddedW),
+		)
+	}
+	return result
+}
+
 func (m Model) formatResultRow(idx int, r search.Result, width int, isSelected bool) string {
 	title := r.Title
 	artist := r.Uploader
@@ -765,7 +845,7 @@ func (m Model) renderDownloadQueue(width, height int) string {
 			continue
 		}
 		// The worker flips status to Downloading the moment it picks
-		// up a job, but yt-dlp takes a beat before emitting its first
+		// up a job, but the download takes a beat before emitting its first
 		// `[download] X%` line. During that window j.Progress is 0,
 		// which is misleading to render as "0%" — the user reads it
 		// as "the download is broken." Show a spinner + "Starting…"
@@ -870,8 +950,8 @@ func (m Model) renderSettingsList(panelWidth, panelHeight int) string {
 		{"Default Volume", fmt.Sprintf("%d", m.settings.DefaultVolume), "Starting volume 0-100  (+/- adjust)"},
 		{"Search Limit", fmt.Sprintf("%d", m.settings.SearchLimit), "Max results per search  (+/- adjust)"},
 		{"Download Dir", truncate(m.settings.DownloadDir, 40), "Where files are saved  (press 'o' to open)"},
-		{"Cookie Browser", truncate(m.settings.CookieBrowser, 20), "Browser for YouTube cookies"},
-		{"User-Agent", truncate(m.settings.UserAgent, 30), "Custom UA for yt-dlp (empty = default)"},
+		{"TIDAL Proxy URL", truncate(m.settings.TidalProxyURL, 40), "Community TIDAL proxy for search & recommendations"},
+		{"Download Format", settings.DownloadFormatLabel(m.settings.DownloadFormat), settings.DownloadFormatHint(m.settings.DownloadFormat)},
 	}
 
 	// Each item uses ~4 lines (label, value, desc, blank).
@@ -1304,6 +1384,45 @@ func (m Model) percentage() float64 {
 		return 0
 	}
 	return (m.position / m.duration) * 100.0
+}
+
+// relativeTime converts an ISO 8601 timestamp to a human-readable "ago" string.
+func relativeTime(iso string) string {
+	t, err := time.Parse(time.RFC3339, iso)
+	if err != nil {
+		// Try alternate format without timezone
+		t, err = time.Parse("2006-01-02T15:04:05Z", iso)
+		if err != nil {
+			return iso
+		}
+	}
+	now := time.Now().UTC()
+	diff := now.Sub(t)
+
+	switch {
+	case diff < time.Minute:
+		return "just now"
+	case diff < time.Hour:
+		m := int(diff.Minutes())
+		if m == 1 {
+			return "1 min ago"
+		}
+		return fmt.Sprintf("%d min ago", m)
+	case diff < 24*time.Hour:
+		h := int(diff.Hours())
+		if h == 1 {
+			return "1 hour ago"
+		}
+		return fmt.Sprintf("%d hours ago", h)
+	case diff < 7*24*time.Hour:
+		d := int(diff.Hours() / 24)
+		if d == 1 {
+			return "1 day ago"
+		}
+		return fmt.Sprintf("%d days ago", d)
+	default:
+		return t.Format("Jan 2")
+	}
 }
 
 func formatDuration(secs int) string {

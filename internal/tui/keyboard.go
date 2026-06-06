@@ -43,7 +43,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.isSearching = true
 				m.searchCursor = 0
 				m.err = nil
-				return m, searchCmd(query, m.settings.SearchLimit, m.settings.CookieBrowser, m.settings.UserAgent)
+				return m, searchCmd(query, m.settings.SearchLimit, m.tidalClient)
 			}
 			return m, nil
 		case "tab":
@@ -140,8 +140,8 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		case PageSettings:
 			// Tab does nothing on settings — arrows navigate the list.
 			return m, nil
-		case PageFavorites, PageLibrary:
-			// Favorites/Library page: search input ↔ list
+		case PageFavorites, PageLibrary, PageHistory:
+			// Favorites/Library/History page: search input ↔ list
 			if m.searchFocused {
 				m.searchFocused = false
 				m.searchInput.Blur()
@@ -193,6 +193,11 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		switch m.activePanel {
 		case PanelSearch:
 			switch m.activePage {
+			case PageHistory:
+				if m.historyCursor > 0 {
+					m.historyCursor--
+					m.clampHistoryOffset()
+				}
 			case PageFavorites:
 				if m.favCursor > 0 {
 					m.favCursor--
@@ -230,6 +235,12 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		switch m.activePanel {
 		case PanelSearch:
 			switch m.activePage {
+			case PageHistory:
+				maxIdx := len(m.history) - 1
+				if m.historyCursor < maxIdx {
+					m.historyCursor++
+					m.clampHistoryOffset()
+				}
 			case PageFavorites:
 				maxIdx := len(m.favorites) - 1
 				if m.favCursor < maxIdx {
@@ -267,10 +278,11 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				switch m.settingsCursor {
 				case 5: // Download Dir
 					m.settings.DownloadDir = newVal
-				case 6: // Cookie Browser
-					m.settings.CookieBrowser = newVal
-				case 7: // User-Agent
-					m.settings.UserAgent = newVal
+				case 6: // TIDAL Proxy URL
+					m.settings.TidalProxyURL = newVal
+					m.reinitTidalClient()
+				case 7: // Download Format (should not reach here, cycles on Enter)
+					// no-op; format is cycled, not typed
 				}
 				return m, tea.Batch(saveSettingsCmd(m.db, m.settings))
 			}
@@ -296,9 +308,20 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				return m, tea.Batch(saveSettingsCmd(m.db, m.settings))
 			case 3, 4: // Volume / Search Limit (numbers — Enter does nothing, use +/-)
 				return m, nil
-			case 5, 6, 7: // Download Dir / Cookie Browser / User-Agent (strings)
+			case 5, 6: // Download Dir / TIDAL Proxy URL (strings)
 				m.startSettingsEdit()
 				return m, nil
+			case 7: // Download Format (cycle)
+				switch m.settings.DownloadFormat {
+				case settings.FormatM4A:
+					m.settings.DownloadFormat = settings.FormatMP3
+				default:
+					m.settings.DownloadFormat = settings.FormatM4A
+				}
+				if m.downloader != nil {
+					m.downloader.SetFormat(m.settings.DownloadFormat)
+				}
+				return m, tea.Batch(saveSettingsCmd(m.db, m.settings))
 			}
 			return m, nil
 		}
@@ -307,21 +330,21 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		switch m.activePage {
 		case PageFavorites:
 			if m.activePanel == PanelSearch && !m.searchFocused {
-				if len(m.favorites) > 0 && m.favCursor >= 0 && m.favCursor < len(m.favorites) {
-					t := m.favorites[m.favCursor]
-					m.queue.Add(t)
+			if len(m.favorites) > 0 && m.favCursor >= 0 && m.favCursor < len(m.favorites) {
+				t := m.favorites[m.favCursor]
+				m.queue.Add(t)
 
-					if m.playerState == player.StateStopped {
-						m.queue.SetCurrentIndex(m.queue.Len() - 1)
-						m.queueCursor = m.queue.CurrentIndex()
-						m.clampQueueOffset()
-						if playCmd := m.startTrackPlayback(t.PlayURL(), t); playCmd != nil {
-							return m, playCmd
-						}
+				if m.playerState == player.StateStopped {
+					m.queue.SetCurrentIndex(m.queue.Len() - 1)
+					m.queueCursor = m.queue.CurrentIndex()
+					m.clampQueueOffset()
+					if playCmd := m.resolveAndPlayCmd(t); playCmd != nil {
+						return m, playCmd
 					}
-
-					m.setStatus("Added to queue: " + t.Title)
 				}
+
+				m.setStatus("Added to queue: " + t.Title)
+			}
 				return m, saveQueueCmd(m.db, m.queue)
 			}
 			// On Favorites page queue panel: play selected queue item
@@ -351,7 +374,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 						m.queue.SetCurrentIndex(m.queue.Len() - 1)
 						m.queueCursor = m.queue.CurrentIndex()
 						m.clampQueueOffset()
-						if playCmd := m.startTrackPlayback(t.PlayURL(), t); playCmd != nil {
+						if playCmd := m.resolveAndPlayCmd(t); playCmd != nil {
 							return m, playCmd
 						}
 					}
@@ -388,7 +411,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 						m.queue.SetCurrentIndex(m.queue.Len() - 1)
 						m.queueCursor = m.queue.CurrentIndex()
 						m.clampQueueOffset()
-						if playCmd := m.startTrackPlayback(t.PlayURL(), t); playCmd != nil {
+						if playCmd := m.resolveAndPlayCmd(t); playCmd != nil {
 							cmds = append(cmds, playCmd)
 						}
 					} else {
@@ -396,13 +419,13 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 					}
 
 					// Download handling (separate from auto-play).
-				if m.settings.PlaybackMode == settings.PlaybackOffline {
-					m.ensureDownloader()
-					m.downloader.Enqueue(t.ID, t.Title, r.Uploader, r.URL, m.downloadDir())
-					cmds = append(cmds, downloadCmd(m.downloader))
-				} else if m.settings.PlaybackMode == settings.PlaybackHybrid && !t.Downloaded {
+					// Enqueue the track; if the URL isn't known yet,
+					// the downloader will resolve it in the background
+					// (see downloader.runJob).
+					if m.settings.PlaybackMode == settings.PlaybackOffline ||
+						(m.settings.PlaybackMode == settings.PlaybackHybrid && !t.Downloaded) {
 						m.ensureDownloader()
-						m.downloader.Enqueue(t.ID, t.Title, r.Uploader, r.URL, m.downloadDir())
+						m.downloader.Enqueue(t.ID, t.Title, r.Uploader, r.URL, m.downloadDir(), r.CoverURL)
 						cmds = append(cmds, downloadCmd(m.downloader))
 					}
 
@@ -589,26 +612,34 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 			r := m.results[m.searchCursor]
-			// resolveTrack checks the library first so we can tell
-			// the user "Already downloaded" instead of re-enqueueing
-			// a download for a file that already exists locally.
 			t := m.resolveTrack(r)
-			if t.URL == "" {
-				m.setStatus("No URL available for: " + t.Title)
-				return m, nil
-			}
-			if t.Downloaded {
-				m.setStatus("Already downloaded: " + t.Title)
-				return m, nil
-			}
-			// Filesystem check — the library scan may not have caught
-			// every file (manually placed, different session, etc.).
 			m.ensureDownloader()
-			if m.downloader.IsDownloaded(t.ID, t.Title, m.downloadDir()) {
+			if m.downloader.HasPendingJob(t.ID) {
+				m.setStatus("Already in download queue: " + t.Title)
+				return m, nil
+			}
+			// IsDownloaded checks the actual filesystem using the
+			// current download format (m4a/mp3), so switching format
+			// in Settings correctly allows re-downloading in the new
+			// format. The old t.Downloaded guard from resolveTrack
+			// was format-agnostic and blocked re-downloads — removed.
+			if m.downloader.IsDownloaded(t.ID, t.Title, r.Uploader, m.downloadDir()) {
 				m.setStatus("Already downloaded: " + t.Title)
 				return m, nil
 			}
-			m.downloader.Enqueue(t.ID, t.Title, r.Uploader, t.URL, m.downloadDir())
+			// Resolve YouTube URL only when we know we need to download.
+			if t.URL == "" {
+				m.pendingResolve = &pendingDownloadResolve{
+					TrackID:  t.ID,
+					Title:    t.Title,
+					Uploader: r.Uploader,
+					CoverURL: r.CoverURL,
+					Action:   "download",
+				}
+				m.setStatus("Fetching URL from YouTube…")
+				return m, resolveURLCmd(t.Artist, t.Title, m.pendingResolve)
+			}
+			m.downloader.Enqueue(t.ID, t.Title, r.Uploader, t.URL, m.downloadDir(), r.CoverURL)
 			m.setStatus("Download queued: " + t.Title)
 			return m, downloadCmd(m.downloader)
 
@@ -617,32 +648,89 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 			t := m.queue.Tracks()[m.queueCursor]
-			if t.Downloaded {
-				m.setStatus("Already downloaded: " + t.Title)
-				return m, nil
-			}
-			if t.URL == "" {
-				m.setStatus("No URL available for: " + t.Title)
-				return m, nil
-			}
 			m.ensureDownloader()
-			if m.downloader.IsDownloaded(t.ID, t.Title, m.downloadDir()) {
+			if m.downloader.HasPendingJob(t.ID) {
+				m.setStatus("Already in download queue: " + t.Title)
+				return m, nil
+			}
+			if m.downloader.IsDownloaded(t.ID, t.Title, t.Artist, m.downloadDir()) {
 				m.setStatus("Already downloaded: " + t.Title)
 				return m, nil
 			}
-			m.downloader.Enqueue(t.ID, t.Title, t.Artist, t.URL, m.downloadDir())
+			// Resolve YouTube URL only when we know we need to download.
+			if t.URL == "" {
+				m.pendingResolve = &pendingDownloadResolve{
+					TrackID:  t.ID,
+					Title:    t.Title,
+					Uploader: t.Artist,
+					CoverURL: t.CoverURL,
+					Action:   "download",
+				}
+				m.setStatus("Fetching URL from YouTube…")
+				return m, resolveURLCmd(t.Artist, t.Title, m.pendingResolve)
+			}
+			m.downloader.Enqueue(t.ID, t.Title, t.Artist, t.URL, m.downloadDir(), t.CoverURL)
 			m.setStatus("Download queued: " + t.Title)
+			return m, downloadCmd(m.downloader)
+
+		case m.activePage == PageFavorites && m.activePanel == PanelSearch:
+			if len(m.favorites) == 0 || m.favCursor < 0 || m.favCursor >= len(m.favorites) {
+				return m, nil
+			}
+			t := m.favorites[m.favCursor]
+			m.ensureDownloader()
+			if m.downloader.HasPendingJob(t.ID) {
+				m.setStatus("Already in download queue: " + t.Title)
+				return m, nil
+			}
+			if m.downloader.IsDownloaded(t.ID, t.Title, t.Artist, m.downloadDir()) {
+				m.setStatus("Already downloaded: " + t.Title)
+				return m, nil
+			}
+			// Resolve YouTube URL only when we know we need to download.
+			if t.URL == "" {
+				m.pendingResolve = &pendingDownloadResolve{
+					TrackID:  t.ID,
+					Title:    t.Title,
+					Uploader: t.Artist,
+					CoverURL: t.CoverURL,
+					Action:   "download",
+				}
+				m.setStatus("Fetching URL from YouTube…")
+				return m, resolveURLCmd(t.Artist, t.Title, m.pendingResolve)
+			}
+			m.downloader.Enqueue(t.ID, t.Title, t.Artist, t.URL, m.downloadDir(), t.CoverURL)
+			m.setStatus("Download queued: " + t.Title)
+			return m, downloadCmd(m.downloader)
+
+		case m.activePage == PageHistory && m.activePanel == PanelSearch:
+			if len(m.history) == 0 || m.historyCursor < 0 || m.historyCursor >= len(m.history) {
+				return m, nil
+			}
+			e := m.history[m.historyCursor]
+			m.ensureDownloader()
+			if m.downloader.HasPendingJob(e.TrackID) {
+				m.setStatus("Already in download queue: " + e.Title)
+				return m, nil
+			}
+			if m.downloader.IsDownloaded(e.TrackID, e.Title, e.Artist, m.downloadDir()) {
+				m.setStatus("Already downloaded: " + e.Title)
+				return m, nil
+			}
+			// History entries don't carry a YouTube URL — always resolve.
+			m.pendingResolve = &pendingDownloadResolve{
+				TrackID:  e.TrackID,
+				Title:    e.Title,
+				Uploader: e.Artist,
+				CoverURL: e.CoverURL,
+				Action:   "download",
+			}
+			m.setStatus("Fetching URL from YouTube…")
+			return m, resolveURLCmd(e.Artist, e.Title, m.pendingResolve)
 		}
 		return m, nil
 
 	case "d", "delete":
-		// Favorites page: d unfavorites the highlighted track
-		if m.activePage == PageFavorites && m.activePanel == PanelSearch {
-			if len(m.favorites) > 0 && m.favCursor >= 0 && m.favCursor < len(m.favorites) {
-				return m, m.toggleFavorite(m.favorites[m.favCursor])
-			}
-			return m, nil
-		}
 		if m.activePanel == PanelQueue && m.queue.Len() > 0 {
 			idx := m.queueCursor
 			removed := m.queue.Remove(idx)
@@ -816,7 +904,14 @@ func (m *Model) handleGlobalKey(msg tea.KeyMsg) (handled bool, cmd tea.Cmd) {
 				m.setStatus(statusMsg)
 			}
 			return true, nil
-		case "4": // Keys.PageSettings
+		case "4": // Keys.PageHistory
+			if m.activePage != PageHistory {
+				m.switchPage(PageHistory)
+				m.setStatus("")
+			}
+			m.loadPlayHistory()
+			return true, nil
+		case "5": // Keys.PageSettings
 			if m.activePage != PageSettings {
 				m.switchPage(PageSettings)
 				m.setStatus("")
@@ -832,7 +927,7 @@ func (m *Model) handleGlobalKey(msg tea.KeyMsg) (handled bool, cmd tea.Cmd) {
 			m.searchCursor = 0
 			m.searchOffset = 0
 			m.setStatus("Loading recommendations…")
-			return true, fetchRecommendationsCmd(m.recsSeq, m.settings.SearchLimit, m.settings.CookieBrowser, m.settings.UserAgent)
+			return true, fetchRecommendationsCmd(m.recsSeq, m.settings.SearchLimit, m.tidalClient, m.db)
 		case "o": // Keys.Open
 			path := m.downloadDir()
 			if err := openInOS(path); err != nil {
@@ -849,6 +944,20 @@ func (m *Model) handleGlobalKey(msg tea.KeyMsg) (handled bool, cmd tea.Cmd) {
 }
 
 // toggleFavorite adds or removes a track from the favorites list.
+// loadPlayHistory loads play history from the database synchronously.
+// Must be called after switchPage(PageHistory) since switchPage sets
+// historyLoaded = false. This is used by both keyboard "4" and mouse
+// click on the History tab.
+func (m *Model) loadPlayHistory() {
+	entries, loadErr := m.db.LoadPlayHistory(100, 0)
+	if loadErr != nil {
+		m.err = loadErr
+	} else {
+		m.history = entries
+	}
+	m.historyLoaded = true
+}
+
 // Returns a saveFavoritesCmd so the caller can batch it.
 func (m *Model) toggleFavorite(t queue.Track) tea.Cmd {
 	if m.favoriteSet[t.ID] {

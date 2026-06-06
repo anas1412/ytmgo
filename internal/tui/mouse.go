@@ -46,6 +46,11 @@ func (m Model) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 			switch m.activePanel {
 			case PanelSearch:
 				switch m.activePage {
+				case PageHistory:
+					if m.historyCursor > 0 {
+						m.historyCursor--
+						m.clampHistoryOffset()
+					}
 				case PageFavorites:
 					if m.favCursor > 0 {
 						m.favCursor--
@@ -74,7 +79,7 @@ func (m Model) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 	if msg.Button == tea.MouseButtonWheelDown {
 		switch m.activePage {
 		case PageSettings:
-			if !m.settingsEditField && m.settingsCursor < 7 {
+			if !m.settingsEditField && m.settingsCursor < 8 {
 				m.settingsCursor++
 				m.clampSettingsOffset()
 			}
@@ -82,6 +87,12 @@ func (m Model) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 			switch m.activePanel {
 			case PanelSearch:
 				switch m.activePage {
+				case PageHistory:
+					maxIdx := len(m.history) - 1
+					if m.historyCursor < maxIdx {
+						m.historyCursor++
+						m.clampHistoryOffset()
+					}
 				case PageFavorites:
 					maxIdx := len(m.favorites) - 1
 					if m.favCursor < maxIdx {
@@ -128,12 +139,13 @@ func (m Model) handleClick(x, y int) (Model, tea.Cmd) {
 			key   string
 			label string
 		}
-		tabs := []tabDef{
-			{"1", "Stream"},
-			{"2", "Favs"},
-			{"3", "Library"},
-			{"4", "Settings"},
-		}
+	tabs := []tabDef{
+		{"1", "Stream"},
+		{"2", "Favs"},
+		{"3", "Library"},
+		{"4", "History"},
+		{"5", "Settings"},
+	}
 		var renderedTabs []string
 		var tabWidths []int
 		for i, t := range tabs {
@@ -160,6 +172,12 @@ func (m Model) handleClick(x, y int) (Model, tea.Cmd) {
 				if x >= cumX && x < cumX+tw {
 					if m.activePage != Page(i) {
 						m.switchPage(Page(i))
+					}
+					// Load history when clicking the History tab
+					// (switchPage sets historyLoaded=false, so we need to
+					// load synchronously here, matching keyboard "4" behavior)
+					if Page(i) == PageHistory {
+						m.loadPlayHistory()
 					}
 					return m, nil
 				}
@@ -199,8 +217,8 @@ func (m Model) handleClick(x, y int) (Model, tea.Cmd) {
 				if idx < 0 {
 					idx = 0
 				}
-				if idx > 7 { // 8 items indexed 0-7
-					idx = 7
+				if idx > 8 { // 9 items indexed 0-8
+					idx = 8
 				}
 				m.settingsCursor = idx
 				m.clampSettingsOffset()
@@ -254,6 +272,15 @@ func (m Model) handleClick(x, y int) (Model, tea.Cmd) {
 			m.activePanel = PanelSearch
 			idx := (y - clickItemOffsetY) / clickLinesPerItem
 			switch m.activePage {
+			case PageHistory:
+				idx += m.historyOffset
+				switch {
+				case idx < 0:
+					idx = 0
+				case idx >= len(m.history):
+					idx = len(m.history) - 1
+				}
+				m.historyCursor = idx
 			case PageFavorites:
 				idx += m.favOffset
 				switch {
@@ -571,6 +598,16 @@ func (m Model) handleControlsClick(x int) (Model, tea.Cmd) {
 // Called by double-click detection in handleClick.
 func (m Model) activateFocusedItem() (Model, tea.Cmd) {
 	switch m.activePage {
+	case PageHistory:
+		if m.activePanel == PanelSearch && len(m.history) > 0 && m.historyCursor >= 0 && m.historyCursor < len(m.history) {
+			e := m.history[m.historyCursor]
+			m.switchPage(PageStream)
+			m.searchInput.SetValue(e.Title)
+			m.searchInput.Focus()
+			m.searchFocused = true
+			m.setStatus("Searching for: " + e.Title)
+		}
+		return m, nil
 	case PageFavorites:
 		if m.activePanel == PanelSearch {
 			if len(m.favorites) > 0 && m.favCursor >= 0 && m.favCursor < len(m.favorites) {
@@ -581,7 +618,7 @@ func (m Model) activateFocusedItem() (Model, tea.Cmd) {
 					m.queue.SetCurrentIndex(m.queue.Len() - 1)
 					m.queueCursor = m.queue.CurrentIndex()
 					m.clampQueueOffset()
-					if playCmd := m.startTrackPlayback(t.PlayURL(), t); playCmd != nil {
+					if playCmd := m.resolveAndPlayCmd(t); playCmd != nil {
 						return m, playCmd
 					}
 				}
@@ -609,7 +646,7 @@ func (m Model) activateFocusedItem() (Model, tea.Cmd) {
 					m.queue.SetCurrentIndex(m.queue.Len() - 1)
 					m.queueCursor = m.queue.CurrentIndex()
 					m.clampQueueOffset()
-					if playCmd := m.startTrackPlayback(t.PlayURL(), t); playCmd != nil {
+					if playCmd := m.resolveAndPlayCmd(t); playCmd != nil {
 						return m, playCmd
 					}
 				}
@@ -640,7 +677,7 @@ func (m Model) activateFocusedItem() (Model, tea.Cmd) {
 					m.queue.SetCurrentIndex(m.queue.Len() - 1)
 					m.queueCursor = m.queue.CurrentIndex()
 					m.clampQueueOffset()
-					if playCmd := m.startTrackPlayback(t.PlayURL(), t); playCmd != nil {
+					if playCmd := m.resolveAndPlayCmd(t); playCmd != nil {
 						cmds = append(cmds, playCmd)
 					}
 				} else {
@@ -649,11 +686,11 @@ func (m Model) activateFocusedItem() (Model, tea.Cmd) {
 
 				if m.settings.PlaybackMode == settings.PlaybackOffline {
 					m.ensureDownloader()
-					m.downloader.Enqueue(t.ID, t.Title, r.Uploader, r.URL, m.downloadDir())
+					m.downloader.Enqueue(t.ID, t.Title, r.Uploader, r.URL, m.downloadDir(), r.CoverURL)
 					cmds = append(cmds, downloadCmd(m.downloader))
 				} else if m.settings.PlaybackMode == settings.PlaybackHybrid && !t.Downloaded {
 					m.ensureDownloader()
-					m.downloader.Enqueue(t.ID, t.Title, r.Uploader, r.URL, m.downloadDir())
+					m.downloader.Enqueue(t.ID, t.Title, r.Uploader, r.URL, m.downloadDir(), r.CoverURL)
 					cmds = append(cmds, downloadCmd(m.downloader))
 				}
 
@@ -687,10 +724,11 @@ func (m Model) activateSettingsItem() (Model, tea.Cmd) {
 		switch m.settingsCursor {
 		case 5: // Download Dir
 			m.settings.DownloadDir = newVal
-		case 6: // Cookie Browser
-			m.settings.CookieBrowser = newVal
-		case 7: // User-Agent
-			m.settings.UserAgent = newVal
+		case 6: // TIDAL Proxy URL
+			m.settings.TidalProxyURL = newVal
+			m.reinitTidalClient()
+		case 7: // Download Format (should not reach here, cycles on Enter)
+			// no-op; format is cycled, not typed
 		}
 		return m, tea.Batch(saveSettingsCmd(m.db, m.settings))
 	}
@@ -714,9 +752,20 @@ func (m Model) activateSettingsItem() (Model, tea.Cmd) {
 		return m, tea.Batch(saveSettingsCmd(m.db, m.settings))
 	case 3, 4: // Volume / Search Limit (numbers — Enter does nothing)
 		return m, nil
-	case 5, 6, 7: // Download Dir / Cookie Browser / User-Agent (strings)
+	case 5, 6: // Download Dir / TIDAL Proxy URL (strings)
 		m.startSettingsEdit()
 		return m, nil
+	case 7: // Download Format (cycle)
+		switch m.settings.DownloadFormat {
+		case settings.FormatM4A:
+			m.settings.DownloadFormat = settings.FormatMP3
+		default:
+			m.settings.DownloadFormat = settings.FormatM4A
+		}
+		if m.downloader != nil {
+			m.downloader.SetFormat(m.settings.DownloadFormat)
+		}
+		return m, tea.Batch(saveSettingsCmd(m.db, m.settings))
 	}
 	return m, nil
 }
