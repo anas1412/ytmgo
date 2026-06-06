@@ -55,6 +55,41 @@ case "$uname_arch" in
   *) err "Unsupported architecture: $uname_arch (only x86_64 and arm64)"; exit 1 ;;
 esac
 
+# ─── Arch Linux: try AUR package first ──────────────────────────────
+# If we're on Arch (or any Arch derivative), prefer installing via AUR
+# helper (paru > yay) for better system integration (desktop file, man
+# page, etc.). Fall back to the static binary if no AUR helper is found.
+is_arch=false
+if [ -f /etc/arch-release ]; then
+  is_arch=true
+elif [ -f /etc/os-release ]; then
+  grep -qi '^ID=arch' /etc/os-release  && is_arch=true
+  grep -qi 'cachyos'  /etc/os-release  && is_arch=true
+fi
+if [ "$os" = "Linux" ] && [ "$is_arch" = true ] && [ -z "${YTMGO_VERSION:-}" ] && [ -z "${YTMGO_INSTALL_DIR:-}" ]; then
+  if command -v paru >/dev/null 2>&1; then
+    info "Detected Arch Linux + paru — installing via AUR…"
+    paru -S --noconfirm ytmgo
+    success "Installed ytmgo via paru"
+    echo ""
+    info "To uninstall later:"
+    echo "  paru -R ytmgo"
+    exit 0
+  elif command -v yay >/dev/null 2>&1; then
+    info "Detected Arch Linux + yay — installing via AUR…"
+    yay -S --noconfirm ytmgo
+    success "Installed ytmgo via yay"
+    echo ""
+    info "To uninstall later:"
+    echo "  yay -R ytmgo"
+    exit 0
+  else
+    warn "Arch Linux detected but no AUR helper found (paru/yay)."
+    warn "Falling back to static binary. Install paru or yay for AUR support."
+    echo ""
+  fi
+fi
+
 goarch="$arch"
 asset="${BINARY}_${os}_${goarch}.tar.gz"
 
