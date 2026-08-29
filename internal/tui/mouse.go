@@ -6,10 +6,9 @@ import (
 	"time"
 
 	"ytmgo/internal/player"
-	"ytmgo/internal/settings"
 
-	"github.com/charmbracelet/lipgloss"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 )
 
 // ─── Mouse click handling ──────────────────────────────────────────
@@ -79,7 +78,7 @@ func (m Model) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 	if msg.Button == tea.MouseButtonWheelDown {
 		switch m.activePage {
 		case PageSettings:
-			if !m.settingsEditField && m.settingsCursor < 8 {
+			if !m.settingsEditField && m.settingsCursor < len(settingDefs)-1 {
 				m.settingsCursor++
 				m.clampSettingsOffset()
 			}
@@ -139,13 +138,13 @@ func (m Model) handleClick(x, y int) (Model, tea.Cmd) {
 			key   string
 			label string
 		}
-	tabs := []tabDef{
-		{"1", "Stream"},
-		{"2", "Favs"},
-		{"3", "Library"},
-		{"4", "History"},
-		{"5", "Settings"},
-	}
+		tabs := []tabDef{
+			{"1", "Stream"},
+			{"2", "Favs"},
+			{"3", "Library"},
+			{"4", "History"},
+			{"5", "Settings"},
+		}
 		var renderedTabs []string
 		var tabWidths []int
 		for i, t := range tabs {
@@ -217,8 +216,8 @@ func (m Model) handleClick(x, y int) (Model, tea.Cmd) {
 				if idx < 0 {
 					idx = 0
 				}
-				if idx > 8 { // 9 items indexed 0-8
-					idx = 8
+				if idx > len(settingDefs)-1 {
+					idx = len(settingDefs) - 1
 				}
 				m.settingsCursor = idx
 				m.clampSettingsOffset()
@@ -312,13 +311,9 @@ func (m Model) handleClick(x, y int) (Model, tea.Cmd) {
 			}
 		} else {
 			// Right column: split into queue (top) and downloads (bottom).
-			// Must match renderPanels() exactly. Each sub-panel: title (1) +
-			// content (N) + borders (2) = N + 3 total lines.
-			totalSubContentH := panelHeight - 6
-			if totalSubContentH < 0 {
-				totalSubContentH = 0
-			}
-			queueContentH := totalSubContentH / 2
+			// rightPanelSplit is shared with renderPanels() so the click
+			// boundary always matches what was drawn.
+			queueContentH, _ := m.rightPanelSplit()
 			// Queue sub-panel ends at: start (1) + queueHeight (queueContentH + 3)
 			queueBorderY := clickPanelStartY + queueContentH + 3
 			if y < queueBorderY {
@@ -399,8 +394,8 @@ func (m Model) handleControlsClick(x int) (Model, tea.Cmd) {
 	playGroupW := lipgloss.Width(spaceHint + " " + playLabel)
 	nextGroupW := lipgloss.Width(nHint + " " + nextLabel)
 
-	prevEnd := contentStartX + prevGroupW            // exclusive
-	playEnd := prevEnd + 2 + playGroupW              // +2 for "  " between groups
+	prevEnd := contentStartX + prevGroupW // exclusive
+	playEnd := prevEnd + 2 + playGroupW   // +2 for "  " between groups
 
 	// ── Right cluster (modes + volume) ──
 	sHint := styleKeyHint.Render("[s]")
@@ -419,15 +414,15 @@ func (m Model) handleControlsClick(x int) (Model, tea.Cmd) {
 		repeatText = "🔁 OFF"
 	}
 
-	shuffleLabel := sHint + " " + "🔀 SHFL"                           // "[s] 🔀 SHFL"
-	repeatLabel := rHint + " " + repeatText                            // "[r] 🔁 ..."
+	shuffleLabel := sHint + " " + "🔀 SHFL"  // "[s] 🔀 SHFL"
+	repeatLabel := rHint + " " + repeatText // "[r] 🔁 ..."
 	volLabel := volDownHint + " " + volBar + " " + fmt.Sprintf("%d%%", m.volume) + " " + volUpHint
 	right := lipgloss.JoinHorizontal(lipgloss.Left, shuffleLabel, "  ", repeatLabel, "  ", volLabel)
 	rightW := lipgloss.Width(right)
 
 	transportW := prevGroupW + 2 + playGroupW + 2 + nextGroupW
 	contentW := m.width - 6 // from renderControls
-	sepW := 1                // "│"
+	sepW := 1               // "│"
 	gap := contentW - transportW - rightW - sepW
 	if gap < 2 {
 		gap = 2
@@ -438,66 +433,19 @@ func (m Model) handleControlsClick(x int) (Model, tea.Cmd) {
 	if m.queue.Len() > 0 && x < rightStartX {
 		switch {
 		case x >= contentStartX && x < prevEnd: // prev zone
-			if m.position > 3 {
-				// Restart current track
-				oldPos := m.position
-				m.position = 0
-				if m.player != nil {
-					m.player.Seek(-oldPos)
-				}
-				m.setStatus("Restarting")
-				return m, nil
-			}
-			if _, ok := m.queue.Prev(); !ok {
-				return m, nil
-			}
-			m.queueCursor = m.queue.CurrentIndex()
-			if playCmd := m.playSelectedQueueItem(); playCmd != nil {
-				return m, tea.Batch(playCmd, saveQueueCmd(m.db, m.queue))
-			}
-			return m, nil
+			return m, m.prevTrack()
 
 		case x >= prevEnd && x < playEnd: // play/pause zone
-			if m.player != nil {
-				m.player.Pause()
-				m.playerState = m.player.State()
-			} else {
-				if m.playerState == player.StatePlaying {
-					m.playerState = player.StatePaused
-				} else {
-					m.playerState = player.StatePlaying
-				}
-			}
-			m.lastPositionAt = time.Now()
-			m.updateDiscordRPC()
-			if m.playerState == player.StatePlaying {
-				return m, playerTickCmd()
-			}
-			return m, nil
+			return m, m.togglePlayPause()
 
 		default: // next zone: x >= playEnd && x < rightStartX
-			if _, ok := m.queue.Next(); !ok {
-				return m, nil
-			}
-			m.queueCursor = m.queue.CurrentIndex()
-			if playCmd := m.playSelectedQueueItem(); playCmd != nil {
-				return m, tea.Batch(playCmd, saveQueueCmd(m.db, m.queue))
-			}
-			return m, nil
+			return m, m.nextTrack()
 		}
 	}
 
 	// Empty queue: only play/pause still works (via the player directly).
 	if m.queue.Len() == 0 && x >= prevEnd && x < playEnd {
-		if m.player != nil {
-			m.player.Pause()
-			m.playerState = m.player.State()
-		}
-		m.lastPositionAt = time.Now()
-		if m.playerState == player.StatePlaying {
-			return m, playerTickCmd()
-		}
-		return m, nil
+		return m, m.togglePlayPause()
 	}
 
 	// ── Right cluster clicks ──
@@ -506,84 +454,47 @@ func (m Model) handleControlsClick(x int) (Model, tea.Cmd) {
 		repeatW := lipgloss.Width(repeatLabel)
 		volLabelW := lipgloss.Width(volLabel)
 
-		shuffleEnd := rightStartX + shuffleW         // exclusive
-		repeatStart := shuffleEnd + 2                 // after "  "
-		repeatEnd := repeatStart + repeatW            // exclusive
-		volStart := repeatEnd + 2                     // after "  "
-		volEnd := volStart + volLabelW                // exclusive
+		shuffleEnd := rightStartX + shuffleW // exclusive
+		repeatStart := shuffleEnd + 2        // after "  "
+		repeatEnd := repeatStart + repeatW   // exclusive
+		volStart := repeatEnd + 2            // after "  "
+		volEnd := volStart + volLabelW       // exclusive
 
 		switch {
 		case x < shuffleEnd:
-			// ── Shuffle toggle ──
-			m.queue.ToggleShuffle()
-			m.modeFlashTarget = "shuffle"
-			m.modeFlashUntil = time.Now().Add(250 * time.Millisecond)
-			if m.queue.IsShuffle() {
-				m.setStatus("Shuffle: ON")
-			} else {
-				m.setStatus("Shuffle: OFF")
-			}
-			return m, nil
+			return m, m.toggleShuffleAction()
 
 		case x >= repeatStart && x < repeatEnd:
-			// ── Repeat cycle ──
-			if !m.queue.IsRepeat() && !m.queue.IsRepeatAll() {
-				m.queue.ToggleRepeat() // → repeat: true
-				m.setStatus("Repeat: ONE")
-			} else if m.queue.IsRepeat() {
-				m.queue.ToggleRepeat()    // repeat: false
-				m.queue.ToggleRepeatAll() // repeatAll: true
-				m.setStatus("Repeat: ALL")
-			} else {
-				m.queue.ToggleRepeatAll() // repeatAll: false
-				m.setStatus("Repeat: OFF")
-			}
-			m.modeFlashTarget = "repeat"
-			m.modeFlashUntil = time.Now().Add(250 * time.Millisecond)
-			return m, nil
+			return m, m.cycleRepeatAction()
 
 		case x >= volStart && x < volEnd:
 			// ── Volume sub-regions ──
 			volDownW := lipgloss.Width(volDownHint) // "[-]" = 3
-			volUpW := lipgloss.Width(volUpHint)      // "[+]" = 3
-			volDownEnd := volStart + volDownW         // exclusive end of "[-]"
-			volUpStart := volEnd - volUpW            // start of "[+]"
+			volUpW := lipgloss.Width(volUpHint)     // "[+]" = 3
+			volDownEnd := volStart + volDownW       // exclusive end of "[-]"
+			volUpStart := volEnd - volUpW           // start of "[+]"
 
 			switch {
 			case x < volDownEnd:
-				m.volume = max(m.volume-5, 0)
-				if m.player != nil {
-					m.player.SetVolume(m.volume)
-				}
+				cmd := m.changeVolume(-5)
 				m.setStatus(fmt.Sprintf("Volume: %d%%", m.volume))
-				return m, nil
+				return m, cmd
 
 			case x >= volUpStart:
-				m.volume = min(m.volume+5, 100)
-				if m.player != nil {
-					m.player.SetVolume(m.volume)
-				}
+				cmd := m.changeVolume(+5)
 				m.setStatus(fmt.Sprintf("Volume: %d%%", m.volume))
-				return m, nil
+				return m, cmd
 
 			default:
 				// Click on the volume bar or percentage — set proportionally.
-				barStart := volStart + volDownW + 1  // after "[-] "
-				barEnd := volEnd - volUpW - 1         // before " [+]"
+				barStart := volStart + volDownW + 1 // after "[-] "
+				barEnd := volEnd - volUpW - 1       // before " [+]"
 				barWidth := barEnd - barStart
 				if barWidth > 0 {
 					pct := float64(x-barStart) / float64(barWidth) * 100.0
-					m.volume = int(pct)
-					if m.volume < 0 {
-						m.volume = 0
-					}
-					if m.volume > 100 {
-						m.volume = 100
-					}
-					if m.player != nil {
-						m.player.SetVolume(m.volume)
-					}
+					cmd := m.setVolumeTo(int(pct))
 					m.setStatus(fmt.Sprintf("Volume: %d%%", m.volume))
+					return m, cmd
 				}
 				return m, nil
 			}
@@ -597,183 +508,8 @@ func (m Model) handleControlsClick(x int) (Model, tea.Cmd) {
 // cursor position (model must already have cursor and activePanel set).
 // Called by double-click detection in handleClick.
 func (m Model) activateFocusedItem() (Model, tea.Cmd) {
-	switch m.activePage {
-	case PageHistory:
-		if m.activePanel == PanelSearch && len(m.history) > 0 && m.historyCursor >= 0 && m.historyCursor < len(m.history) {
-			e := m.history[m.historyCursor]
-			m.switchPage(PageStream)
-			m.searchInput.SetValue(e.Title)
-			m.searchInput.Focus()
-			m.searchFocused = true
-			m.setStatus("Searching for: " + e.Title)
-		}
-		return m, nil
-	case PageFavorites:
-		if m.activePanel == PanelSearch {
-			if len(m.favorites) > 0 && m.favCursor >= 0 && m.favCursor < len(m.favorites) {
-				t := m.favorites[m.favCursor]
-				m.autoplayFired = false
-				m.queue.Add(t)
-
-				if m.playerState == player.StateStopped {
-					m.queue.SetCurrentIndex(m.queue.Len() - 1)
-					m.queueCursor = m.queue.CurrentIndex()
-					m.clampQueueOffset()
-					if playCmd := m.resolveAndPlayCmd(t); playCmd != nil {
-						return m, playCmd
-					}
-				}
-
-				m.setStatus("Added to queue: " + t.Title)
-			}
-			return m, nil
-		}
-		if m.activePanel == PanelQueue {
-			if playCmd := m.playSelectedQueueItem(); playCmd != nil {
-				return m, tea.Batch(playCmd, saveQueueCmd(m.db, m.queue))
-			}
-			return m, nil
-		}
-		return m, nil
-
-	case PageLibrary:
-		if m.activePanel == PanelSearch {
-			tracks := m.filteredLibrary()
-			if len(tracks) > 0 && m.libraryCursor >= 0 && m.libraryCursor < len(tracks) {
-				t := tracks[m.libraryCursor]
-				m.autoplayFired = false
-				m.queue.Add(t)
-
-				if m.playerState == player.StateStopped {
-					m.queue.SetCurrentIndex(m.queue.Len() - 1)
-					m.queueCursor = m.queue.CurrentIndex()
-					m.clampQueueOffset()
-					if playCmd := m.resolveAndPlayCmd(t); playCmd != nil {
-						return m, playCmd
-					}
-				}
-
-				m.setStatus("Added to queue: " + t.Title)
-			}
-			return m, nil
-		}
-		if m.activePanel == PanelQueue {
-			if playCmd := m.playSelectedQueueItem(); playCmd != nil {
-				return m, tea.Batch(playCmd, saveQueueCmd(m.db, m.queue))
-			}
-			return m, nil
-		}
-		return m, nil
-
-	default: // Stream page
-		switch m.activePanel {
-		case PanelSearch:
-			if len(m.results) > 0 && m.searchCursor >= 0 && m.searchCursor < len(m.results) {
-				r := m.results[m.searchCursor]
-				t := m.resolveTrack(r)
-				m.autoplayFired = false
-				m.queue.Add(t)
-
-				var cmds []tea.Cmd
-
-				if m.playerState == player.StateStopped {
-					m.queue.SetCurrentIndex(m.queue.Len() - 1)
-					m.queueCursor = m.queue.CurrentIndex()
-					m.clampQueueOffset()
-					if playCmd := m.resolveAndPlayCmd(t); playCmd != nil {
-						cmds = append(cmds, playCmd)
-					}
-				} else {
-					m.setStatus("Added to queue: " + t.Title)
-				}
-
-				if m.settings.PlaybackMode == settings.PlaybackOffline {
-					m.ensureDownloader()
-					m.downloader.Enqueue(t.ID, t.Title, r.Uploader, r.URL, m.downloadDir(), r.CoverURL)
-					cmds = append(cmds, downloadCmd(m.downloader))
-				} else if m.settings.PlaybackMode == settings.PlaybackHybrid && !t.Downloaded {
-					m.ensureDownloader()
-					m.downloader.Enqueue(t.ID, t.Title, r.Uploader, r.URL, m.downloadDir(), r.CoverURL)
-					cmds = append(cmds, downloadCmd(m.downloader))
-				}
-
-				if len(cmds) == 0 {
-					return m, nil
-				}
-				return m, tea.Batch(cmds...)
-			}
-			return m, nil
-
-		case PanelQueue:
-			if playCmd := m.playSelectedQueueItem(); playCmd != nil {
-				return m, tea.Batch(playCmd, saveQueueCmd(m.db, m.queue))
-			}
-			return m, nil
-
-		default:
-			return m, nil
-		}
-	}
-}
-
-// activateSettingsItem replicates the Enter key behaviour for the currently
-// focused settings item. Called by double-click on the settings page.
-func (m Model) activateSettingsItem() (Model, tea.Cmd) {
-	if m.settingsEditField {
-		// Finish editing string field
-		newVal := m.settingsEditInput.Value()
-		m.settingsEditField = false
-		m.settingsEditInput.Blur()
-		switch m.settingsCursor {
-		case 6: // Download Dir
-			m.settings.DownloadDir = newVal
-		case 7: // TIDAL Proxy URL
-			m.settings.TidalProxyURL = newVal
-			m.reinitTidalClient()
-		case 8: // Download Format (should not reach here, cycles on Enter)
-			// no-op; format is cycled, not typed
-		}
-		return m, tea.Batch(saveSettingsCmd(m.db, m.settings))
-	}
-	switch m.settingsCursor {
-	case 0: // Playback Mode (cycle)
-		m.settings.PlaybackMode = (m.settings.PlaybackMode + 1) % 3
-		return m, tea.Batch(saveSettingsCmd(m.db, m.settings))
-	case 1: // Show Quotes (boolean)
-		m.settings.ShowQuotes = !m.settings.ShowQuotes
-		m.tickCount = 0
-		if m.settings.ShowQuotes {
-			m.fallbackIdx = 0
-			m.currentQuote = fallbackQuotes[0]
-		} else {
-			m.advanceTip()
-		}
-		return m, tea.Batch(saveSettingsCmd(m.db, m.settings))
-	case 2: // Discord RPC (boolean)
-		m.settings.DiscordRPCEnabled = !m.settings.DiscordRPCEnabled
-		m.reinitDiscordRPC()
-		return m, tea.Batch(saveSettingsCmd(m.db, m.settings))
-	case 3: // Autoplay (boolean)
-		m.settings.AutoplayEnabled = !m.settings.AutoplayEnabled
-		return m, tea.Batch(saveSettingsCmd(m.db, m.settings))
-	case 4, 5: // Volume / Search Limit (numbers — Enter does nothing)
-		return m, nil
-	case 6, 7: // Download Dir / TIDAL Proxy URL (strings)
-		m.startSettingsEdit()
-		return m, nil
-	case 8: // Download Format (cycle)
-		switch m.settings.DownloadFormat {
-		case settings.FormatM4A:
-			m.settings.DownloadFormat = settings.FormatMP3
-		default:
-			m.settings.DownloadFormat = settings.FormatM4A
-		}
-		if m.downloader != nil {
-			m.downloader.SetFormat(m.settings.DownloadFormat)
-		}
-		return m, tea.Batch(saveSettingsCmd(m.db, m.settings))
-	}
-	return m, nil
+	cmd := m.activateSelection()
+	return m, cmd
 }
 
 // handleProgressClick maps a click on the progress bar row to a seek position.
@@ -825,7 +561,7 @@ func (m Model) handleProgressClick(x int) (Model, tea.Cmd) {
 	m.lastPosition = targetPos
 	m.lastPositionAt = time.Now()
 	m.setStatus(fmt.Sprintf("Seeked to %s", formatTime(targetPos)))
-	m.updateDiscordRPC()
+	m.updatePresence()
 
 	return m, nil
 }

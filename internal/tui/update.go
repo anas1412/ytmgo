@@ -2,16 +2,32 @@ package tui
 
 import (
 	"fmt"
+	"ytmgo/internal/db"
+	"ytmgo/internal/mpris"
 	"ytmgo/internal/player"
+	"ytmgo/internal/queue"
 	ver "ytmgo/internal/version"
+	"ytmgo/internal/ytmusic"
 
 	tea "github.com/charmbracelet/bubbletea"
 )
 
+// historyEntryTrack converts a play-history row back into a playable
+// track. New-style entries store a YouTube videoId, so the watch URL is
+// reconstructed directly; legacy entries (TIDAL ids) fall back to
+// yt-dlp resolution when played.
+func historyEntryTrack(e db.PlayHistoryEntry) queue.Track {
+	t := queue.Track{ID: e.TrackID, Title: e.Title, Artist: e.Artist, CoverURL: e.CoverURL}
+	if ytmusic.IsVideoID(e.TrackID) {
+		t.URL = ytmusic.WatchURL(e.TrackID)
+	}
+	return t
+}
+
 // Init satisfies tea.Model. It starts the tick for progress animation,
 // opens the database, and fetches TIDAL recommendations.
 func (m Model) Init() tea.Cmd {
-	return tea.Batch(tickCmd(), initQueueFavoritesCmd(m.db), fetchQuoteCmd(m.quoteSeq), fetchRecommendationsCmd(m.recsSeq, m.settings.SearchLimit, m.tidalClient, m.db), scanLibraryCmd(m.downloadDir()), checkUpdateCmd(ver.Version), discordRPCInitCmd(m.settings.DiscordRPCEnabled))
+	return tea.Batch(tickCmd(), initQueueFavoritesCmd(m.db), fetchQuoteCmd(m.quoteSeq), fetchRecommendationsCmd(m.recsSeq, m.settings.SearchLimit, m.db), scanLibraryCmd(m.downloadDir(), m.db), checkUpdateCmd(ver.Version), discordRPCInitCmd(m.settings.DiscordRPCEnabled), mprisInitCmd())
 }
 
 // Update satisfies tea.Model. It handles all messages without making
@@ -107,6 +123,40 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case AutoplayResultsMsg:
 		return m.handleAutoplayResults(msg)
 
+	// ── MPRIS service connected ──────────────────────────────────
+	case MprisReadyMsg:
+		m.mpris = msg.Svc
+		m.updateMPRIS()
+		return m, listenMprisCmd(m.mpris)
+
+	// ── External control via MPRIS (media keys, playerctl) ──────
+	case MprisCmdMsg:
+		var cmd tea.Cmd
+		switch msg.Cmd {
+		case mpris.CmdPlayPause:
+			cmd = m.togglePlayPause()
+		case mpris.CmdPlay:
+			if m.playerState == player.StatePaused {
+				cmd = m.togglePlayPause()
+			}
+		case mpris.CmdPause:
+			if m.playerState == player.StatePlaying {
+				cmd = m.togglePlayPause()
+			}
+		case mpris.CmdStop:
+			if m.player != nil {
+				m.player.Stop()
+			}
+			m.playerState = player.StateStopped
+			m.position = 0
+			m.updatePresence()
+		case mpris.CmdNext:
+			cmd = m.nextTrack()
+		case mpris.CmdPrev:
+			cmd = m.prevTrack()
+		}
+		return m, tea.Batch(cmd, listenMprisCmd(m.mpris))
+
 	// ── URL prefetched (background cache populate) ──────────────
 	case URLPrefetchedMsg:
 		return m.handleURLPrefetched(msg)
@@ -145,17 +195,5 @@ func (m *Model) playSelectedQueueItem() tea.Cmd {
 	t := m.queue.Tracks()[m.queueCursor]
 	m.queue.SetCurrentIndex(m.queueCursor)
 
-	// suppressAutoAdvance prevents the stale endedCmd from the PREVIOUS
-	// playback (which is still blocked on the old endCh) from calling
-	// Next() in the SongEnded handler when the old mpv is killed by
-	// the Play() call below.
-	if m.playerState == player.StatePlaying {
-		m.suppressAutoAdvance = true
-	}
-
 	return m.resolveAndPlayCmd(t)
 }
-
-
-
-

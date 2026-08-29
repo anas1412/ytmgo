@@ -58,7 +58,7 @@ When the queue is exhausted, the application automatically enqueues suggested tr
 ---
 
 ### Discord Rich Presence
-**Status:** ❌ Not started  
+**Status:** ✅ Done  
 **Effort:** Small  
 **Depends on:** Player module (existing), optional: Presence image assets  
 
@@ -137,6 +137,20 @@ Enhance the search panel with scoped and filtered queries:
 
 ---
 
+### Custom Theming System
+**Status:** ❌ Not started  
+**Effort:** Medium  
+**Depends on:** None  
+
+Allow users to define custom color schemes and layout preferences:
+
+- **Theme file** — load a TOML or YAML config specifying Lipgloss color values for each component (header, panels, borders, progress bar, etc.)
+- **Built-in presets** — ship 2–3 curated themes (catppuccin, dracula, gruvbox)
+- **Live reload** — re-apply theme on file change without restart
+- **Settings UI** — theme selector dropdown in the Settings page
+
+---
+
 ## Tier 3 — Backlog / Future Consideration
 
 ### Last.fm Scrobbling
@@ -150,20 +164,6 @@ Authenticate with Last.fm and automatically scrobble played tracks:
 - Scrobble on track change (or after 50% play duration per Last.fm rules)
 - "Now Playing" periodic update
 - Configurable: enable/disable, account linking from Settings UI
-
----
-
-### Custom Theming System
-**Status:** ❌ Not started  
-**Effort:** Medium  
-**Depends on:** None  
-
-Allow users to define custom color schemes and layout preferences:
-
-- **Theme file** — load a TOML or YAML config specifying Lipgloss color values for each component (header, panels, borders, progress bar, etc.)
-- **Built-in presets** — ship 2–3 curated themes (catppuccin, dracula, gruvbox)
-- **Live reload** — re-apply theme on file change without restart
-- **Settings UI** — theme selector dropdown in the Settings page
 
 ---
 

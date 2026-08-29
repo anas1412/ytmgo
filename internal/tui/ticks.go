@@ -75,5 +75,6 @@ func (m Model) handlePlayerTick(msg playerTickMsg) (tea.Model, tea.Cmd) {
 	if m.playerState == player.StatePlaying {
 		return m, playerTickCmd()
 	}
+	m.playerTicking = false
 	return m, nil
 }

@@ -2,8 +2,10 @@ package downloader
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"os/exec"
@@ -11,15 +13,21 @@ import (
 	"regexp"
 	"strings"
 	"sync"
+	"syscall"
+	"time"
 
 	"ytmgo/internal/ytresolve"
 )
+
+// coverClient downloads album art. Bounded so a stalled CDN response
+// can't hang a download job forever.
+var coverClient = &http.Client{Timeout: 30 * time.Second}
 
 // Status of a download job
 type Status int
 
 const (
-	StatusPending    Status = iota
+	StatusPending Status = iota
 	StatusDownloading
 	StatusDone
 	StatusFailed
@@ -28,16 +36,16 @@ const (
 
 // Job is a single download request
 type Job struct {
-	TrackID   string
-	Title     string
-	Uploader  string // artist name, used for yt-dlp search + output filename
-	URL       string // optional YouTube URL (if known); empty = resolve via ytresolve
-	OutDir    string
-	CoverURL  string // TIDAL album art URL; empty = skip cover embedding
-	Status    Status
-	Progress  float64 // 0-100
-	FilePath  string  // set when done
-	Err       error
+	TrackID  string
+	Title    string
+	Uploader string // artist name, used for yt-dlp search + output filename
+	URL      string // optional YouTube URL (if known); empty = resolve via ytresolve
+	OutDir   string
+	CoverURL string // TIDAL album art URL; empty = skip cover embedding
+	Status   Status
+	Progress float64 // 0-100
+	FilePath string  // set when done
+	Err      error
 }
 
 // ProgressEvent is sent to the progress channel
@@ -57,8 +65,8 @@ type Downloader struct {
 	jobs     []*Job
 	jobCh    chan *Job
 	progress chan ProgressEvent
-	cancel   chan struct{}
-	wg       sync.WaitGroup
+	ctx      context.Context // cancelled by Close; kills running yt-dlp/ffmpeg
+	cancel   context.CancelFunc
 	format   string // output format: "m4a" or "mp3"
 }
 
@@ -67,14 +75,28 @@ func New(outDir, format string) *Downloader {
 	if format == "" {
 		format = "m4a"
 	}
+	ctx, cancel := context.WithCancel(context.Background())
 	d := &Downloader{
 		jobCh:    make(chan *Job, 100),
 		progress: make(chan ProgressEvent, 200),
-		cancel:   make(chan struct{}),
+		ctx:      ctx,
+		cancel:   cancel,
 		format:   format,
 	}
 	go d.worker(outDir)
 	return d
+}
+
+// pgidCommand builds a command in its own process group so cancelling
+// the context kills the whole tree (yt-dlp spawns ffmpeg children that
+// a plain Process.Kill would orphan).
+func pgidCommand(ctx context.Context, name string, args ...string) *exec.Cmd {
+	cmd := exec.CommandContext(ctx, name, args...)
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	cmd.Cancel = func() error {
+		return syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
+	}
+	return cmd
 }
 
 // SetFormat updates the output audio format for new downloads.
@@ -180,15 +202,15 @@ func (d *Downloader) Jobs() []*Job {
 	return cp
 }
 
-// Close shuts down the downloader
+// Close shuts down the downloader and kills any running yt-dlp/ffmpeg.
 func (d *Downloader) Close() {
-	close(d.cancel)
+	d.cancel()
 }
 
 func (d *Downloader) worker(outDir string) {
 	for {
 		select {
-		case <-d.cancel:
+		case <-d.ctx.Done():
 			return
 		case job := <-d.jobCh:
 			d.runJob(job, outDir)
@@ -241,16 +263,16 @@ func (d *Downloader) runJob(job *Job, outDir string) {
 	// --get-filename). We know the output path from the template, so we
 	// construct it ourselves after yt-dlp completes.
 	args := []string{
-		"-x",                          // extract audio
-		"--audio-format", d.format,    // output format: m4a or mp3
-		"--audio-quality", "0",        // best quality
-		"--embed-thumbnail",           // embed YouTube thumbnail as cover art
+		"-x",                       // extract audio
+		"--audio-format", d.format, // output format: m4a or mp3
+		"--audio-quality", "0", // best quality
+		"--embed-thumbnail", // embed YouTube thumbnail as cover art
 		"--output", outPattern,
 		"--no-playlist",
 		videoURL,
 	}
 
-	cmd := exec.Command("yt-dlp", args...)
+	cmd := pgidCommand(d.ctx, "yt-dlp", args...)
 
 	// Capture stderr for progress parsing
 	stderr, err := cmd.StderrPipe()
@@ -332,9 +354,10 @@ func (d *Downloader) runJob(job *Job, outDir string) {
 	// file using ffmpeg. Non-fatal — if it fails we still report the
 	// download as completed (the audio file is already on disk).
 	if job.CoverURL != "" {
-		if err := embedCoverArt(outPath, job.CoverURL); err != nil {
-			// Log to stderr; user can re-embed later if they want.
-			fmt.Fprintf(os.Stderr, "ytmgo: cover art embed failed for %s - %s: %v\n",
+		if err := d.embedCoverArt(outPath, job.CoverURL); err != nil {
+			// Goes to the app log file (main redirects the default
+			// logger); writing to stderr would corrupt the TUI.
+			log.Printf("cover art embed failed for %s - %s: %v",
 				job.Uploader, job.Title, err)
 		}
 	}
@@ -381,9 +404,9 @@ func findExisting(dir, trackID string) string {
 // embedCoverArt downloads a cover image from coverURL and embeds it into
 // the audio file at audioPath using ffmpeg. Requires ffmpeg in PATH
 // (already needed by yt-dlp for audio extraction).
-func embedCoverArt(audioPath, coverURL string) error {
+func (d *Downloader) embedCoverArt(audioPath, coverURL string) error {
 	// Download the cover image to a temp file
-	resp, err := http.Get(coverURL) //nolint:noctx
+	resp, err := coverClient.Get(coverURL)
 	if err != nil {
 		return fmt.Errorf("download cover: %w", err)
 	}
@@ -412,14 +435,14 @@ func embedCoverArt(audioPath, coverURL string) error {
 	tmpName := audioTmp.Name()
 	audioTmp.Close()
 
-	cmd := exec.Command("ffmpeg",
+	cmd := pgidCommand(d.ctx, "ffmpeg",
 		"-i", audioPath,
 		"-i", coverTmp.Name(),
-		"-map", "0:a",          // audio from first input
-		"-map", "1:v",          // cover from second input
-		"-c", "copy",            // copy both streams without re-encode
+		"-map", "0:a", // audio from first input
+		"-map", "1:v", // cover from second input
+		"-c", "copy", // copy both streams without re-encode
 		"-disposition:v:0", "attached_pic",
-		"-y",                    // overwrite tmp output
+		"-y", // overwrite tmp output
 		tmpName,
 	)
 	if err := cmd.Run(); err != nil {

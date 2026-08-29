@@ -18,6 +18,11 @@ import (
 
 func (m Model) handleSearchResults(msg SearchResultsMsg) (tea.Model, tea.Cmd) {
 	m.isSearching = false
+	// The user cleared the search while this request was in flight and
+	// recommendations are showing again — drop the stale results.
+	if m.showingRecommendations {
+		return m, nil
+	}
 	if msg.Error != nil {
 		m.err = msg.Error
 		m.setStatus("Search failed: " + msg.Error.Error())
@@ -47,6 +52,7 @@ func (m Model) handleRecommendations(msg RecommendationsMsg) (tea.Model, tea.Cmd
 		m.setStatus("Recommendations unavailable: " + msg.Error.Error())
 	} else {
 		m.results = msg.Results
+		m.recommendations = msg.Results // cached; restored when a search is cleared
 		m.searchCursor = 0
 		m.searchOffset = 0
 		if len(msg.Results) > 0 {
@@ -220,8 +226,10 @@ func (m Model) handleDownloadProgress(msg DownloadProgressMsg) (tea.Model, tea.C
 
 func (m Model) handleURLResolved(msg URLResolvedMsg) (tea.Model, tea.Cmd) {
 	// Check if this resolve result is still relevant — a newer resolve
-	// may have been triggered since this one was dispatched.
-	if m.pendingResolve == nil {
+	// may have been triggered since this one was dispatched. Matching on
+	// TrackID+Action (not just non-nil) drops the reply of a superseded
+	// request instead of letting the older pick win over the newer one.
+	if m.pendingResolve == nil || m.pendingResolve.TrackID != msg.TrackID || m.pendingResolve.Action != msg.Action {
 		return m, nil
 	}
 	m.pendingResolve = nil
@@ -290,6 +298,10 @@ func (m Model) handlePosition(msg PositionMsg) (tea.Model, tea.Cmd) {
 	m.lastPosition = msg.Position
 	m.lastPositionAt = time.Now()
 
+	// Keep the MPRIS Position property roughly current (no signal spam:
+	// position changes are served on demand, not broadcast).
+	m.updateMPRIS()
+
 	// Pre-fetch autoplay recommendations 30 s before the current track
 	// ends so the suggestions are already in the queue by the time the
 	// song finishes — seamless playback.
@@ -302,7 +314,7 @@ func (m Model) handlePosition(msg PositionMsg) (tea.Model, tea.Cmd) {
 		m.queue.IsLastTrack() {
 		m.autoplayFired = true
 		m.setStatus("Autoplay fetching suggestions…")
-		autoplayCmd = fetchAutoplayCmd(m.tidalClient, m.db)
+		autoplayCmd = fetchAutoplayCmd(m.db)
 	}
 
 	// Keep listening
@@ -319,17 +331,11 @@ func (m Model) handlePosition(msg PositionMsg) (tea.Model, tea.Cmd) {
 // ── Song ended naturally (mpv exited / track finished) ───────────────
 
 func (m Model) handleSongEnded(msg SongEndedMsg) (tea.Model, tea.Cmd) {
-	// Suppress auto-advance if the old mpv was just killed by a
-	// user-initiated playback (Enter on queue item, n/p keys).
-	// Without this guard, the stale endedCmd from the previous
-	// playback fires a SongEndedMsg milliseconds after Play()
-	// kills the old process, and the Next() below advances past
-	// the track the user just selected — the "press Enter on
-	// first song → skips to the 2nd" bug.
-	if m.suppressAutoAdvance {
-		m.suppressAutoAdvance = false
-		return m, nil
-	}
+	// The endedCmd listener that delivered this message is gone; the
+	// next startTrackPlayback re-arms it. Spurious ends are no longer
+	// possible: the player only emits Ended for end-file reason "eof"
+	// (or "error"), never for track switches or manual stops.
+	m.endedListening = false
 
 	// Auto-advance: play the next track. Uses resolveAndPlayCmd
 	// so already-downloaded tracks play immediately while streaming
@@ -349,9 +355,9 @@ func (m Model) handleSongEnded(msg SongEndedMsg) (tea.Model, tea.Cmd) {
 				m.duration = 0
 				m.lastPosition = 0
 				m.lastPositionAt = time.Time{}
-				m.updateDiscordRPC()
+				m.updatePresence()
 				m.setStatus("Autoplay fetching suggestions…")
-				return m, fetchAutoplayCmd(m.tidalClient, m.db)
+				return m, fetchAutoplayCmd(m.db)
 			}
 
 			// Pre-fetch already in progress (handlePosition fired
@@ -364,7 +370,7 @@ func (m Model) handleSongEnded(msg SongEndedMsg) (tea.Model, tea.Cmd) {
 				m.duration = 0
 				m.lastPosition = 0
 				m.lastPositionAt = time.Time{}
-				m.updateDiscordRPC()
+				m.updatePresence()
 				m.setStatus("Autoplay loading suggestions…")
 				return m, nil
 			}
@@ -375,7 +381,7 @@ func (m Model) handleSongEnded(msg SongEndedMsg) (tea.Model, tea.Cmd) {
 			m.duration = 0
 			m.lastPosition = 0
 			m.lastPositionAt = time.Time{}
-			m.updateDiscordRPC()
+			m.updatePresence()
 			m.setStatus("Queue empty")
 			return m, nil
 		}
@@ -405,7 +411,7 @@ func (m Model) handleAutoplayResults(msg AutoplayResultsMsg) (tea.Model, tea.Cmd
 
 	if len(msg.Tracks) == 0 {
 		if m.playerState != player.StatePlaying {
-			m.updateDiscordRPC()
+			m.updatePresence()
 		}
 		m.setStatus("Autoplay: no suggestions available")
 		return m, nil

@@ -9,10 +9,10 @@ import (
 	"ytmgo/internal/player"
 	"ytmgo/internal/queue"
 	"ytmgo/internal/search"
-	"ytmgo/internal/settings"
 	ver "ytmgo/internal/version"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 )
 
 // ─── Extra inline styles (beyond what styles.go provides) ──────────
@@ -149,7 +149,7 @@ func (m Model) renderSettingsPanels() string {
 
 	// Left panel: Settings list (always focused — arrows navigate it)
 	leftBorder := panelBorderFocused
-	settingsTitle := stylePanelTitle.Render("SETTINGS")
+	settingsTitle := stylePanelTitle.Render(truncate("SETTINGS", max(1, panelWidth-2)))
 	settingsContent := m.renderSettingsList(panelWidth, panelHeight-3)
 	leftPanel := lipgloss.JoinVertical(lipgloss.Top,
 		settingsTitle,
@@ -162,7 +162,7 @@ func (m Model) renderSettingsPanels() string {
 
 	// Right panel: Keyboard shortcuts (always visible, view-only)
 	rightBorder := panelBorder
-	helpTitle := stylePanelTitle.Render("KEYBOARD SHORTCUTS")
+	helpTitle := stylePanelTitle.Render(truncate("KEYBOARD SHORTCUTS", max(1, panelWidth-2)))
 	helpContent := m.renderHelpPanel(panelWidth, panelHeight-3)
 	rightPanel := lipgloss.JoinVertical(lipgloss.Top,
 		helpTitle,
@@ -231,9 +231,11 @@ func (m Model) renderHeader() string {
 	}
 	spacer := strings.Repeat(" ", gap)
 
-	return styleHeader.Render(
+	// Hard-truncate: a header wider than the terminal wraps to a second
+	// physical row and shifts every mouse hit zone below it.
+	return truncate(styleHeader.Render(
 		lipgloss.JoinHorizontal(lipgloss.Center, left, spacer, tabsStr),
-	)
+	), m.width)
 }
 
 // ─── Panels (Search Results | Queue + Downloads) ───────────────────
@@ -291,11 +293,15 @@ func (m Model) renderPanels() string {
 	default:
 		if m.showingRecommendations {
 			rHint := styleKeyHint.Render("[R]")
-			xHint := styleKeyHint.Render("[x]")
 			panelLabel = "RECOMMENDATIONS  " + rHint + " refresh  " + xHint + " download  " + fHint + " add to fav"
+		} else {
+			panelLabel = "SEARCH RESULTS  " + xHint + " download  " + fHint + " add to fav"
 		}
 	}
-	searchTitle := stylePanelTitle.Render(panelLabel)
+	// Truncate every panel title to the panel width: a wrapped title
+	// grows the box a full row and breaks mouse hit-testing below it.
+	titleW := max(1, panelWidth-2)
+	searchTitle := stylePanelTitle.Render(truncate(panelLabel, titleW))
 
 	// Search panel content.
 	// lipgloss Height(N) on a bordered style renders N+2 total lines (N content
@@ -315,22 +321,22 @@ func (m Model) renderPanels() string {
 
 	// Split right panel into queue (top) and downloads (bottom).
 	// Each sub-panel renders as: border-top (1) + title (1) + content (N) + border-bottom (1)
-	// = N + 3 total lines. Two sub-panels: 2N + 6 total. We want total = panelHeight,
-	// so N + M = panelHeight - 6 (split roughly 50/50).
-	totalSubContentH := panelHeight - 6
-	if totalSubContentH < 0 {
-		totalSubContentH = 0
-	}
-	queueContentH := totalSubContentH / 2
-	downloadsContentH := totalSubContentH - queueContentH
+	// = N + 3 total lines. The split lives in rightPanelSplit so the
+	// mouse hit-testing stays in sync; the downloads panel collapses
+	// when it has no jobs.
+	queueContentH, downloadsContentH := m.rightPanelSplit()
 
 	// Queue sub-panel (top of right column)
 	dHint := styleKeyHint.Render("[d]")
 	dCapHint := styleKeyHint.Render("[D]")
 	reorderHint := styleKeyHint.Render("[ctrl+↑↓]")
-	queueTitle := fmt.Sprintf("QUEUE  [%d]  %s remove  %s clear  %s reorder",
-		m.queue.Len(), dHint, dCapHint, reorderHint)
-	queueTitleStyled := stylePanelTitle.Render(queueTitle)
+	queueCount := fmt.Sprintf("[%d]", m.queue.Len())
+	if total := m.queueTotalSecs(); total > 0 {
+		queueCount = fmt.Sprintf("[%d · %s]", m.queue.Len(), formatTotalDuration(total))
+	}
+	queueTitle := fmt.Sprintf("QUEUE  %s  %s remove  %s clear  %s reorder",
+		queueCount, dHint, dCapHint, reorderHint)
+	queueTitleStyled := stylePanelTitle.Render(truncate(queueTitle, titleW))
 	queueContent := m.renderQueue(panelWidth-2, queueContentH)
 	queuePanel := lipgloss.JoinVertical(lipgloss.Top,
 		queueTitleStyled,
@@ -348,7 +354,7 @@ func (m Model) renderPanels() string {
 	}
 	oHint := styleKeyHint.Render("[o]")
 	downloadsTitle := fmt.Sprintf("DOWNLOADS  [%d]  %s open folder", dlCount, oHint)
-	downloadsTitleStyled := stylePanelTitle.Render(downloadsTitle)
+	downloadsTitleStyled := stylePanelTitle.Render(truncate(downloadsTitle, titleW))
 	downloadsContent := m.renderDownloadQueue(panelWidth-2, downloadsContentH)
 	downloadsPanel := lipgloss.JoinVertical(lipgloss.Top,
 		downloadsTitleStyled,
@@ -386,13 +392,13 @@ func (m Model) renderSearchResults(width, height int) string {
 	}
 	if m.isSearching {
 		return styleEmpty.Width(width - 2).Height(height).Render(
-			"⏳  Searching…",
+			m.spinner() + "  Searching…",
 		)
 	}
 	if len(m.results) == 0 {
 		if m.showingRecommendations {
 			return styleEmpty.Width(width - 2).Height(height).Render(
-				"⏳  Loading recommendations…",
+				m.spinner() + "  Loading recommendations…",
 			)
 		}
 		return styleEmpty.Width(width - 2).Height(height).Render(
@@ -416,12 +422,8 @@ func (m Model) renderSearchResults(width, height int) string {
 		lines = append(lines, m.formatResultRow(i, m.results[i], width-2, isSelected))
 	}
 
-	remaining := len(m.results) - end
-	if remaining > 0 {
-		scrollbar := fmt.Sprintf("  ↓ %d more  [cursor %d/%d]", remaining, m.searchCursor+1, len(m.results))
-		lines = append(lines,
-			lipgloss.NewStyle().Foreground(colorTextDim).Italic(true).PaddingLeft(1).Render(scrollbar),
-		)
+	if ind := scrollIndicator(start, len(m.results)-end, m.searchCursor+1, len(m.results)); ind != "" {
+		lines = append(lines, ind)
 	}
 
 	// Pad each line to full width, then pad to full height — this
@@ -444,7 +446,7 @@ func (m Model) renderLibrary(width, height int) string {
 	if len(tracks) == 0 {
 		if !m.libraryLoaded {
 			return styleEmpty.Width(width - 2).Height(height).Render(
-				"⏳  Scanning library…",
+				m.spinner() + "  Scanning library…",
 			)
 		}
 		if m.searchInput.Value() != "" {
@@ -473,9 +475,9 @@ func (m Model) renderLibrary(width, height int) string {
 		t := tracks[i]
 		prefix := fmt.Sprintf("%d. ", i+1)
 		title := t.Title
-		maxTitle := width - len(prefix) - 2
-		if len(title) > maxTitle && maxTitle > 3 {
-			title = title[:maxTitle-1] + "…"
+		maxTitle := width - lipgloss.Width(prefix) - 2
+		if maxTitle > 3 {
+			title = truncate(title, maxTitle)
 		}
 		line := prefix + title
 
@@ -494,8 +496,8 @@ func (m Model) renderLibrary(width, height int) string {
 		}
 		rightInfo := heart + dur + "  ✓"
 		maxLeft := width - lipgloss.Width(rightInfo) - 2
-		if len(leftInfo) > maxLeft && maxLeft > 3 {
-			leftInfo = leftInfo[:maxLeft-1] + "…"
+		if maxLeft > 3 {
+			leftInfo = truncate(leftInfo, maxLeft)
 		}
 		spacing := width - lipgloss.Width(leftInfo) - lipgloss.Width(rightInfo)
 		if spacing < 1 {
@@ -506,12 +508,8 @@ func (m Model) renderLibrary(width, height int) string {
 		lines = append(lines, renderListItemBlock(line, info, isSelected, false, width))
 	}
 
-	remaining := len(tracks) - end
-	if remaining > 0 {
-		scrollbar := fmt.Sprintf("  ↓ %d more  [cursor %d/%d]", remaining, m.libraryCursor+1, len(tracks))
-		lines = append(lines,
-			lipgloss.NewStyle().Foreground(colorTextDim).Italic(true).PaddingLeft(1).Render(scrollbar),
-		)
+	if ind := scrollIndicator(start, len(tracks)-end, m.libraryCursor+1, len(tracks)); ind != "" {
+		lines = append(lines, ind)
 	}
 
 	// Pad each line to full width, then pad to full height — overwrites
@@ -552,9 +550,9 @@ func (m Model) renderFavorites(width, height int) string {
 		t := tracks[i]
 		prefix := fmt.Sprintf("%d. ", i+1)
 		title := t.Title
-		maxTitle := width - len(prefix) - 2
-		if len(title) > maxTitle && maxTitle > 3 {
-			title = title[:maxTitle-1] + "…"
+		maxTitle := width - lipgloss.Width(prefix) - 2
+		if maxTitle > 3 {
+			title = truncate(title, maxTitle)
 		}
 		line := prefix + title
 
@@ -569,8 +567,8 @@ func (m Model) renderFavorites(width, height int) string {
 		leftInfo := "   " + artist
 		rightInfo := "♥  " + dur
 		maxLeft := width - lipgloss.Width(rightInfo) - 2
-		if len(leftInfo) > maxLeft && maxLeft > 3 {
-			leftInfo = leftInfo[:maxLeft-1] + "…"
+		if maxLeft > 3 {
+			leftInfo = truncate(leftInfo, maxLeft)
 		}
 		spacing := width - lipgloss.Width(leftInfo) - lipgloss.Width(rightInfo)
 		if spacing < 1 {
@@ -581,12 +579,8 @@ func (m Model) renderFavorites(width, height int) string {
 		lines = append(lines, renderListItemBlock(line, info, isSelected, false, width))
 	}
 
-	remaining := len(tracks) - end
-	if remaining > 0 {
-		scrollbar := fmt.Sprintf("  ↓ %d more  [cursor %d/%d]", remaining, m.favCursor+1, len(tracks))
-		lines = append(lines,
-			lipgloss.NewStyle().Foreground(colorTextDim).Italic(true).PaddingLeft(1).Render(scrollbar),
-		)
+	if ind := scrollIndicator(start, len(tracks)-end, m.favCursor+1, len(tracks)); ind != "" {
+		lines = append(lines, ind)
 	}
 
 	result := strings.Join(lines, "\n")
@@ -606,7 +600,7 @@ func (m Model) renderHistory(width, height int) string {
 	if len(entries) == 0 {
 		if !m.historyLoaded {
 			return styleEmpty.Width(width - 2).Height(height).Render(
-				"⏳  Loading history…",
+				m.spinner() + "  Loading history…",
 			)
 		}
 		return styleEmpty.Width(width - 2).Height(height).Render(
@@ -631,9 +625,9 @@ func (m Model) renderHistory(width, height int) string {
 
 		prefix := fmt.Sprintf("%d. ", i+1)
 		title := e.Title
-		maxTitle := width - len(prefix) - 2
-		if len(title) > maxTitle && maxTitle > 3 {
-			title = title[:maxTitle-1] + "…"
+		maxTitle := width - lipgloss.Width(prefix) - 2
+		if maxTitle > 3 {
+			title = truncate(title, maxTitle)
 		}
 		line := prefix + title
 
@@ -644,8 +638,8 @@ func (m Model) renderHistory(width, height int) string {
 		timeAgo := relativeTime(e.PlayedAt)
 		leftInfo := "   " + artist
 		maxLeft := width - lipgloss.Width(timeAgo) - 2
-		if len(leftInfo) > maxLeft && maxLeft > 3 {
-			leftInfo = leftInfo[:maxLeft-1] + "…"
+		if maxLeft > 3 {
+			leftInfo = truncate(leftInfo, maxLeft)
 		}
 		spacing := width - lipgloss.Width(leftInfo) - lipgloss.Width(timeAgo)
 		if spacing < 1 {
@@ -656,12 +650,8 @@ func (m Model) renderHistory(width, height int) string {
 		lines = append(lines, renderListItemBlock(line, info, isSelected, false, width))
 	}
 
-	remaining := len(entries) - end
-	if remaining > 0 {
-		scrollbar := fmt.Sprintf("  ↓ %d more  [cursor %d/%d]", remaining, m.historyCursor+1, len(entries))
-		lines = append(lines,
-			lipgloss.NewStyle().Foreground(colorTextDim).Italic(true).PaddingLeft(1).Render(scrollbar),
-		)
+	if ind := scrollIndicator(start, len(entries)-end, m.historyCursor+1, len(entries)); ind != "" {
+		lines = append(lines, ind)
 	}
 
 	result := strings.Join(lines, "\n")
@@ -682,9 +672,9 @@ func (m Model) formatResultRow(idx int, r search.Result, width int, isSelected b
 	dur := formatDuration(r.Duration)
 
 	prefix := fmt.Sprintf("%d. ", idx+1)
-	maxTitle := width - len(prefix)
-	if len(title) > maxTitle && maxTitle > 3 {
-		title = title[:maxTitle-1] + "…"
+	maxTitle := width - lipgloss.Width(prefix)
+	if maxTitle > 3 {
+		title = truncate(title, maxTitle)
 	}
 	line := prefix + title
 
@@ -695,9 +685,9 @@ func (m Model) formatResultRow(idx int, r search.Result, width int, isSelected b
 		heart = "♥  "
 	}
 	rightInfo := heart + dur
-	maxLeft := width - len(rightInfo) - 2
-	if len(leftInfo) > maxLeft && maxLeft > 3 {
-		leftInfo = leftInfo[:maxLeft-1] + "…"
+	maxLeft := width - lipgloss.Width(rightInfo) - 2
+	if maxLeft > 3 {
+		leftInfo = truncate(leftInfo, maxLeft)
 	}
 
 	spacing := width - lipgloss.Width(leftInfo) - lipgloss.Width(rightInfo)
@@ -734,11 +724,8 @@ func (m Model) renderQueue(width, height int) string {
 		lines = append(lines, m.formatQueueRow(i-start, tracks[i], width-2))
 	}
 
-	if len(tracks) > end {
-		scrollbar := fmt.Sprintf("  ↓ %d more  [cursor %d/%d]", len(tracks)-end, m.queueCursor+1, len(tracks))
-		lines = append(lines,
-			lipgloss.NewStyle().Foreground(colorTextDim).Italic(true).PaddingLeft(1).Render(scrollbar),
-		)
+	if ind := scrollIndicator(start, len(tracks)-end, m.queueCursor+1, len(tracks)); ind != "" {
+		lines = append(lines, ind)
 	}
 
 	// Pad each line to full width, then pad to full height — overwrites
@@ -769,10 +756,10 @@ func (m Model) formatQueueRow(idx int, t queue.Track, width int) string {
 	// Absolute numbering: every track shows its real position (1..N)
 	// so the display number always matches the scrollbar cursor position.
 	prefix := fmt.Sprintf("%s%d. ", indicator, m.queueOffset+idx+1)
-	maxTitle := width - len(prefix)
+	maxTitle := width - lipgloss.Width(prefix)
 	title := t.Title
-	if len(title) > maxTitle && maxTitle > 3 {
-		title = title[:maxTitle-1] + "…"
+	if maxTitle > 3 {
+		title = truncate(title, maxTitle)
 	}
 	line := prefix + title
 
@@ -787,8 +774,8 @@ func (m Model) formatQueueRow(idx int, t queue.Track, width int) string {
 	}
 	rightInfo := heart + t.Duration + dlIndicator
 	maxLeft := width - lipgloss.Width(rightInfo) - 2
-	if len(leftInfo) > maxLeft && maxLeft > 3 {
-		leftInfo = leftInfo[:maxLeft-1] + "…"
+	if maxLeft > 3 {
+		leftInfo = truncate(leftInfo, maxLeft)
 	}
 
 	spacing := width - lipgloss.Width(leftInfo) - lipgloss.Width(rightInfo)
@@ -820,7 +807,7 @@ func renderListItemBlock(line, info string, isSelected, isPlaying bool, width in
 		infoStyle = lipgloss.NewStyle().Foreground(colorTextDim)
 	}
 
-	return bgStyle.Render(titleStyle.Render(line) + "\n" + infoStyle.Render(info))
+	return bgStyle.Render(truncate(titleStyle.Render(line), width) + "\n" + truncate(infoStyle.Render(info), width))
 }
 
 // ─── Download Queue (right panel on Library page) ─────────────────
@@ -860,13 +847,9 @@ func (m Model) renderDownloadQueue(width, height int) string {
 				j.Progress,
 			)
 		} else {
-			// Braille spinner — 6 frames, advances every 500ms tick,
-			// so a full rotation every 3s.
-			spinnerFrames := []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴"}
-			spinner := spinnerFrames[m.tickCount%len(spinnerFrames)]
 			line = fmt.Sprintf("⬇ %s  %s  Starting…",
 				truncate(j.Title, max(1, width-25)),
-				spinner,
+				m.spinner(),
 			)
 		}
 		sections = append(sections, styleDownloadLabel.Render(line))
@@ -940,21 +923,8 @@ func (m Model) renderDownloadQueue(width, height int) string {
 func (m Model) renderSettingsList(panelWidth, panelHeight int) string {
 	var lines []string
 
-	settingsItems := []struct {
-		label string
-		value string
-		desc  string
-	}{
-		{"Playback Mode", settings.PlaybackModeLabel(m.settings.PlaybackMode), "Stream (online) · Hybrid (play+download) · Offline (download first)"},
-		{"Show Quotes", boolStr(m.settings.ShowQuotes), "Show quotes in status bar when idle"},
-		{"Discord RPC", boolStr(m.settings.DiscordRPCEnabled), "Show currently playing track on your Discord profile"},
-		{"Autoplay", boolStr(m.settings.AutoplayEnabled), "Auto-queue related tracks when queue runs out"},
-		{"Default Volume", fmt.Sprintf("%d", m.settings.DefaultVolume), "Starting volume 0-100  (+/- adjust)"},
-		{"Search Limit", fmt.Sprintf("%d", m.settings.SearchLimit), "Max results per search  (+/- adjust)"},
-		{"Download Dir", truncate(m.settings.DownloadDir, 40), "Where files are saved  (press 'o' to open)"},
-		{"TIDAL Proxy URL", truncate(m.settings.TidalProxyURL, 40), "Community TIDAL proxy for search & recommendations"},
-		{"Download Format", settings.DownloadFormatLabel(m.settings.DownloadFormat), settings.DownloadFormatHint(m.settings.DownloadFormat)},
-	}
+	// Rows come from settingDefs — the single source of truth shared
+	// with the keyboard and mouse handlers.
 
 	// Each item uses ~4 lines (label, value, desc, blank).
 	// Reserve 2 lines for scroll indicator + help text at bottom.
@@ -964,14 +934,14 @@ func (m Model) renderSettingsList(panelWidth, panelHeight int) string {
 	}
 	offset := m.settingsOffset
 	end := offset + vis
-	if end > len(settingsItems) {
-		end = len(settingsItems)
+	if end > len(settingDefs) {
+		end = len(settingDefs)
 	}
 
 	innerW := max(1, panelWidth-2)
 
-	for i, item := range settingsItems[offset:end] {
-		idx := offset + i
+	for idx := offset; idx < end; idx++ {
+		def := settingDefs[idx]
 		cursor := "  "
 		if idx == m.settingsCursor && !m.settingsEditField {
 			cursor = "▶ "
@@ -980,13 +950,13 @@ func (m Model) renderSettingsList(panelWidth, panelHeight int) string {
 		// Truncate each element to innerW so it never spills out of the
 		// bordered panel — descriptions like "… Offline (download first)"
 		// are particularly long and would overflow on narrow terminals.
-		label := styleSettingsLabel.Render(truncate(cursor+item.label, innerW))
-		value := styleSettingsValue.Render(truncate(item.value, innerW))
-		desc := styleSettingsDesc.Render(truncate(item.desc, innerW))
+		label := styleSettingsLabel.Render(truncate(cursor+def.label, innerW))
+		value := styleSettingsValue.Render(truncate(def.value(&m), innerW))
+		desc := styleSettingsDesc.Render(truncate(def.desc(&m), innerW))
 
-		// Show an inline [Open] button when the cursor is on the Download
-		// Dir row and we're not editing — makes the 'o' shortcut discoverable.
-		if idx == 6 && !m.settingsEditField {
+		// Show an inline [Open] button on rows that declare one (the
+		// Download Dir row) — makes the 'o' shortcut discoverable.
+		if def.openBtn && !m.settingsEditField {
 			openBtn := "  " + styleSettingsOpenBtn.Render("[Open]")
 			value = value + openBtn
 		}
@@ -996,21 +966,24 @@ func (m Model) renderSettingsList(panelWidth, panelHeight int) string {
 			value = styleSettingsValue.Render(m.settingsEditInput.View())
 		}
 
-		lines = append(lines, label)
-		lines = append(lines, "  "+truncate(value, innerW))
-		lines = append(lines, desc)
+		// Clamp AFTER styling: the styles add left padding, so a string
+		// truncated to innerW before styling can still wrap inside the
+		// box and grow it a row (breaking mouse hit-testing below).
+		lines = append(lines, truncate(label, innerW))
+		lines = append(lines, truncate("  "+value, innerW))
+		lines = append(lines, truncate(desc, innerW))
 		lines = append(lines, "")
 	}
 
 	// Scroll indicator
-	if end < len(settingsItems) {
-		lines = append(lines, styleSettingsDesc.Render(truncate("  ↓ more items below", innerW)))
+	if end < len(settingDefs) {
+		lines = append(lines, truncate(styleSettingsDesc.Render("  ↓ more items below"), innerW))
 	} else if offset > 0 {
-		lines = append(lines, styleSettingsDesc.Render(truncate("  ↑ more items above", innerW)))
+		lines = append(lines, truncate(styleSettingsDesc.Render("  ↑ more items above"), innerW))
 	}
 
 	// Help text at bottom
-	lines = append(lines, styleSettingsDesc.Render(truncate("↑↓ navigate · Enter toggle/edit · Esc cancel edit · 1/2/3 switch page", innerW)))
+	lines = append(lines, truncate(styleSettingsDesc.Render("↑↓ navigate · Enter toggle/edit · Esc cancel edit · 1-5 switch page"), innerW))
 
 	// Pad/truncate each line to full width and full height — overwrites
 	// any stale content from prior taller frames.
@@ -1055,14 +1028,17 @@ func padToWidth(s string, width int) string {
 	return strings.Join(lines, "\n")
 }
 
+// truncate shortens s to at most maxLen terminal cells, appending an
+// ellipsis when cut. Width-aware: CJK characters occupy two cells and
+// are never split mid-rune.
 func truncate(s string, maxLen int) string {
 	if maxLen < 1 {
 		return ""
 	}
-	if len(s) <= maxLen {
+	if lipgloss.Width(s) <= maxLen {
 		return s
 	}
-	return s[:maxLen-1] + "…"
+	return ansi.Truncate(s, maxLen, "…")
 }
 
 var styleTextDim = lipgloss.NewStyle().Foreground(colorTextDim)
@@ -1097,8 +1073,8 @@ func (m Model) renderPlayerBar() string {
 
 		trackLabel := t.Title + " — " + t.Artist
 		// Title line gets the full inner width now (time appears on the progress row).
-		if len(trackLabel) > innerW && innerW > 5 {
-			trackLabel = trackLabel[:innerW-1] + "…"
+		if innerW > 5 {
+			trackLabel = truncate(trackLabel, innerW)
 		}
 
 		// Smooth progress: glide the bar from the last reported position
@@ -1134,6 +1110,24 @@ func (m Model) renderPlayerBar() string {
 			styleNowTitle.Render(trackLabel),
 		)
 
+		// Right-align a dim "up next" hint on the same row when it fits,
+		// so the layout height (and mouse hit-testing) never changes.
+		if next, ok := m.queue.PeekNext(); ok {
+			upNext := "⏭ " + next.Title
+			avail := innerW - lipgloss.Width(nowPlaying) - 4
+			if avail >= 12 {
+				upNext = truncate(upNext, avail)
+				gapN := innerW - lipgloss.Width(nowPlaying) - lipgloss.Width(upNext)
+				if gapN > 0 {
+					nowPlaying = lipgloss.JoinHorizontal(lipgloss.Left,
+						nowPlaying,
+						strings.Repeat(" ", gapN),
+						styleTextDim.Render(upNext),
+					)
+				}
+			}
+		}
+
 		rightPart := styleTime.Render(timeInfo)
 		hHint := styleKeyHint.Render("[h]")
 		lHint := styleKeyHint.Render("[l]")
@@ -1157,10 +1151,13 @@ func (m Model) renderPlayerBar() string {
 		controls = m.renderControls()
 	}
 
+	// Clamp each row to the box's inner width: an overflowing row makes
+	// the whole join wider than the terminal, which wraps and shifts
+	// every mouse hit zone.
 	content := lipgloss.JoinVertical(lipgloss.Left,
-		nowPlaying,
-		progress,
-		controls,
+		truncate(nowPlaying, max(1, innerW)),
+		truncate(progress, max(1, innerW)),
+		truncate(controls, max(1, innerW)),
 	)
 
 	boxStyle := stylePlayerBox
@@ -1319,73 +1316,135 @@ func (m Model) renderHelpBar() string {
 	if gap < 1 {
 		gap = 1
 	}
-	return strings.Repeat(" ", margin) + left + strings.Repeat(" ", gap) + right + strings.Repeat(" ", margin)
+	// Hard-truncate so the help bar can never wrap (see renderStatus).
+	return truncate(strings.Repeat(" ", margin)+left+strings.Repeat(" ", gap)+right+strings.Repeat(" ", margin), m.width)
 }
 
 // ─── Status ────────────────────────────────────────────────────────
 
 func (m Model) renderStatus() string {
+	// Hard-truncate every variant: a status line wider than the terminal
+	// (long Japanese titles, long errors) wraps to a second physical row
+	// and shifts the player bar's mouse hit zones.
 	if m.err != nil {
-		return styleStatusErr.Render("✗ Error: " + m.err.Error())
+		return truncate(styleStatusErr.Render("✗ Error: "+m.err.Error()), m.width)
 	}
 	if m.isConfirming() && m.confirmAction == confirmDeleteTrack {
 		// Delete-track confirmation is fully styled inline in the message
-		// itself — return it raw so the ANSI codes aren't wrapped.
-		return m.statusMessage
+		// itself — return it raw so the ANSI codes aren't re-wrapped.
+		return truncate(m.statusMessage, m.width)
 	}
 	if m.statusMessage != "" {
-		return styleStatus.Render("● " + m.statusMessage)
+		return truncate(styleStatus.Render("● "+m.statusMessage), m.width)
 	}
 	// Nothing actionable — show a quote (when enabled) or classic tip
 	if m.settings.ShowQuotes {
-		return styleStatusIdle.Render("▸ " + m.currentQuote)
+		return truncate(styleStatusIdle.Render("▸ "+m.currentQuote), m.width)
 	}
-	return styleStatusIdle.Render("▸ " + m.currentTip())
+	return truncate(styleStatusIdle.Render("▸ "+m.currentTip()), m.width)
 }
 
 // ─── Help Overlay ──────────────────────────────────────────────────
 
 // renderHelpPanel renders keyboard shortcuts inside a bordered panel.
+// When the single-column list would overflow the panel (it usually
+// would: the keymap is longer than a terminal is tall), the entries
+// flow into two columns so no shortcut is silently cut off.
 func (m Model) renderHelpPanel(panelWidth, panelHeight int) string {
-	var b strings.Builder
 	innerW := max(1, panelWidth-2)
-	keyCol := styleHelpKey.Width(18)
+
+	keyCol := styleHelpKey.Width(12)
+	var entries []string
 	for i, group := range Keys.FullHelp() {
 		if i > 0 {
-			b.WriteString("\n")
+			entries = append(entries, "")
 		}
 		for _, kb := range group {
-			keys := strings.Join(kb.Keys(), ", ")
-			desc := kb.Help().Desc
-			b.WriteString("  " + keyCol.Render(keys) + "  " + styleHelp.Render(desc) + "\n")
+			// Help().Key is the human-readable label; the raw key list
+			// renders a space key as literally nothing.
+			entries = append(entries, " "+keyCol.Render(kb.Help().Key)+" "+styleHelp.Render(kb.Help().Desc))
 		}
 	}
 
-	result := b.String()
-	result = padToWidth(result, innerW)
-	lines := strings.Split(result, "\n")
-	// Truncate if taller than panelHeight
-	if len(lines) > panelHeight {
-		lines = lines[:panelHeight]
-	}
-	// Pad if shorter than panelHeight
-	if cnt := len(lines); cnt < panelHeight {
-		lines = append(lines, make([]string, panelHeight-cnt)...)
-		// Each padded line is a blank line of innerW spaces
-		for i := cnt; i < panelHeight; i++ {
-			lines[i] = strings.Repeat(" ", innerW)
+	var lines []string
+	if len(entries) > panelHeight && innerW >= 56 {
+		colW := innerW / 2
+		rows := (len(entries) + 1) / 2
+		left, right := entries[:rows], entries[rows:]
+		for i := 0; i < rows; i++ {
+			l := truncate(left[i], colW)
+			l += strings.Repeat(" ", max(0, colW-lipgloss.Width(l)))
+			r := ""
+			if i < len(right) {
+				r = truncate(right[i], innerW-colW)
+			}
+			lines = append(lines, l+r)
+		}
+	} else {
+		for _, e := range entries {
+			lines = append(lines, truncate(e, innerW))
 		}
 	}
-	return strings.Join(lines, "\n")
+
+	result := padToWidth(strings.Join(lines, "\n"), innerW)
+	out := strings.Split(result, "\n")
+	if len(out) > panelHeight {
+		out = out[:panelHeight]
+	}
+	for len(out) < panelHeight {
+		out = append(out, strings.Repeat(" ", innerW))
+	}
+	return strings.Join(out, "\n")
 }
 
 // ─── Helpers ───────────────────────────────────────────────────────
 
-func (m Model) percentage() float64 {
-	if m.duration <= 0 {
-		return 0
+// queueTotalSecs sums the known durations of all queued tracks.
+func (m Model) queueTotalSecs() int {
+	total := 0
+	for _, t := range m.queue.Tracks() {
+		total += t.DurationSec
 	}
-	return (m.position / m.duration) * 100.0
+	return total
+}
+
+// formatTotalDuration renders a total running time, with hours when needed.
+func formatTotalDuration(secs int) string {
+	if secs <= 0 {
+		return "0:00"
+	}
+	h := secs / 3600
+	mnt := (secs % 3600) / 60
+	s := secs % 60
+	if h > 0 {
+		return fmt.Sprintf("%d:%02d:%02d", h, mnt, s)
+	}
+	return fmt.Sprintf("%d:%02d", mnt, s)
+}
+
+// spinnerFrames drives the loading spinners; advances on the 500ms tick.
+var spinnerFrames = []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴"}
+
+// spinner returns the current loading-spinner frame.
+func (m Model) spinner() string {
+	return spinnerFrames[m.tickCount%len(spinnerFrames)]
+}
+
+// scrollIndicator renders the "more items" footer under a scrolled list.
+// Returns "" when everything is visible.
+func scrollIndicator(above, below, cursor, total int) string {
+	if above <= 0 && below <= 0 {
+		return ""
+	}
+	var parts []string
+	if above > 0 {
+		parts = append(parts, fmt.Sprintf("↑ %d above", above))
+	}
+	if below > 0 {
+		parts = append(parts, fmt.Sprintf("↓ %d below", below))
+	}
+	txt := fmt.Sprintf("  %s  [cursor %d/%d]", strings.Join(parts, " · "), cursor, total)
+	return lipgloss.NewStyle().Foreground(colorTextDim).Italic(true).PaddingLeft(1).Render(txt)
 }
 
 // relativeTime converts an ISO 8601 timestamp to a human-readable "ago" string.

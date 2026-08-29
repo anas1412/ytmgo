@@ -4,11 +4,19 @@
 package ytresolve
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os/exec"
 	"strings"
+	"syscall"
+	"time"
 )
+
+// resolveTimeout bounds one yt-dlp search. Without it a wedged yt-dlp
+// (network black hole, YouTube throttling) hangs the resolve forever
+// and survives app exit as an orphan.
+const resolveTimeout = 60 * time.Second
 
 // Result is a single YouTube search result from yt-dlp's --dump-json output.
 type Result struct {
@@ -35,9 +43,18 @@ func Resolve(artist, title string) (*Result, error) {
 		fmt.Sprintf("ytsearch1:%s", query),
 	}
 
-	cmd := exec.Command("yt-dlp", args...)
+	ctx, cancel := context.WithTimeout(context.Background(), resolveTimeout)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "yt-dlp", args...)
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	cmd.Cancel = func() error {
+		return syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
+	}
 	stdout, err := cmd.Output()
 	if err != nil {
+		if ctx.Err() != nil {
+			return nil, fmt.Errorf("yt-dlp search timed out after %s", resolveTimeout)
+		}
 		if ee, ok := err.(*exec.ExitError); ok {
 			return nil, fmt.Errorf("yt-dlp search failed: %s (stderr: %s)", err, string(ee.Stderr))
 		}

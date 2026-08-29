@@ -6,6 +6,7 @@
 // build date. See .github/workflows/release.yml for the injection.
 //
 // Typical output:
+//
 //	ytmgo v0.1.1 (abc1234, 2026-06-01T12:34:56Z)
 package version
 

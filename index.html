@@ -297,11 +297,14 @@ kbd{font-family:var(--font-mono);font-size:.75rem;background:var(--bg-panel);bor
     <p class="section-desc">Search, download, queue, and play &mdash; all from your keyboard. No browser, no bloat, no nonsense.</p>
   </div>
   <div class="features-grid reveal">
-    <div class="feature-card"><span class="feature-icon"><i class="fas fa-music"></i></span><div class="feature-name">Search from the terminal</div><div class="feature-desc">No browser, no tabs. Search, pick, and queue — all without leaving your terminal.</div></div>
+    <div class="feature-card"><span class="feature-icon"><i class="fas fa-music"></i></span><div class="feature-name">Native YouTube Music search</div><div class="feature-desc">Talks to YT Music's own API directly — no key, no login, no proxy. Exact tracks with instant metadata.</div></div>
+    <div class="feature-card"><span class="feature-icon"><i class="fas fa-infinity"></i></span><div class="feature-name">Autoplay radio</div><div class="feature-desc">Queue runs dry? ytmgo queues what YouTube Music itself would play next, seeded by your listening history.</div></div>
     <div class="feature-card"><span class="feature-icon"><i class="fas fa-download"></i></span><div class="feature-name">Download in one key</div><div class="feature-desc">Press <kbd>x</kbd> on any track and it downloads. Queue-friendly, one at a time, with progress feedback.</div></div>
-    <div class="feature-card"><span class="feature-icon"><i class="fas fa-heart"></i></span><div class="feature-name">Favorites page</div><div class="feature-desc"><kbd>f</kbd> to bookmark. Dedicated page to browse them all. Heart shows on every favorited track.</div></div>
+    <div class="feature-card"><span class="feature-icon"><i class="fas fa-heart"></i></span><div class="feature-name">Favorites &amp; history</div><div class="feature-desc"><kbd>f</kbd> to bookmark, a listening-history page, and a filterable library of everything on disk.</div></div>
     <div class="feature-card"><span class="feature-icon"><i class="fas fa-mouse"></i></span><div class="feature-name">Full mouse support</div><div class="feature-desc">Click tabs, click panels, click the progress bar to seek. Most terminal apps can't do this.</div></div>
+    <div class="feature-card"><span class="feature-icon"><i class="fas fa-keyboard"></i></span><div class="feature-name">Media keys (MPRIS)</div><div class="feature-desc">Play, pause, and skip from your keyboard's media keys, playerctl, or desktop widgets on Linux.</div></div>
     <div class="feature-card"><span class="feature-icon"><i class="fa-brands fa-discord"></i></span><div class="feature-name">Discord Rich Presence</div><div class="feature-desc">Show what you're listening to — track, artist, play status — live on your Discord profile.</div></div>
+    <div class="feature-card"><span class="feature-icon"><i class="fas fa-hard-drive"></i></span><div class="feature-name">Offline playback</div><div class="feature-desc">Downloaded tracks always play from disk — with album art embedded, in m4a or mp3.</div></div>
     <div class="feature-card"><span class="feature-icon"><i class="fas fa-feather"></i></span><div class="feature-name">Static binary, no bloat</div><div class="feature-desc">Pure Go, no Electron, no browser engine. Starts instantly, sips RAM, gets out of your way.</div></div>
   </div>
 </section>
@@ -316,6 +319,7 @@ kbd{font-family:var(--font-mono);font-size:.75rem;background:var(--bg-panel);bor
     <div class="key-row"><div class="key-combo"><kbd>Tab</kbd></div><div class="key-action">Cycle focus: search &rarr; results &rarr; queue &rarr; search</div></div>
     <div class="key-row"><div class="key-combo"><kbd>&uarr;</kbd><kbd>&darr;</kbd></div><div class="key-action">Navigate lists</div></div>
     <div class="key-row"><div class="key-combo"><kbd>j</kbd><kbd>k</kbd></div><div class="key-action">Vim-style navigation</div></div>
+    <div class="key-row"><div class="key-combo"><kbd>g</kbd><kbd>G</kbd></div><div class="key-action">Jump to top / bottom of a list</div></div>
     <div class="key-row"><div class="key-combo"><kbd>Enter</kbd></div><div class="key-action">Search: add to queue / Queue: play</div></div>
     <div class="key-row"><div class="key-combo"><kbd>Space</kbd></div><div class="key-action">Play / Pause</div></div>
     <div class="key-row"><div class="key-combo"><kbd>n</kbd><kbd>&rarr;</kbd></div><div class="key-action">Next track</div></div>
@@ -325,6 +329,7 @@ kbd{font-family:var(--font-mono);font-size:.75rem;background:var(--bg-panel);bor
     <div class="key-row"><div class="key-combo"><kbd>+</kbd><kbd>-</kbd></div><div class="key-action">Volume up / down</div></div>
     <div class="key-row"><div class="key-combo"><kbd>d</kbd><kbd>Del</kbd></div><div class="key-action">Remove from queue</div></div>
     <div class="key-row"><div class="key-combo"><kbd>D</kbd></div><div class="key-action">Clear entire queue</div></div>
+    <div class="key-row"><div class="key-combo"><kbd>C</kbd></div><div class="key-action">Clear play history</div></div>
     <div class="key-row"><div class="key-combo"><kbd>f</kbd></div><div class="key-action">Toggle favorite on selected track</div></div>
     <div class="key-row"><div class="key-combo"><kbd>s</kbd></div><div class="key-action">Toggle shuffle</div></div>
     <div class="key-row"><div class="key-combo"><kbd>r</kbd></div><div class="key-action">Cycle repeat: OFF &rarr; ONE &rarr; ALL</div></div>
@@ -332,9 +337,9 @@ kbd{font-family:var(--font-mono);font-size:.75rem;background:var(--bg-panel);bor
     <div class="key-row"><div class="key-combo"><kbd>R</kbd></div><div class="key-action">Refresh recommendations</div></div>
     <div class="key-row"><div class="key-combo"><kbd>U</kbd></div><div class="key-action">Check for updates / confirm install</div></div>
     <div class="key-row"><div class="key-combo"><kbd>o</kbd></div><div class="key-action">Open download directory</div></div>
-    <div class="key-row"><div class="key-combo"><kbd>1</kbd><kbd>2</kbd><kbd>3</kbd><kbd>4</kbd></div><div class="key-action">Switch page: Stream / Favorites / Library / Settings</div></div>
+    <div class="key-row"><div class="key-combo"><kbd>1</kbd><kbd>2</kbd><kbd>3</kbd><kbd>4</kbd><kbd>5</kbd></div><div class="key-action">Switch page: Stream / Favorites / Library / History / Settings</div></div>
     <div class="key-row"><div class="key-combo"><kbd>Ctrl+&uarr;</kbd><kbd>Ctrl+&darr;</kbd></div><div class="key-action">Move item in queue</div></div>
-    <div class="key-row"><div class="key-combo"><kbd>?</kbd></div><div class="key-action">Show keyboard shortcuts</div></div>
+    <div class="key-row"><div class="key-combo"><kbd>?</kbd></div><div class="key-action">Open Settings with all shortcuts</div></div>
     <div class="key-row"><div class="key-combo"><kbd>Esc</kbd></div><div class="key-action">Cancel / back</div></div>
     <div class="key-row"><div class="key-combo"><kbd>q</kbd><kbd>Ctrl+C</kbd></div><div class="key-action">Quit</div></div>
   </div>
@@ -344,14 +349,15 @@ kbd{font-family:var(--font-mono);font-size:.75rem;background:var(--bg-panel);bor
   <div class="reveal">
     <div class="section-label">Architecture</div>
     <h2 class="section-title">Engineered for reliability.</h2>
-    <p class="section-desc">Go + Bubble Tea (Elm architecture). Mutex-guarded state, yt-dlp download pipeline, real-time mpv IPC polling, embedded SQLite via modernc.org/sqlite (zero CGO).</p>
+    <p class="section-desc">Go + Bubble Tea (Elm architecture). One persistent event-driven mpv, YouTube Music's own API for search and radio, embedded SQLite via modernc.org/sqlite (zero CGO).</p>
   </div>
   <div class="arch-grid reveal">
-    <div class="arch-card"><span class="arch-icon"><i class="fas fa-play"></i></span><div class="arch-name">mpv IPC</div><div class="arch-desc">JSON-based FIFO polling for real-time position, duration, and playback-state events</div></div>
-    <div class="arch-card"><span class="arch-icon"><i class="fas fa-search"></i></span><div class="arch-name">Search Engine</div><div class="arch-desc">Music catalog search via community API proxy — type-ahead, recommendations, and track metadata</div></div>
-    <div class="arch-card"><span class="arch-icon"><i class="fas fa-cloud"></i></span><div class="arch-name">yt-dlp</div><div class="arch-desc">Streaming URL resolution and audio downloads via yt-dlp search on YouTube Music</div></div>
+    <div class="arch-card"><span class="arch-icon"><i class="fas fa-play"></i></span><div class="arch-name">mpv IPC</div><div class="arch-desc">One persistent mpv over a JSON IPC socket — position, pause, and track-end arrive as events, zero polling</div></div>
+    <div class="arch-card"><span class="arch-icon"><i class="fas fa-search"></i></span><div class="arch-name">YT Music API</div><div class="arch-desc">Talks to YouTube Music's InnerTube API directly — keyless search, radio, and recommendations</div></div>
+    <div class="arch-card"><span class="arch-icon"><i class="fas fa-cloud"></i></span><div class="arch-name">yt-dlp</div><div class="arch-desc">Audio downloads with live progress; ffmpeg embeds the album art</div></div>
+    <div class="arch-card"><span class="arch-icon"><i class="fas fa-headphones"></i></span><div class="arch-name">MPRIS</div><div class="arch-desc">org.mpris.MediaPlayer2 over D-Bus — media keys, playerctl, and desktop widgets control playback</div></div>
     <div class="arch-card"><span class="arch-icon"><i class="fas fa-leaf"></i></span><div class="arch-name">Bubble Tea</div><div class="arch-desc">Elm-architecture TUI framework: Model-View-Update loop with composable tea.Cmd messages</div></div>
-    <div class="arch-card"><span class="arch-icon"><i class="fas fa-database"></i></span><div class="arch-name">SQLite</div><div class="arch-desc">modernc.org/sqlite — pure Go, no CGO. WAL mode, busy_timeout, immediate locking for crash safety</div></div>
+    <div class="arch-card"><span class="arch-icon"><i class="fas fa-database"></i></span><div class="arch-name">SQLite</div><div class="arch-desc">modernc.org/sqlite — pure Go, no CGO. Queue, favorites, history, settings, and metadata caches</div></div>
   </div>
 </section>
 

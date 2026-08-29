@@ -1,0 +1,38 @@
+name: ci
+
+# Format check, vet, and tests on every push and pull request.
+# Network-dependent tests (YouTube Music API, D-Bus, mpv) skip
+# themselves when their dependency is unavailable on the runner.
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+
+      - name: Install mpv (player integration test)
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends mpv
+
+      - name: gofmt
+        run: |
+          out=$(gofmt -l .)
+          if [ -n "$out" ]; then
+            echo "gofmt needed on:" && echo "$out" && exit 1
+          fi
+
+      - name: go vet
+        run: go vet ./...
+
+      - name: go test
+        run: go test ./... -count=1 -timeout 300s

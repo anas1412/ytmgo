@@ -6,17 +6,17 @@ import (
 	"net/http"
 	"os/exec"
 	"path"
-	"strconv"
 	"time"
 
 	"ytmgo/internal/db"
 	"ytmgo/internal/downloader"
 	"ytmgo/internal/library"
+	"ytmgo/internal/mpris"
 	"ytmgo/internal/player"
 	"ytmgo/internal/queue"
 	"ytmgo/internal/search"
 	"ytmgo/internal/settings"
-	"ytmgo/internal/tidal"
+	"ytmgo/internal/ytmusic"
 	"ytmgo/internal/ytresolve"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -35,10 +35,11 @@ const playerTickInterval = 50 * time.Millisecond
 
 // ─── Search ─────────────────────────────────────────────────────────────
 
-// searchCmd fires a TIDAL search in a goroutine and sends results back.
-func searchCmd(query string, limit int, tc *tidal.Client) tea.Cmd {
+// searchCmd fires a YouTube Music search in a goroutine and sends
+// results back.
+func searchCmd(query string, limit int) tea.Cmd {
 	return func() tea.Msg {
-		results, err := search.Search(query, limit, tc)
+		results, err := search.Search(query, limit)
 		if err != nil {
 			return SearchResultsMsg{Error: err}
 		}
@@ -49,32 +50,38 @@ func searchCmd(query string, limit int, tc *tidal.Client) tea.Cmd {
 	}
 }
 
-// fetchRecommendationsCmd fires a request for TIDAL recommendations
-// seeded from the user's listening history.
-// seq is the generation counter — stale responses are ignored.
-func fetchRecommendationsCmd(seq, limit int, tc *tidal.Client, db *db.DB) tea.Cmd {
-	return func() tea.Msg {
-		// Load recent listening history for seeding recommendations
-		var historyIDs []int
-		if db != nil {
-			entries, err := db.LoadPlayHistory(50, 0)
-			if err == nil {
-				// Deduplicate by track ID, keep order
-				seen := make(map[string]bool)
-				for _, e := range entries {
-					if seen[e.TrackID] {
-						continue
-					}
-					seen[e.TrackID] = true
-					// Parse track ID (some may be strings, some ints)
-					id, parseErr := strconv.Atoi(e.TrackID)
-					if parseErr == nil {
-						historyIDs = append(historyIDs, id)
-					}
-				}
-			}
+// historySeeds returns the most recent unique videoIds from play
+// history (newest first). Legacy entries (TIDAL numeric IDs, library
+// file paths) are skipped: they can't seed a YouTube Music radio.
+func historySeeds(database *db.DB, max int) []string {
+	if database == nil {
+		return nil
+	}
+	entries, err := database.LoadPlayHistory(50, 0)
+	if err != nil {
+		return nil
+	}
+	seen := make(map[string]bool)
+	var seeds []string
+	for _, e := range entries {
+		if seen[e.TrackID] || !ytmusic.IsVideoID(e.TrackID) {
+			continue
 		}
-		results, err := search.FetchRecommendations(limit, tc, historyIDs)
+		seen[e.TrackID] = true
+		seeds = append(seeds, e.TrackID)
+		if len(seeds) >= max {
+			break
+		}
+	}
+	return seeds
+}
+
+// fetchRecommendationsCmd fires a request for YouTube Music radio
+// recommendations seeded from the user's listening history.
+// seq is the generation counter — stale responses are ignored.
+func fetchRecommendationsCmd(seq, limit int, db *db.DB) tea.Cmd {
+	return func() tea.Msg {
+		results, err := search.FetchRecommendations(limit, historySeeds(db, 4))
 		if err != nil {
 			return RecommendationsMsg{Error: err, Seq: seq}
 		}
@@ -88,27 +95,10 @@ func fetchRecommendationsCmd(seq, limit int, tc *tidal.Client, db *db.DB) tea.Cm
 // fetchAutoplayCmd fetches a small batch of recommendations to continue
 // playback when the queue runs dry. Uses a fixed small limit so autoplay
 // never floods the queue with dozens of tracks.
-func fetchAutoplayCmd(tc *tidal.Client, db *db.DB) tea.Cmd {
+func fetchAutoplayCmd(db *db.DB) tea.Cmd {
 	const autoplayBatch = 1
 	return func() tea.Msg {
-		var historyIDs []int
-		if db != nil {
-			entries, err := db.LoadPlayHistory(50, 0)
-			if err == nil {
-				seen := make(map[string]bool)
-				for _, e := range entries {
-					if seen[e.TrackID] {
-						continue
-					}
-					seen[e.TrackID] = true
-					id, parseErr := strconv.Atoi(e.TrackID)
-					if parseErr == nil {
-						historyIDs = append(historyIDs, id)
-					}
-				}
-			}
-		}
-		results, err := search.FetchRecommendations(autoplayBatch, tc, historyIDs)
+		results, err := search.FetchRecommendations(autoplayBatch, historySeeds(db, 4))
 		if err != nil || len(results) == 0 {
 			return nil // silent — no results to autoplay
 		}
@@ -155,6 +145,7 @@ func checkUpdateCmd(currentVersion string) tea.Cmd {
 		}
 		// Don't follow redirect — we want the Location header.
 		client := &http.Client{
+			Timeout: 10 * time.Second,
 			CheckRedirect: func(*http.Request, []*http.Request) error {
 				return http.ErrUseLastResponse
 			},
@@ -181,11 +172,15 @@ func checkUpdateCmd(currentVersion string) tea.Cmd {
 
 // ─── Random quote fetch ─────────────────────────────────────────────
 
+// quoteClient fetches idle quotes; bounded so a slow API can't pile up
+// hung goroutines behind the 30s rotation.
+var quoteClient = &http.Client{Timeout: 10 * time.Second}
+
 // fetchQuoteCmd fetches a random quote from dummyjson.
 // On failure it returns nil so the fallback quote stays displayed.
 func fetchQuoteCmd(seq int) tea.Cmd {
 	return func() tea.Msg {
-		resp, err := http.Get("https://dummyjson.com/quotes/random")
+		resp, err := quoteClient.Get("https://dummyjson.com/quotes/random")
 		if err != nil {
 			return nil
 		}
@@ -207,12 +202,23 @@ func fetchQuoteCmd(seq int) tea.Cmd {
 // ─── Library scan ───────────────────────────────────────────────────────
 
 // scanLibraryCmd scans the downloads directory for existing audio files.
-func scanLibraryCmd(dir string) tea.Cmd {
+// Durations are served from the SQLite cache; only new or changed files
+// hit ffprobe, and the fresh results are persisted for the next run.
+func scanLibraryCmd(dir string, database *db.DB) tea.Cmd {
 	return func() tea.Msg {
-		tracks, err := library.ScanDir(dir)
+		var cache library.DurationCache
+		if database != nil {
+			if c, err := database.LoadLibraryCache(); err == nil {
+				cache = c
+			}
+		}
+		tracks, updates, err := library.ScanDir(dir, cache)
 		if err != nil {
 			// Non-fatal — just return empty library
 			return LibraryScanMsg{Tracks: []queue.Track{}}
+		}
+		if database != nil && len(updates) > 0 {
+			_ = database.SaveLibraryCache(updates) // best-effort
 		}
 		return LibraryScanMsg{Tracks: tracks}
 	}
@@ -238,6 +244,34 @@ func endedCmd(p *player.Player) tea.Cmd {
 		defer func() { recover() }()
 		<-p.Ended()
 		return SongEndedMsg{}
+	}
+}
+
+// ─── MPRIS ──────────────────────────────────────────────────────────────
+
+// mprisInitCmd starts the MPRIS D-Bus service in the background so
+// media keys and desktop widgets can control playback. On systems
+// without a session bus this silently does nothing.
+func mprisInitCmd() tea.Cmd {
+	return func() tea.Msg {
+		svc, err := mpris.Start()
+		if err != nil {
+			return nil
+		}
+		return MprisReadyMsg{Svc: svc}
+	}
+}
+
+// listenMprisCmd waits for one external control request and forwards
+// it into the update loop. Re-armed by the MprisCmdMsg handler.
+func listenMprisCmd(svc *mpris.Service) tea.Cmd {
+	return func() (msg tea.Msg) {
+		defer func() { recover() }()
+		cmd, ok := <-svc.Commands()
+		if !ok {
+			return nil
+		}
+		return MprisCmdMsg{Cmd: cmd}
 	}
 }
 

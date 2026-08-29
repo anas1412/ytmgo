@@ -14,20 +14,31 @@ import (
 // Track is an alias so library tracks are compatible with the queue.
 type Track = queue.Track
 
+// CacheEntry is a cached ffprobe result for one file.
+type CacheEntry struct {
+	Mtime       int64 // file modification time (unix seconds)
+	DurationSec int
+}
+
+// DurationCache maps a file path to its cached probe result.
+type DurationCache map[string]CacheEntry
+
 // ScanDir scans a directory for audio files and extracts metadata.
-// Each file's duration is read via ffprobe; title/artist are parsed from
-// the filename (since TIDAL downloads are tracked by track ID in
-// --embed-metadata, and existing files won't have them retroactively).
-func ScanDir(dir string) ([]Track, error) {
+// Title/artist are parsed from the filename. Durations come from the
+// provided cache when the file's mtime is unchanged; only new or
+// modified files are probed with ffprobe. The second return value holds
+// the fresh probe results for the caller to persist.
+func ScanDir(dir string, cache DurationCache) ([]Track, DurationCache, error) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return []Track{}, nil
+			return []Track{}, nil, nil
 		}
-		return nil, fmt.Errorf("reading library dir: %w", err)
+		return nil, nil, fmt.Errorf("reading library dir: %w", err)
 	}
 
 	var tracks []Track
+	updates := DurationCache{}
 	for _, e := range entries {
 		if e.IsDir() {
 			continue
@@ -38,7 +49,18 @@ func ScanDir(dir string) ([]Track, error) {
 		}
 
 		fpath := filepath.Join(dir, e.Name())
-		duration := probeDuration(fpath)
+		var mtime int64
+		if info, err := e.Info(); err == nil {
+			mtime = info.ModTime().Unix()
+		}
+
+		var duration int
+		if ce, ok := cache[fpath]; ok && ce.Mtime == mtime {
+			duration = ce.DurationSec
+		} else {
+			duration = probeDuration(fpath)
+			updates[fpath] = CacheEntry{Mtime: mtime, DurationSec: duration}
+		}
 		title, artist := parseFilename(e.Name())
 
 		tracks = append(tracks, Track{
@@ -51,7 +73,7 @@ func ScanDir(dir string) ([]Track, error) {
 			Downloaded:  true,
 		})
 	}
-	return tracks, nil
+	return tracks, updates, nil
 }
 
 // probeDuration returns the duration in seconds using ffprobe.

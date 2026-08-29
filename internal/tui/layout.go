@@ -107,11 +107,38 @@ func (m Model) visibleItems() int {
 	return n
 }
 
-// queueVisibleItems returns how many list rows fit in the queue sub-panel.
-// The queue sub-panel receives height = queueContentH = (panelHeight - 6) / 2,
-// then computes maxItems = (height - 1) / 2 = (panelHeight - 8) / 4.
+// rightPanelSplit returns the content heights of the queue (top) and
+// downloads (bottom) sub-panels of the right column. Each sub-panel
+// renders as title (1) + content (N) + borders (2) = N + 3 lines. When
+// there are no download jobs the downloads panel collapses to a single
+// content line so the queue gets the space. renderPanels and the mouse
+// hit-testing both derive from this, so they can never disagree.
+func (m Model) rightPanelSplit() (queueContentH, downloadsContentH int) {
+	total := m.panelHeight() - 6
+	if total < 0 {
+		total = 0
+	}
+	hasDownloads := m.downloader != nil && len(m.downloader.Jobs()) > 0
+	if !hasDownloads {
+		// The "No downloads" empty state renders 2 lines (top padding +
+		// text); anything smaller overflows the box and shifts every row
+		// below it, breaking mouse hit-testing.
+		downloadsContentH = 2
+		if downloadsContentH > total {
+			downloadsContentH = total
+		}
+		return total - downloadsContentH, downloadsContentH
+	}
+	queueContentH = total / 2
+	return queueContentH, total - queueContentH
+}
+
+// queueVisibleItems returns how many list rows fit in the queue
+// sub-panel. Must mirror renderQueue, which receives the queue content
+// height and shows (height - 1) / 2 two-line rows.
 func (m Model) queueVisibleItems() int {
-	n := (m.panelHeight() - 8) / 4
+	qh, _ := m.rightPanelSplit()
+	n := (qh - 1) / 2
 	if n < 1 {
 		n = 1
 	}
@@ -239,7 +266,7 @@ func (m *Model) clampQueueOffset() {
 // clampSettingsOffset adjusts settingsOffset so the cursor is visible.
 func (m *Model) clampSettingsOffset() {
 	vis := m.settingsVisibleItems()
-	maxItem := 8 // 9 items indexed 0-8
+	maxItem := len(settingDefs) - 1
 
 	if m.settingsCursor > maxItem {
 		m.settingsCursor = maxItem
@@ -252,6 +279,53 @@ func (m *Model) clampSettingsOffset() {
 	}
 	if m.settingsCursor >= m.settingsOffset+vis {
 		m.settingsOffset = m.settingsCursor - vis + 1
+	}
+}
+
+// moveCursorToEdge jumps the focused list's cursor to its first or
+// last item (vim-style g / G).
+func (m *Model) moveCursorToEdge(bottom bool) {
+	pick := func(n int) int {
+		if bottom {
+			return n - 1
+		}
+		return 0
+	}
+	if m.activePage == PageSettings {
+		if !m.settingsEditField {
+			m.settingsCursor = pick(len(settingDefs))
+			m.clampSettingsOffset()
+		}
+		return
+	}
+	if m.activePanel == PanelQueue {
+		if n := m.queue.Len(); n > 0 {
+			m.queueCursor = pick(n)
+			m.clampQueueOffset()
+		}
+		return
+	}
+	switch m.activePage {
+	case PageHistory:
+		if n := len(m.history); n > 0 {
+			m.historyCursor = pick(n)
+			m.clampHistoryOffset()
+		}
+	case PageFavorites:
+		if n := len(m.favorites); n > 0 {
+			m.favCursor = pick(n)
+			m.clampFavoritesOffset()
+		}
+	case PageLibrary:
+		if n := len(m.filteredLibrary()); n > 0 {
+			m.libraryCursor = pick(n)
+			m.clampLibraryOffset()
+		}
+	default:
+		if n := len(m.results); n > 0 {
+			m.searchCursor = pick(n)
+			m.clampSearchOffset()
+		}
 	}
 }
 
@@ -305,10 +379,10 @@ func (m *Model) switchPage(page Page) {
 func (m *Model) startSettingsEdit() {
 	m.settingsEditField = true
 	current := ""
-	if m.settingsCursor == 6 {
-		current = m.settings.DownloadDir
-	} else if m.settingsCursor == 7 {
-		current = m.settings.TidalProxyURL
+	if m.settingsCursor >= 0 && m.settingsCursor < len(settingDefs) {
+		if get := settingDefs[m.settingsCursor].editGet; get != nil {
+			current = get(m)
+		}
 	}
 	m.settingsEditInput.SetValue(current)
 	m.settingsEditInput.Focus()

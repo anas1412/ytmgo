@@ -17,15 +17,14 @@ const (
 
 // Settings holds all user-configurable values.
 type Settings struct {
-	PlaybackMode      int    `json:"playback_mode"`        // 0=Stream, 1=Hybrid, 2=Offline
-	DefaultVolume     int    `json:"default_volume"`       // 0-100
-	SearchLimit       int    `json:"search_limit"`         // results per search / recommendation batch
-	DownloadDir       string `json:"download_dir"`         // relative or absolute path for downloads
-	TidalProxyURL     string `json:"tidal_proxy_url"`      // TIDAL API proxy URL
-	DownloadFormat    string `json:"download_format"`      // m4a or mp3
-	ShowQuotes        bool   `json:"show_quotes"`          // fetch internet quotes
-	DiscordRPCEnabled bool   `json:"discord_rpc_enabled"`  // enable Discord Rich Presence
-	AutoplayEnabled   bool   `json:"autoplay_enabled"`     // auto-queue related tracks when queue empties
+	PlaybackMode      int    `json:"playback_mode"`       // 0=Stream, 1=Hybrid, 2=Offline
+	DefaultVolume     int    `json:"default_volume"`      // 0-100
+	SearchLimit       int    `json:"search_limit"`        // results per search / recommendation batch
+	DownloadDir       string `json:"download_dir"`        // relative or absolute path for downloads
+	DownloadFormat    string `json:"download_format"`     // m4a or mp3
+	ShowQuotes        bool   `json:"show_quotes"`         // fetch internet quotes
+	DiscordRPCEnabled bool   `json:"discord_rpc_enabled"` // enable Discord Rich Presence
+	AutoplayEnabled   bool   `json:"autoplay_enabled"`    // auto-queue related tracks when queue empties
 }
 
 // Defaults returns a Settings with sane defaults.
@@ -35,7 +34,6 @@ func Defaults() *Settings {
 		DefaultVolume:     80,
 		SearchLimit:       20,
 		DownloadDir:       "downloads",
-		TidalProxyURL:     "https://eu-central.monochrome.tf",
 		DownloadFormat:    FormatM4A,
 		ShowQuotes:        true,
 		DiscordRPCEnabled: true,
@@ -80,5 +78,3 @@ func PlaybackModeLabel(mode int) string {
 		return "Hybrid"
 	}
 }
-
-

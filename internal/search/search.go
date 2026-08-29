@@ -2,11 +2,10 @@ package search
 
 import (
 	"fmt"
-	"strconv"
 	"time"
 
 	"ytmgo/internal/queue"
-	"ytmgo/internal/tidal"
+	"ytmgo/internal/ytmusic"
 )
 
 // ─── Result ───────────────────────────────────────────────────────────
@@ -17,8 +16,8 @@ type Result struct {
 	Title    string
 	Uploader string
 	Duration int    // seconds
-	URL      string
-	CoverURL string // TIDAL album cover art URL (empty if unavailable)
+	URL      string // playable YouTube Music watch URL
+	CoverURL string // album art URL (empty if unavailable)
 }
 
 // ToTrack converts a search Result to a queue.Track.
@@ -36,74 +35,87 @@ func (r Result) ToTrack() queue.Track {
 
 // ─── Public API ───────────────────────────────────────────────────────
 
-// Search runs a TIDAL track search and returns up to limit results.
-// Uses the provided TIDAL client for API calls.
-func Search(query string, limit int, tc *tidal.Client) ([]Result, error) {
-	tracks, err := tc.SearchTracks(query, limit, 0)
+// Search runs a YouTube Music songs search and returns up to limit
+// results. Every result carries the exact videoId (as ID) and a
+// playable watch URL, so no later artist-title resolution is needed.
+func Search(query string, limit int) ([]Result, error) {
+	tracks, err := ytmusic.Search(query, limit)
 	if err != nil {
-		return nil, fmt.Errorf("tidal search failed: %w", err)
+		return nil, fmt.Errorf("youtube music search failed: %w", err)
 	}
-	return tidalResultsToResults(tracks), nil
+	return ytTracksToResults(tracks), nil
 }
 
-// FetchRecommendations returns recommended tracks seeded from listening history.
-// historyTrackIDs contains the most recent unique track IDs from play history.
-// Falls back to a trending search if nothing else works.
-func FetchRecommendations(limit int, tc *tidal.Client, historyTrackIDs []int) ([]Result, error) {
-	tracks, err := tc.FetchRecommendations(limit, historyTrackIDs)
-	if err != nil {
-		return nil, fmt.Errorf("tidal recommendations failed: %w", err)
+// FetchRecommendations returns recommended tracks seeded from listening
+// history. seedVideoIDs are the most recent unique videoIds from play
+// history (newest first); each seed contributes its YouTube Music radio
+// queue. Falls back to a trending search when no seeds are usable.
+func FetchRecommendations(limit int, seedVideoIDs []string) ([]Result, error) {
+	seen := make(map[string]bool)
+	for _, id := range seedVideoIDs {
+		seen[id] = true // never recommend something just played
 	}
-	return tidalResultsToResults(tracks), nil
-}
 
-// MockSearch returns fake results for dev mode (no TIDAL API required).
-func MockSearch(query string, limit int) []Result {
-	songs := []struct{ title, artist string }{
-		{"Bohemian Rhapsody", "Queen"},
-		{"Hotel California", "Eagles"},
-		{"Stairway to Heaven", "Led Zeppelin"},
-		{"Smells Like Teen Spirit", "Nirvana"},
-		{"Imagine", "John Lennon"},
-		{"Purple Rain", "Prince"},
-		{"Like a Rolling Stone", "Bob Dylan"},
-		{"Hey Jude", "The Beatles"},
-		{"What's Going On", "Marvin Gaye"},
-		{"Respect", "Aretha Franklin"},
-	}
 	var results []Result
-	for i, s := range songs {
-		if i >= limit {
+	maxSeeds := 2
+	for i, seed := range seedVideoIDs {
+		if i >= maxSeeds || len(results) >= limit {
 			break
 		}
-		id := fmt.Sprintf("mock_%d_%d", i, time.Now().UnixNano())
-		results = append(results, Result{
-			ID:       id,
-			Title:    fmt.Sprintf("%s (matching: %s)", s.title, query),
-			Uploader: s.artist,
-			Duration: 180 + i*30,
-			URL:      "https://tidal.com/browse/track/" + id,
-		})
+		tracks, err := ytmusic.Radio(seed, limit)
+		if err != nil {
+			continue
+		}
+		for _, t := range tracks {
+			if seen[t.VideoID] {
+				continue
+			}
+			seen[t.VideoID] = true
+			results = append(results, ytTrackToResult(t))
+			if len(results) >= limit {
+				break
+			}
+		}
 	}
-	return results
+
+	// Fallback: nothing seeded (fresh install, or radio unavailable).
+	if len(results) < limit {
+		tracks, err := ytmusic.Search("trending songs", limit-len(results))
+		if err != nil && len(results) == 0 {
+			return nil, fmt.Errorf("youtube music recommendations failed: %w", err)
+		}
+		for _, t := range tracks {
+			if seen[t.VideoID] {
+				continue
+			}
+			seen[t.VideoID] = true
+			results = append(results, ytTrackToResult(t))
+			if len(results) >= limit {
+				break
+			}
+		}
+	}
+
+	return results, nil
 }
 
-// ─── TIDAL conversion ─────────────────────────────────────────────────
+// ─── conversion ───────────────────────────────────────────────────────
 
-// tidalResultsToResults converts TIDAL API track results into search Results.
-func tidalResultsToResults(tracks []tidal.TrackResult) []Result {
+func ytTrackToResult(t ytmusic.Track) Result {
+	return Result{
+		ID:       t.VideoID,
+		Title:    t.Title,
+		Uploader: t.Artist,
+		Duration: t.Duration,
+		URL:      ytmusic.WatchURL(t.VideoID),
+		CoverURL: t.CoverURL,
+	}
+}
+
+func ytTracksToResults(tracks []ytmusic.Track) []Result {
 	results := make([]Result, 0, len(tracks))
 	for _, t := range tracks {
-		id := strconv.Itoa(t.ID)
-		r := Result{
-			ID:       id,
-			Title:    t.Title,
-			Uploader: t.ArtistName(),
-			Duration: t.Duration,
-			URL:      "",
-			CoverURL: t.CoverURL(320, 320), // 320x320 album art from TIDAL
-		}
-		results = append(results, r)
+		results = append(results, ytTrackToResult(t))
 	}
 	return results
 }

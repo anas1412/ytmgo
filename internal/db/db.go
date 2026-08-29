@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"ytmgo/internal/library"
 	"ytmgo/internal/queue"
 	"ytmgo/internal/settings"
 
@@ -52,7 +53,8 @@ CREATE TABLE IF NOT EXISTS queue_state (
 	    artist       TEXT NOT NULL DEFAULT '',
 	    duration     TEXT NOT NULL DEFAULT '',
 	    duration_sec INTEGER NOT NULL DEFAULT 0,
-	    cover_url    TEXT NOT NULL DEFAULT ''
+	    cover_url    TEXT NOT NULL DEFAULT '',
+	    url          TEXT NOT NULL DEFAULT ''
 	);
 
 	CREATE TABLE IF NOT EXISTS play_history (
@@ -70,6 +72,12 @@ CREATE TABLE IF NOT EXISTS url_cache (
     resolved_at  TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
+CREATE TABLE IF NOT EXISTS library_cache (
+    file_path    TEXT PRIMARY KEY,
+    mtime        INTEGER NOT NULL,
+    duration_sec INTEGER NOT NULL DEFAULT 0
+);
+
 CREATE TABLE IF NOT EXISTS settings (
     id                  INTEGER PRIMARY KEY CHECK (id = 1),
     playback_mode       INTEGER NOT NULL DEFAULT 0,
@@ -85,7 +93,11 @@ CREATE TABLE IF NOT EXISTS settings (
 `
 
 const insertDefaultQueueState = `INSERT OR IGNORE INTO queue_state (id, tracks, current_idx, shuffle, repeat, repeat_all) VALUES (1, '[]', -1, 0, 0, 0);`
-const insertDefaultSettings = `INSERT OR IGNORE INTO settings (id, playback_mode, default_volume, search_limit, download_dir, tidal_proxy_url, download_format, show_quotes, discord_rpc_enabled, autoplay_enabled) VALUES (1, 0, 80, 20, 'downloads', 'https://eu-central.monochrome.tf', 'm4a', 1, 1, 1);`
+
+// tidal_proxy_url is omitted: the column survives in old databases (and
+// the schema, for their sake) but the app no longer reads it — search
+// and recommendations moved to YouTube Music's own API.
+const insertDefaultSettings = `INSERT OR IGNORE INTO settings (id, playback_mode, default_volume, search_limit, download_dir, download_format, show_quotes, discord_rpc_enabled, autoplay_enabled) VALUES (1, 0, 80, 20, 'downloads', 'm4a', 1, 1, 1);`
 
 // Open opens (or creates) the SQLite database, runs migrations, and
 // returns a DB handle. The database is opened with WAL journal mode,
@@ -114,6 +126,7 @@ func Open() (*DB, error) {
 	db.Exec(`ALTER TABLE settings ADD COLUMN tidal_proxy_url TEXT NOT NULL DEFAULT 'https://eu-central.monochrome.tf'`)
 	db.Exec(`ALTER TABLE settings ADD COLUMN download_format TEXT NOT NULL DEFAULT 'm4a'`)
 	db.Exec(`ALTER TABLE favorites ADD COLUMN cover_url TEXT NOT NULL DEFAULT ''`)
+	db.Exec(`ALTER TABLE favorites ADD COLUMN url TEXT NOT NULL DEFAULT ''`)
 	db.Exec(`ALTER TABLE play_history ADD COLUMN cover_url TEXT NOT NULL DEFAULT ''`)
 
 	if _, err := db.Exec(insertDefaultQueueState); err != nil {
@@ -177,7 +190,7 @@ func (d *DB) SaveQueue(tracks []queue.Track, currentIndex int, shuffle, repeat, 
 // LoadFavorites reads all favorited tracks from the database, ordered
 // most-recent-first (descending by id).
 func (d *DB) LoadFavorites() ([]queue.Track, error) {
-	rows, err := d.Query(`SELECT track_id, title, artist, duration, duration_sec, cover_url FROM favorites ORDER BY id DESC`)
+	rows, err := d.Query(`SELECT track_id, title, artist, duration, duration_sec, cover_url, url FROM favorites ORDER BY id DESC`)
 	if err != nil {
 		return nil, fmt.Errorf("load favorites: %w", err)
 	}
@@ -186,7 +199,7 @@ func (d *DB) LoadFavorites() ([]queue.Track, error) {
 	var favs []queue.Track
 	for rows.Next() {
 		var t queue.Track
-		if err := rows.Scan(&t.ID, &t.Title, &t.Artist, &t.Duration, &t.DurationSec, &t.CoverURL); err != nil {
+		if err := rows.Scan(&t.ID, &t.Title, &t.Artist, &t.Duration, &t.DurationSec, &t.CoverURL, &t.URL); err != nil {
 			return nil, fmt.Errorf("load favorites: scan: %w", err)
 		}
 		favs = append(favs, t)
@@ -212,14 +225,14 @@ func (d *DB) SaveFavorites(tracks []queue.Track) error {
 		return fmt.Errorf("save favorites: delete: %w", err)
 	}
 
-	stmt, err := tx.Prepare(`INSERT INTO favorites (track_id, title, artist, duration, duration_sec, cover_url) VALUES (?, ?, ?, ?, ?, ?)`)
+	stmt, err := tx.Prepare(`INSERT INTO favorites (track_id, title, artist, duration, duration_sec, cover_url, url) VALUES (?, ?, ?, ?, ?, ?, ?)`)
 	if err != nil {
 		return fmt.Errorf("save favorites: prepare: %w", err)
 	}
 	defer stmt.Close()
 
 	for _, t := range tracks {
-		if _, err := stmt.Exec(t.ID, t.Title, t.Artist, t.Duration, t.DurationSec, t.CoverURL); err != nil {
+		if _, err := stmt.Exec(t.ID, t.Title, t.Artist, t.Duration, t.DurationSec, t.CoverURL, t.URL); err != nil {
 			return fmt.Errorf("save favorites: insert %q: %w", t.ID, err)
 		}
 	}
@@ -307,8 +320,8 @@ func (d *DB) ClearPlayHistory() error {
 func (d *DB) LoadSettings() (*settings.Settings, error) {
 	var s settings.Settings
 	var showQuotes, discordRPC, autoplayEnabled int
-	row := d.QueryRow(`SELECT playback_mode, default_volume, search_limit, download_dir, tidal_proxy_url, download_format, show_quotes, discord_rpc_enabled, autoplay_enabled FROM settings WHERE id = 1`)
-	if err := row.Scan(&s.PlaybackMode, &s.DefaultVolume, &s.SearchLimit, &s.DownloadDir, &s.TidalProxyURL, &s.DownloadFormat, &showQuotes, &discordRPC, &autoplayEnabled); err != nil {
+	row := d.QueryRow(`SELECT playback_mode, default_volume, search_limit, download_dir, download_format, show_quotes, discord_rpc_enabled, autoplay_enabled FROM settings WHERE id = 1`)
+	if err := row.Scan(&s.PlaybackMode, &s.DefaultVolume, &s.SearchLimit, &s.DownloadDir, &s.DownloadFormat, &showQuotes, &discordRPC, &autoplayEnabled); err != nil {
 		return settings.Defaults(), fmt.Errorf("load settings: %w", err)
 	}
 	s.ShowQuotes = showQuotes != 0
@@ -320,8 +333,8 @@ func (d *DB) LoadSettings() (*settings.Settings, error) {
 // SaveSettings writes settings to the database.
 func (d *DB) SaveSettings(s *settings.Settings) error {
 	_, err := d.Exec(
-		`UPDATE settings SET playback_mode = ?, default_volume = ?, search_limit = ?, download_dir = ?, tidal_proxy_url = ?, download_format = ?, show_quotes = ?, discord_rpc_enabled = ?, autoplay_enabled = ? WHERE id = 1`,
-		s.PlaybackMode, s.DefaultVolume, s.SearchLimit, s.DownloadDir, s.TidalProxyURL, s.DownloadFormat, boolInt(s.ShowQuotes), boolInt(s.DiscordRPCEnabled), boolInt(s.AutoplayEnabled),
+		`UPDATE settings SET playback_mode = ?, default_volume = ?, search_limit = ?, download_dir = ?, download_format = ?, show_quotes = ?, discord_rpc_enabled = ?, autoplay_enabled = ? WHERE id = 1`,
+		s.PlaybackMode, s.DefaultVolume, s.SearchLimit, s.DownloadDir, s.DownloadFormat, boolInt(s.ShowQuotes), boolInt(s.DiscordRPCEnabled), boolInt(s.AutoplayEnabled),
 	)
 	if err != nil {
 		return fmt.Errorf("save settings: %w", err)
@@ -354,6 +367,62 @@ func (d *DB) LoadCachedURL(trackID string) (string, error) {
 		return "", fmt.Errorf("load cached URL: %w", err)
 	}
 	return url, nil
+}
+
+// ─── Library metadata cache ─────────────────────────────────────────────
+
+// LoadLibraryCache returns the cached ffprobe results keyed by file path.
+// The scan skips ffprobe for any file whose mtime matches its cache row,
+// which turns the startup scan from N subprocess spawns into zero for an
+// unchanged library.
+func (d *DB) LoadLibraryCache() (library.DurationCache, error) {
+	rows, err := d.Query(`SELECT file_path, mtime, duration_sec FROM library_cache`)
+	if err != nil {
+		return nil, fmt.Errorf("load library cache: %w", err)
+	}
+	defer rows.Close()
+
+	cache := library.DurationCache{}
+	for rows.Next() {
+		var path string
+		var e library.CacheEntry
+		if err := rows.Scan(&path, &e.Mtime, &e.DurationSec); err != nil {
+			return nil, fmt.Errorf("load library cache: scan: %w", err)
+		}
+		cache[path] = e
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("load library cache: rows: %w", err)
+	}
+	return cache, nil
+}
+
+// SaveLibraryCache upserts freshly probed entries.
+func (d *DB) SaveLibraryCache(updates library.DurationCache) error {
+	if len(updates) == 0 {
+		return nil
+	}
+	tx, err := d.Begin()
+	if err != nil {
+		return fmt.Errorf("save library cache: begin: %w", err)
+	}
+	defer tx.Rollback()
+
+	stmt, err := tx.Prepare(`INSERT OR REPLACE INTO library_cache (file_path, mtime, duration_sec) VALUES (?, ?, ?)`)
+	if err != nil {
+		return fmt.Errorf("save library cache: prepare: %w", err)
+	}
+	defer stmt.Close()
+
+	for path, e := range updates {
+		if _, err := stmt.Exec(path, e.Mtime, e.DurationSec); err != nil {
+			return fmt.Errorf("save library cache: insert %q: %w", path, err)
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("save library cache: commit: %w", err)
+	}
+	return nil
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────

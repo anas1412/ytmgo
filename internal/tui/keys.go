@@ -4,31 +4,33 @@ import "github.com/charmbracelet/bubbles/key"
 
 // KeyMap defines every key binding in the TUI.
 type KeyMap struct {
-	Quit         key.Binding
-	Help         key.Binding
-	FocusNext    key.Binding
-	Enter        key.Binding
-	Up           key.Binding
-	Down         key.Binding
-	PlayPause    key.Binding
-	NextTrack    key.Binding
-	PrevTrack    key.Binding
-	SeekForward  key.Binding
-	SeekBackward key.Binding
-	VolumeUp     key.Binding
-	VolumeDown   key.Binding
-	Delete       key.Binding
-	Favorite     key.Binding
-	Shuffle      key.Binding
-	Repeat       key.Binding
-	ClearQueue   key.Binding
-	MoveUp       key.Binding
-	MoveDown     key.Binding
-	Download     key.Binding
-	Recs         key.Binding
-	Open         key.Binding
-	Update       key.Binding
-	ClearHistory key.Binding
+	Quit          key.Binding
+	Help          key.Binding
+	FocusNext     key.Binding
+	Enter         key.Binding
+	Up            key.Binding
+	Down          key.Binding
+	JumpTop       key.Binding
+	JumpBottom    key.Binding
+	PlayPause     key.Binding
+	NextTrack     key.Binding
+	PrevTrack     key.Binding
+	SeekForward   key.Binding
+	SeekBackward  key.Binding
+	VolumeUp      key.Binding
+	VolumeDown    key.Binding
+	Delete        key.Binding
+	Favorite      key.Binding
+	Shuffle       key.Binding
+	Repeat        key.Binding
+	ClearQueue    key.Binding
+	MoveUp        key.Binding
+	MoveDown      key.Binding
+	Download      key.Binding
+	Recs          key.Binding
+	Open          key.Binding
+	Update        key.Binding
+	ClearHistory  key.Binding
 	PageStream    key.Binding // 1
 	PageFavorites key.Binding // 2
 	PageLibrary   key.Binding // 3
@@ -62,6 +64,14 @@ var Keys = KeyMap{
 	Down: key.NewBinding(
 		key.WithKeys("down", "j"),
 		key.WithHelp("↓/j", "move down"),
+	),
+	JumpTop: key.NewBinding(
+		key.WithKeys("g"),
+		key.WithHelp("g", "jump to top"),
+	),
+	JumpBottom: key.NewBinding(
+		key.WithKeys("G"),
+		key.WithHelp("G", "jump to bottom"),
 	),
 	PlayPause: key.NewBinding(
 		key.WithKeys(" "),
@@ -149,7 +159,7 @@ var Keys = KeyMap{
 	),
 	PageLibrary: key.NewBinding(
 		key.WithKeys("3"),
-		key.WithHelp("3", "library page"),
+		key.WithHelp("3/L", "library page"),
 	),
 	PageHistory: key.NewBinding(
 		key.WithKeys("4"),
@@ -184,6 +194,8 @@ func (k KeyMap) FullHelp() [][]key.Binding {
 			k.Enter,
 			k.Up,
 			k.Down,
+			k.JumpTop,
+			k.JumpBottom,
 		},
 		{
 			k.PlayPause,

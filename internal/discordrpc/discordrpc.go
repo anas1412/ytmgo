@@ -40,12 +40,12 @@ var (
 // Discord name in the member list; "type" sets the icon and prefix
 // (2 = Listening → headphone icon, 0 = Playing → controller icon).
 type activityPayload struct {
-	Name       string              `json:"name"`
-	Type       int                 `json:"type"`
-	Details    string              `json:"details,omitempty"`
-	State      string              `json:"state,omitempty"`
-	Assets     *assetsPayload      `json:"assets,omitempty"`
-	Timestamps *timestampsPayload  `json:"timestamps,omitempty"`
+	Name       string             `json:"name"`
+	Type       int                `json:"type"`
+	Details    string             `json:"details,omitempty"`
+	State      string             `json:"state,omitempty"`
+	Assets     *assetsPayload     `json:"assets,omitempty"`
+	Timestamps *timestampsPayload `json:"timestamps,omitempty"`
 }
 
 type assetsPayload struct {
@@ -59,14 +59,14 @@ type timestampsPayload struct {
 
 // setActivityFrame is the full SET_ACTIVITY IPC frame payload.
 type setActivityFrame struct {
-	Cmd   string           `json:"cmd"`
-	Args  setActivityArgs  `json:"args"`
-	Nonce string           `json:"nonce"`
+	Cmd   string          `json:"cmd"`
+	Args  setActivityArgs `json:"args"`
+	Nonce string          `json:"nonce"`
 }
 
 type setActivityArgs struct {
-	PID      int               `json:"pid"`
-	Activity *activityPayload  `json:"activity"`
+	PID      int              `json:"pid"`
+	Activity *activityPayload `json:"activity"`
 }
 
 // ─── Lifecycle ──────────────────────────────────────────────────────

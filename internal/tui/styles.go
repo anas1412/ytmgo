@@ -45,13 +45,6 @@ var (
 	panelBorderFocused = lipgloss.NewStyle().
 				Border(lipgloss.RoundedBorder()).
 				BorderForeground(colorBorderFoc)
-
-	// Confirmation dialog border — double line for modal weight
-	styleConfirmBorder = lipgloss.NewStyle().
-				Border(lipgloss.DoubleBorder()).
-				BorderForeground(colorAccent3).
-				Padding(1, 3, 1, 3).
-				Background(colorBg)
 )
 
 // ─── Header ─────────────────────────────────────────────────────────
@@ -74,56 +67,6 @@ var (
 				Bold(true)
 )
 
-// ─── Separator / Horizontal Rule ────────────────────────────────────
-
-var (
-	// Heavy separator line — used to divide major layout sections
-	styleSeparatorHeavy = lipgloss.NewStyle().
-				Foreground(colorBorder).
-				PaddingLeft(1).
-				PaddingRight(1)
-
-	// Light separator — used between control groups
-	styleSeparatorLight = lipgloss.NewStyle().
-				Foreground(colorTextDim)
-)
-
-func renderSeparator(char string, width int) string {
-	return lipgloss.NewStyle().
-		Foreground(colorBorder).
-		Render(strings.Repeat(char, width))
-}
-
-// ─── List Items ─────────────────────────────────────────────────────
-
-var (
-	styleListItem = lipgloss.NewStyle().
-			Foreground(colorText).
-			PaddingLeft(1)
-
-	styleListItemSelected = lipgloss.NewStyle().
-				Foreground(colorTitle).
-				Background(colorBgHover).
-				PaddingLeft(1).
-				Bold(true)
-
-	styleListItemPlaying = lipgloss.NewStyle().
-				Foreground(colorPlaying).
-				PaddingLeft(1).
-				Bold(true)
-
-	styleListNum = lipgloss.NewStyle().
-			Foreground(colorTextDim).
-			Width(3)
-
-	styleListDuration = lipgloss.NewStyle().
-				Foreground(colorTextDim).
-				Align(lipgloss.Right)
-
-	styleListArtist = lipgloss.NewStyle().
-			Foreground(colorTextMid)
-)
-
 // ─── Player Bar ─────────────────────────────────────────────────────
 
 var (
@@ -143,18 +86,11 @@ var (
 			Foreground(colorTitle).
 			Bold(true)
 
-	styleNowArtist = lipgloss.NewStyle().
-			Foreground(colorTextMid)
-
 	styleNowIndicator = lipgloss.NewStyle().
 				Foreground(colorPlaying)
 
 	styleTime = lipgloss.NewStyle().
 			Foreground(colorTextDim)
-
-	stylePlayerCtrl = lipgloss.NewStyle().
-			Foreground(colorText).
-			PaddingLeft(1)
 
 	styleCtrlBtn = lipgloss.NewStyle().
 			Foreground(colorTextMid).
@@ -164,17 +100,13 @@ var (
 				Foreground(colorAccent2).
 				Bold(true)
 
-	styleCtrlBtnPlaying = lipgloss.NewStyle().
-				Foreground(colorAccent).
-				Bold(true)
-
 	// Mode indicators
 	styleModeActive = lipgloss.NewStyle().
 			Foreground(colorAccent2).
 			Bold(true)
 
 	styleModeInactive = lipgloss.NewStyle().
-			Foreground(colorTextDim)
+				Foreground(colorTextDim)
 
 	// Mode flash — used for ~250ms after the user presses `s` or `r`,
 	// so the SHFL / REPT label briefly pops to confirm the keypress
@@ -199,9 +131,6 @@ var (
 				Foreground(colorDownload).
 				Bold(true)
 
-	styleDownloadTitle = lipgloss.NewStyle().
-				Foreground(colorText)
-
 	styleDoneLabel = lipgloss.NewStyle().
 			Foreground(colorDone).
 			Bold(true)
@@ -213,19 +142,11 @@ var (
 
 // ─── Panel Titles ───────────────────────────────────────────────────
 
-var (
-	stylePanelTitle = lipgloss.NewStyle().
-			Foreground(colorAccent).
-			Bold(true).
-			PaddingLeft(1).
-			PaddingRight(1)
-
-	styleSearchInput = lipgloss.NewStyle().
-				Foreground(colorText).
-				Background(colorBgHover).
-				PaddingLeft(1).
-				PaddingRight(1)
-)
+var stylePanelTitle = lipgloss.NewStyle().
+	Foreground(colorAccent).
+	Bold(true).
+	PaddingLeft(1).
+	PaddingRight(1)
 
 // ─── Page Navigation Tabs ───────────────────────────────────────────
 
@@ -259,12 +180,6 @@ var (
 				Italic(true).
 				PaddingLeft(3)
 
-	styleSettingsCursor = lipgloss.NewStyle().
-				Foreground(colorBgHover).
-				Background(colorAccent).
-				PaddingLeft(1).
-				PaddingRight(1)
-
 	styleSettingsBoolOn = lipgloss.NewStyle().
 				Foreground(colorAccent2).
 				Bold(true)
@@ -277,22 +192,6 @@ var (
 				Bold(true)
 )
 
-// ─── Confirmation Dialog ────────────────────────────────────────────
-
-var (
-	styleConfirmTitle = lipgloss.NewStyle().
-				Foreground(colorAccent3).
-				Bold(true)
-
-	styleConfirmText = lipgloss.NewStyle().
-				Foreground(colorText).
-				PaddingLeft(0)
-
-	styleConfirmHint = lipgloss.NewStyle().
-				Foreground(colorTextDim).
-				Italic(true)
-)
-
 // ─── Help Bar ───────────────────────────────────────────────────────
 
 var (
@@ -302,9 +201,6 @@ var (
 
 	styleHelpKey = lipgloss.NewStyle().
 			Foreground(colorAccent2)
-
-	styleHelpSep = lipgloss.NewStyle().
-			Foreground(colorTextDim)
 )
 
 // ─── Inline Key Hints ───────────────────────────────────────────────
@@ -315,8 +211,8 @@ var (
 
 var (
 	styleKeyHint = lipgloss.NewStyle().
-			Foreground(colorAccent2).
-			Bold(true)
+		Foreground(colorAccent2).
+		Bold(true)
 )
 
 // ─── Status ─────────────────────────────────────────────────────────

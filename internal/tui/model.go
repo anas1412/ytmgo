@@ -7,11 +7,11 @@ import (
 	"ytmgo/internal/db"
 	"ytmgo/internal/discordrpc"
 	"ytmgo/internal/downloader"
+	"ytmgo/internal/mpris"
 	"ytmgo/internal/player"
 	"ytmgo/internal/queue"
 	"ytmgo/internal/search"
 	"ytmgo/internal/settings"
-	"ytmgo/internal/tidal"
 
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
@@ -53,9 +53,9 @@ type (
 	// DownloadProgressMsg reports status from the downloader worker.
 	DownloadProgressMsg struct {
 		TrackID  string
-		Title    string // carries through from the downloader Job so the
-		Uploader string // TUI can build a library entry on completion
-		Progress float64 // 0–100
+		Title    string            // carries through from the downloader Job so the
+		Uploader string            // TUI can build a library entry on completion
+		Progress float64           // 0–100
 		Status   downloader.Status // StatusDone or StatusSkipped when Done
 		Done     bool
 		FilePath string // local path once downloaded
@@ -71,7 +71,7 @@ type (
 		Title    string
 		Uploader string
 		CoverURL string
-		Action   string // "play" or "download"
+		Action   string      // "play" or "download"
 		Track    queue.Track // populated for play action
 	}
 
@@ -145,6 +145,15 @@ type (
 		Tracks []queue.Track
 	}
 
+	// MprisReadyMsg delivers the connected MPRIS service.
+	MprisReadyMsg struct {
+		Svc *mpris.Service
+	}
+
+	// MprisCmdMsg is an external control request (media keys, playerctl).
+	MprisCmdMsg struct {
+		Cmd mpris.Command
+	}
 )
 
 // tickMsg triggers periodic UI updates (progress bar animation).
@@ -193,11 +202,12 @@ type Model struct {
 	searchCursor           int
 	searchOffset           int
 	results                []search.Result
+	recommendations        []search.Result // last fetched batch; restored when the search is cleared
 	isSearching            bool
 	showingRecommendations bool
-	recsSeq                int       // bumped each time R is pressed or a search starts
-	updateAvailable        string    // "" = unknown, "latest" = up to date, "v0.X.Y" = update
-	updateCheckManual      bool      // true when U was pressed to trigger the check
+	recsSeq                int    // bumped each time R is pressed or a search starts
+	updateAvailable        string // "" = unknown, "latest" = up to date, "v0.X.Y" = update
+	updateCheckManual      bool   // true when U was pressed to trigger the check
 
 	// ── Library (local downloaded files) ──
 	library       []queue.Track
@@ -247,12 +257,15 @@ type Model struct {
 	// stays at its normal active/inactive style.
 	modeFlashUntil  time.Time
 	modeFlashTarget string // "shuffle", "repeat", or ""
-	// suppressAutoAdvance prevents the SongEnded handler from calling
-	// Next() when the old mpv was intentionally killed by a new
-	// Play() call in playSelectedQueueItem. Without this, the stale
-	// endedCmd from the previous playback fires a SongEndedMsg that
-	// advances past the track the user just selected.
-	suppressAutoAdvance bool
+	// Channel-listener guards. positionCmd/endedCmd/playerTickCmd each
+	// keep exactly one listener alive on the persistent player's
+	// channels; without these flags every Play would stack another
+	// listener. positionListening/endedListening arm once and stay armed
+	// (their handlers re-arm themselves); playerTicking drops when the
+	// tick loop dies on pause/stop and re-arms on the next play/resume.
+	positionListening bool
+	endedListening    bool
+	playerTicking     bool
 
 	// autoplayFired prevents duplicate autoplay fetches while one
 	// is already in-flight. Set true when fetchAutoplayCmd fires,
@@ -270,6 +283,9 @@ type Model struct {
 	// ── Downloads ──
 	downloader *downloader.Downloader
 
+	// ── MPRIS (media keys / desktop integration) ──
+	mpris *mpris.Service
+
 	// ── Async URL resolution ──
 	// pendingResolve stores the context of an in-flight YouTube URL
 	// resolution. Set before returning resolveURLCmd, cleared when the
@@ -282,9 +298,6 @@ type Model struct {
 	// by handleURLResolved / handleURLPrefetched and seeded from the
 	// SQLite url_cache table on first access.
 	resolvedURLs map[string]string
-
-	// ── TIDAL API Client ──
-	tidalClient *tidal.Client
 
 	// ── Settings ──
 	settings          *settings.Settings
@@ -301,9 +314,9 @@ type Model struct {
 	// ── Quote/tip rotation (shown in status bar when idle) ──
 	currentQuote string
 	fallbackIdx  int
-	quoteSeq     int   // bumped each rotation; stale API responses dropped
-	tipIndex     int   // used when ShowQuotes is off (classic tips)
-	tickCount    int   // counts ticks between rotations
+	quoteSeq     int // bumped each rotation; stale API responses dropped
+	tipIndex     int // used when ShowQuotes is off (classic tips)
+	tickCount    int // counts ticks between rotations
 }
 
 // ─── Status helpers ─────────────────────────────────────────────────
@@ -362,9 +375,6 @@ func InitialModel() Model {
 	}
 	vol := defSettings.DefaultVolume
 
-	// Initialize TIDAL API client
-	tc := tidal.New(defSettings.TidalProxyURL, "LOSSLESS")
-
 	return Model{
 		activePage:             PageStream,
 		activePanel:            PanelSearch,
@@ -381,7 +391,6 @@ func InitialModel() Model {
 		settingsEditInput:      sti,
 		currentQuote:           fallbackQuotes[0],
 		db:                     database,
-		tidalClient:            tc,
 		resolvedURLs:           map[string]string{},
 	}
 }
@@ -413,12 +422,24 @@ func (m *Model) startTrackPlayback(playURL string, t queue.Track) tea.Cmd {
 	}
 	// Mirror the player's state — it is the single source of truth.
 	m.playerState = m.player.State()
-	m.updateDiscordRPC()
+	m.updatePresence()
 	// playerTickCmd drives the 50ms redraws that make the progress
 	// bar glide instead of jumping. It self-perpetuates from within
 	// Update as long as playerState == StatePlaying.
 	// recordPlayCmd logs this play in the database silently.
-	cmds := []tea.Cmd{positionCmd(m.player), endedCmd(m.player), playerTickCmd()}
+	var cmds []tea.Cmd
+	if !m.positionListening {
+		m.positionListening = true
+		cmds = append(cmds, positionCmd(m.player))
+	}
+	if !m.endedListening {
+		m.endedListening = true
+		cmds = append(cmds, endedCmd(m.player))
+	}
+	if !m.playerTicking {
+		m.playerTicking = true
+		cmds = append(cmds, playerTickCmd())
+	}
 	if m.db != nil {
 		cmds = append(cmds, recordPlayCmd(m.db, t))
 	}
@@ -445,6 +466,13 @@ func (m *Model) resolveAndPlayCmd(t queue.Track) tea.Cmd {
 			m.pendingResolve = nil
 			return m.startTrackPlayback(t.FilePath, t)
 		}
+	}
+
+	// Direct URL known (YouTube Music results carry the exact watch
+	// URL): play immediately, nothing to resolve.
+	if t.URL != "" {
+		m.pendingResolve = nil
+		return m.startTrackPlayback(t.URL, t)
 	}
 
 	// Check in-memory URL cache.
@@ -482,6 +510,10 @@ func (m *Model) prefetchCmd(t queue.Track) tea.Cmd {
 		// Track has a local file — no URL needed.
 		return nil
 	}
+	if t.URL != "" {
+		// Direct watch URL already known — nothing to resolve.
+		return nil
+	}
 	// Check in-memory cache.
 	if _, ok := m.resolvedURLs[t.ID]; ok {
 		return nil
@@ -497,10 +529,75 @@ func (m *Model) prefetchCmd(t queue.Track) tea.Cmd {
 	return prefetchURLCmd(t.ID, t.Artist, t.Title)
 }
 
-// reinitTidalClient creates a new TIDAL client with the current proxy URL.
-// Call this after changing TidalProxyURL.
-func (m *Model) reinitTidalClient() {
-	m.tidalClient = tidal.New(m.settings.TidalProxyURL, "LOSSLESS")
+// showRecommendations restores the recommendations list in the results
+// panel: instantly from the cached batch when one exists, otherwise by
+// fetching a fresh one. Used when the user clears the search.
+func (m *Model) showRecommendations() tea.Cmd {
+	m.showingRecommendations = true
+	m.searchCursor = 0
+	m.searchOffset = 0
+	m.isSearching = false
+	m.err = nil
+	if len(m.recommendations) > 0 {
+		m.results = m.recommendations
+		return nil
+	}
+	m.recsSeq++
+	m.results = nil
+	m.setStatus("Loading recommendations…")
+	return fetchRecommendationsCmd(m.recsSeq, m.settings.SearchLimit, m.db)
+}
+
+// setVolumeTo sets the playback volume to an absolute value and
+// persists it as the default, so the level survives restarts.
+func (m *Model) setVolumeTo(v int) tea.Cmd {
+	m.volume = min(100, max(0, v))
+	if m.player != nil {
+		m.player.SetVolume(m.volume)
+	}
+	m.settings.DefaultVolume = m.volume
+	m.updateMPRIS()
+	return saveSettingsCmd(m.db, m.settings)
+}
+
+// changeVolume adjusts playback volume by delta (see setVolumeTo).
+func (m *Model) changeVolume(delta int) tea.Cmd {
+	return m.setVolumeTo(m.volume + delta)
+}
+
+// updatePresence syncs playback state to every external surface:
+// Discord Rich Presence and the MPRIS D-Bus endpoint.
+func (m *Model) updatePresence() {
+	m.updateDiscordRPC()
+	m.updateMPRIS()
+}
+
+// updateMPRIS publishes the current playback state to the MPRIS
+// service (no-op until the service is up).
+func (m *Model) updateMPRIS() {
+	if m.mpris == nil {
+		return
+	}
+	snap := mpris.Snapshot{
+		Position: m.position,
+		Duration: m.duration,
+		Volume:   m.volume,
+		Shuffle:  m.queue.IsShuffle(),
+		LoopOne:  m.queue.IsRepeat(),
+		LoopAll:  m.queue.IsRepeatAll(),
+	}
+	if t, ok := m.queue.Current(); ok && m.playerState != player.StateStopped {
+		snap.TrackID = t.ID
+		snap.Title = t.Title
+		snap.Artist = t.Artist
+		snap.CoverURL = t.CoverURL
+		if snap.Duration == 0 {
+			snap.Duration = float64(t.DurationSec)
+		}
+		snap.Playing = m.playerState == player.StatePlaying
+		snap.Paused = m.playerState == player.StatePaused
+	}
+	m.mpris.Publish(snap)
 }
 
 // updateDiscordRPC syncs the current playback state to Discord Rich
@@ -525,7 +622,7 @@ func (m *Model) reinitDiscordRPC() {
 	discordrpc.Close()
 	if m.settings.DiscordRPCEnabled {
 		discordrpc.Init()
-		m.updateDiscordRPC()
+		m.updatePresence()
 	}
 }
 
@@ -575,17 +672,16 @@ var idleTips = []string{
 	"Press `?` for all keyboard shortcuts",
 	"`Tab` cycles focus · `o` opens the download folder",
 	"Press `R` for fresh recommendations",
-	"Press `D` twice to clear the entire queue",
-	"`1` `2` `3` jump between Stream · Library · Settings",
-	"`↑↓` or `j`/`k` to navigate lists",
+	"`D` then `Enter` clears the entire queue",
+	"`1`-`5` switch between Stream · Favs · Library · History · Settings",
+	"`↑↓` or `j`/`k` to navigate · `g`/`G` jump to top/bottom",
 	"`space` toggles play / pause",
 	"`ctrl+↑` / `ctrl+↓` to reorder the queue",
 	"`s` toggles shuffle · `r` cycles repeat",
 	"Stream mode plays without downloading — toggle in Settings",
 	"Press `x` on any track to download it for offline use",
 	"Already have MP3s? Point Download Dir at them in Settings",
-	"Set Default Volume in Settings so every track starts at your level",
-	"Use a cookie browser in Settings for age-restricted tracks",
+	"Media keys work too — ytmgo speaks MPRIS on Linux",
 }
 
 // idleTipRotateEvery is how many 500ms ticks between tip rotations.
@@ -607,20 +703,17 @@ func (m *Model) advanceTip() {
 	m.tickCount = 0
 }
 
-
-
 // Shutdown cleans up background processes. Call on program exit.
 func (m Model) Shutdown() {
 	if m.player != nil {
-		m.player.Stop()
+		m.player.Shutdown()
 	}
 	if m.downloader != nil {
 		m.downloader.Close()
 	}
 	discordrpc.Close()
+	m.mpris.Close()
 	if m.db != nil {
 		m.db.Close()
 	}
 }
-
-
