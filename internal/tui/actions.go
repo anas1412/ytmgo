@@ -95,12 +95,13 @@ func (m *Model) activateSelection() tea.Cmd {
 	return nil
 }
 
-// nextTrack advances the queue and plays the next track.
+// nextTrack advances the queue and plays the next track. It uses Skip,
+// not Next, so an explicit press moves on even under repeat-one.
 func (m *Model) nextTrack() tea.Cmd {
 	if m.queue.Len() == 0 {
 		return nil
 	}
-	if _, ok := m.queue.Next(); !ok {
+	if _, ok := m.queue.Skip(); !ok {
 		return nil
 	}
 	m.queueCursor = m.queue.CurrentIndex()

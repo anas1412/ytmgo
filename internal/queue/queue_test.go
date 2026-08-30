@@ -162,3 +162,87 @@ func TestPlayURLPrefersLocalFile(t *testing.T) {
 		t.Fatalf("PlayURL = %s, want URL", got)
 	}
 }
+
+// TestSkipMovesUnderRepeatOne: pressing next must advance even with
+// repeat-one on. Sharing Next with the end-of-track handler made the
+// next key look dead for as long as repeat-one was enabled, while prev
+// (which ignored repeat) kept working — the asymmetry users hit.
+func TestSkipMovesUnderRepeatOne(t *testing.T) {
+	q := New()
+	for _, id := range []string{"a", "b", "c"} {
+		q.Add(Track{ID: id})
+	}
+	q.SetCurrentIndex(0)
+	q.ToggleRepeat()
+
+	// End-of-track still repeats the same one.
+	if got, ok := q.Next(); !ok || got.ID != "a" {
+		t.Errorf("Next under repeat-one = %q/%v, want a/true", got.ID, ok)
+	}
+	// An explicit skip moves on.
+	if got, ok := q.Skip(); !ok || got.ID != "b" {
+		t.Errorf("Skip under repeat-one = %q/%v, want b/true", got.ID, ok)
+	}
+	if q.CurrentIndex() != 1 {
+		t.Errorf("Skip left currentIndex at %d, want 1", q.CurrentIndex())
+	}
+	// And prev comes back to where it was: the two must mirror.
+	if got, ok := q.Prev(); !ok || got.ID != "a" {
+		t.Errorf("Prev = %q/%v, want a/true", got.ID, ok)
+	}
+}
+
+// TestPrevFollowsShuffleOrder: prev walked the raw queue while next
+// walked the shuffle order, so going back in shuffle mode landed on a
+// track that had never played.
+func TestPrevFollowsShuffleOrder(t *testing.T) {
+	q := New()
+	for _, id := range []string{"a", "b", "c", "d", "e"} {
+		q.Add(Track{ID: id})
+	}
+	q.SetCurrentIndex(0)
+	q.ToggleShuffle()
+	// Repeat-all so the walk never runs off the end of the shuffle
+	// order, whichever slot the starting track landed in.
+	q.ToggleRepeatAll()
+
+	var played []string
+	if cur, ok := q.Current(); ok {
+		played = append(played, cur.ID)
+	}
+	for i := 0; i < 3; i++ {
+		t2, ok := q.Skip()
+		if !ok {
+			t.Fatalf("Skip %d failed early", i)
+		}
+		played = append(played, t2.ID)
+	}
+	// Walking back must retrace the same path.
+	for i := len(played) - 2; i >= 0; i-- {
+		got, ok := q.Prev()
+		if !ok {
+			t.Fatalf("Prev failed at step %d", i)
+		}
+		if got.ID != played[i] {
+			t.Fatalf("Prev returned %q, want %q (played order %v)", got.ID, played[i], played)
+		}
+	}
+}
+
+// TestPrevWrapsWithRepeatAll mirrors Next's wraparound.
+func TestPrevWrapsWithRepeatAll(t *testing.T) {
+	q := New()
+	for _, id := range []string{"a", "b", "c"} {
+		q.Add(Track{ID: id})
+	}
+	q.SetCurrentIndex(0)
+
+	// Without repeat-all, prev at the top stays put.
+	if got, _ := q.Prev(); got.ID != "a" {
+		t.Errorf("Prev at top = %q, want a", got.ID)
+	}
+	q.ToggleRepeatAll()
+	if got, ok := q.Prev(); !ok || got.ID != "c" {
+		t.Errorf("Prev at top with repeat-all = %q/%v, want c/true", got.ID, ok)
+	}
+}

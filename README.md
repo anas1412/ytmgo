@@ -240,6 +240,7 @@ Tab cycles focus through: search input → result list → queue panel → searc
 | `A` | Toggle search between songs and albums |
 | `a` | Queue every track of the open album |
 | `v` | Toggle the now-playing panel (art + spectrum) |
+| `X` | Toggle the downloads panel (queue takes the full column when hidden) |
 | `U` | Check for updates / confirm install |
 | `1` … `5` | Switch page: Stream / Favorites / Library / History / Settings |
 | `L` | Jump straight to the Library page |

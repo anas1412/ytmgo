@@ -155,7 +155,8 @@ func (q *Queue) SetCurrentIndex(i int) {
 	}
 }
 
-// Next advances queue and returns the next track. Returns ok=false if nothing next.
+// Next returns what should play when the current track ends. Repeat-one
+// holds the queue where it is; everything else advances.
 func (q *Queue) Next() (Track, bool) {
 	q.mu.Lock()
 	defer q.mu.Unlock()
@@ -165,6 +166,25 @@ func (q *Queue) Next() (Track, bool) {
 	if q.repeat && q.currentIndex >= 0 {
 		return q.tracks[q.currentIndex], true
 	}
+	return q.advanceLocked()
+}
+
+// Skip advances for an explicit "next track" press. Repeat-one governs
+// what happens when a track *ends*, not whether the listener is allowed
+// to move on, so it is deliberately ignored here — otherwise the next
+// key looks broken for as long as repeat-one is enabled.
+func (q *Queue) Skip() (Track, bool) {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	if len(q.tracks) == 0 {
+		return Track{}, false
+	}
+	return q.advanceLocked()
+}
+
+// advanceLocked moves one track forward along whichever order is in
+// effect. Callers hold q.mu.
+func (q *Queue) advanceLocked() (Track, bool) {
 	if q.shuffle && len(q.shuffleOrder) > 0 {
 		// find current position in shuffle order
 		for si, ti := range q.shuffleOrder {
@@ -199,16 +219,40 @@ func (q *Queue) Next() (Track, bool) {
 	return q.tracks[q.currentIndex], true
 }
 
-// Prev goes back one track
 func (q *Queue) Prev() (Track, bool) {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 	if len(q.tracks) == 0 {
 		return Track{}, false
 	}
+	// Mirror of advanceLocked: walk back along the order actually being
+	// played, so in shuffle mode this returns the track just heard
+	// rather than whatever happens to sit one slot lower in the queue.
+	if q.shuffle && len(q.shuffleOrder) > 0 {
+		for si, ti := range q.shuffleOrder {
+			if ti == q.currentIndex {
+				prev := si - 1
+				if prev < 0 {
+					if q.repeatAll {
+						prev = len(q.shuffleOrder) - 1
+					} else {
+						prev = 0
+					}
+				}
+				q.currentIndex = q.shuffleOrder[prev]
+				return q.tracks[q.currentIndex], true
+			}
+		}
+		q.currentIndex = q.shuffleOrder[0]
+		return q.tracks[q.currentIndex], true
+	}
 	prev := q.currentIndex - 1
 	if prev < 0 {
-		prev = 0
+		if q.repeatAll {
+			prev = len(q.tracks) - 1
+		} else {
+			prev = 0
+		}
 	}
 	q.currentIndex = prev
 	return q.tracks[q.currentIndex], true
