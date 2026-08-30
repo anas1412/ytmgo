@@ -88,7 +88,7 @@ System dependencies (mpv, yt-dlp, ffmpeg) are **not** touched — they may be us
 - **Favorites, history, library** — `f` to bookmark, a listening-history page, and a filterable page for everything on disk.
 - **Full mouse support** — Click tabs, click panels, click the progress bar to seek. Most terminal apps can't do this.
 - **Media keys** — Play, pause, and skip with your keyboard's media keys, or from your desktop's media widget (Linux).
-- **Audio visualiser** — Press `v` for a live spectrum across the panel. Optional: needs `cava` installed.
+- **Audio visualiser** — Press `v` for a live spectrum across the panel.
 - **Discord Rich Presence** — Show what you're listening to — track, artist, play status — live on your Discord profile.
 - **Static binary, no bloat** — Pure Go, no Electron, no browser engine. Starts instantly, sips RAM, gets out of your way.
 
@@ -106,7 +106,7 @@ System dependencies (mpv, yt-dlp, ffmpeg) are **not** touched — they may be us
 - **mpv** — audio playback
 - **yt-dlp** — downloads, and the stream resolution mpv performs when playing
 - **ffmpeg** — audio extraction and cover-art embedding (includes `ffprobe`, used to read durations of local files)
-- **cava** *(optional)* — powers the audio visualiser (`v`); ytmgo runs fine without it
+- **cava** — audio visualiser (`v`)
 
 ### Install system dependencies
 
@@ -114,16 +114,13 @@ These are required for playback and downloads:
 
 ```bash
 # Debian / Ubuntu
-sudo apt install mpv yt-dlp ffmpeg
+sudo apt install mpv yt-dlp ffmpeg cava
 
 # macOS
-brew install mpv yt-dlp ffmpeg
+brew install mpv yt-dlp ffmpeg cava
 
 # Arch Linux
-sudo pacman -S mpv yt-dlp ffmpeg
-
-# optional, for the visualiser
-sudo pacman -S cava        # apt/dnf/brew: install cava
+sudo pacman -S mpv yt-dlp ffmpeg cava
 ```
 
 > Search and recommendations use YouTube Music's API directly. mpv plays the resulting watch URLs (resolving streams through its yt-dlp hook), and yt-dlp downloads tracks for offline use. ffmpeg handles audio extraction and cover-art embedding.
@@ -242,7 +239,7 @@ Tab cycles focus through: search input → result list → queue panel → searc
 | `R` | Refresh recommendations |
 | `A` | Toggle search between songs and albums |
 | `a` | Queue every track of the open album |
-| `v` | Toggle the audio visualiser (needs cava) |
+| `v` | Toggle the audio visualiser |
 | `U` | Check for updates / confirm install |
 | `1` … `5` | Switch page: Stream / Favorites / Library / History / Settings |
 | `L` | Jump straight to the Library page |

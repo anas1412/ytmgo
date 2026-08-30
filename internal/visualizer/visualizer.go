@@ -21,6 +21,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 )
 
 // Frame is one snapshot of the spectrum: one value per bar, 0..100.
@@ -32,6 +33,7 @@ type Visualizer struct {
 	frames  chan Frame
 	cfgPath string
 	stderr  *bytes.Buffer
+	waited  chan struct{} // closed once the reaper goroutine has Wait()ed
 
 	mu      sync.Mutex
 	latest  Frame
@@ -83,11 +85,12 @@ func Start(bars int) (*Visualizer, error) {
 		return nil, fmt.Errorf("cava start: %w", err)
 	}
 
-	v := &Visualizer{cmd: cmd, cfgPath: cfg, frames: make(chan Frame, 2), stderr: &errBuf}
+	v := &Visualizer{cmd: cmd, cfgPath: cfg, frames: make(chan Frame, 2), stderr: &errBuf, waited: make(chan struct{})}
 	go v.read(stdout)
 	// Record why cava stopped, so the caller can report it instead of
 	// showing an empty spectrum indefinitely.
 	go func() {
+		defer close(v.waited)
 		err := cmd.Wait()
 		v.mu.Lock()
 		if !v.closed {
@@ -150,7 +153,13 @@ func (v *Visualizer) Close() {
 
 	if v.cmd != nil && v.cmd.Process != nil {
 		v.cmd.Process.Kill()
-		v.cmd.Wait()
+		// The reaper goroutine owns Wait(); calling it here too would be
+		// a second Wait on the same Cmd, which deadlocks. Wait for the
+		// reaper instead, with a bound so Close can never hang the UI.
+		select {
+		case <-v.waited:
+		case <-time.After(2 * time.Second):
+		}
 	}
 	if v.cfgPath != "" {
 		os.Remove(v.cfgPath)

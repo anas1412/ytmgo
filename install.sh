@@ -16,7 +16,7 @@
 #   1. Detects your OS and CPU architecture
 #   2. Downloads the matching static binary from the GitHub Release
 #   3. Installs it to a directory on PATH (or prints the export command)
-#   4. Auto-installs any missing system deps (mpv, yt-dlp, ffmpeg) via
+#   4. Auto-installs any missing system deps (mpv, yt-dlp, ffmpeg, cava) via
 #      your package manager — uses sudo for system PMs, no sudo for brew.
 #      You'll see the exact command before it runs.
 
@@ -197,7 +197,7 @@ esac
 # Auto-install any missing mpv/yt-dlp/ffmpeg via the user's package
 # manager. Uses sudo for system PMs (apt/dnf/pacman/apk) — not for brew.
 missing=()                        # init for `set -u` (line 154 reads ${#missing[@]})
-deps=("mpv" "yt-dlp")
+deps=("mpv" "yt-dlp" "cava")
 for dep in "${deps[@]}"; do
   if ! command -v "$dep" >/dev/null 2>&1; then
     missing+=("$dep")
@@ -219,14 +219,14 @@ if [ ${#missing[@]} -gt 0 ]; then
   pm_cmd=""
   case "$os" in
     Linux)
-      if   command -v apt    >/dev/null 2>&1; then pm_cmd="sudo apt install -y mpv yt-dlp ffmpeg"
-      elif command -v dnf    >/dev/null 2>&1; then pm_cmd="sudo dnf install -y mpv yt-dlp ffmpeg"
-      elif command -v pacman >/dev/null 2>&1; then pm_cmd="sudo pacman -S --noconfirm mpv yt-dlp ffmpeg"
-      elif command -v apk    >/dev/null 2>&1; then pm_cmd="sudo apk add mpv yt-dlp ffmpeg"
+      if   command -v apt    >/dev/null 2>&1; then pm_cmd="sudo apt install -y mpv yt-dlp ffmpeg cava"
+      elif command -v dnf    >/dev/null 2>&1; then pm_cmd="sudo dnf install -y mpv yt-dlp ffmpeg cava"
+      elif command -v pacman >/dev/null 2>&1; then pm_cmd="sudo pacman -S --noconfirm mpv yt-dlp ffmpeg cava"
+      elif command -v apk    >/dev/null 2>&1; then pm_cmd="sudo apk add mpv yt-dlp ffmpeg cava"
       fi ;;
     Darwin)
       if command -v brew >/dev/null 2>&1; then
-        pm_cmd="brew install mpv yt-dlp ffmpeg"
+        pm_cmd="brew install mpv yt-dlp ffmpeg cava"
       fi ;;
   esac
 
@@ -243,34 +243,6 @@ if [ ${#missing[@]} -gt 0 ]; then
     exit 1
   fi
   success "Installed system dependencies"
-fi
-
-# ─── Optional: cava (audio visualiser, press v in the TUI) ──────────
-# Best-effort only: ytmgo runs fine without it, so a missing package or
-# a failed install must never abort the installation.
-if ! command -v cava >/dev/null 2>&1; then
-  cava_cmd=""
-  case "$os" in
-    Linux)
-      if   command -v apt    >/dev/null 2>&1; then cava_cmd="sudo apt install -y cava"
-      elif command -v dnf    >/dev/null 2>&1; then cava_cmd="sudo dnf install -y cava"
-      elif command -v pacman >/dev/null 2>&1; then cava_cmd="sudo pacman -S --noconfirm cava"
-      elif command -v apk    >/dev/null 2>&1; then cava_cmd="sudo apk add cava"
-      fi ;;
-    Darwin)
-      if command -v brew >/dev/null 2>&1; then cava_cmd="brew install cava"; fi ;;
-  esac
-
-  if [ -n "$cava_cmd" ]; then
-    echo ""
-    info "Optional: installing cava for the audio visualiser…"
-    info "Running: $cava_cmd"
-    if $cava_cmd; then
-      success "Installed cava — press 'v' in ytmgo for the visualiser"
-    else
-      warn "cava install failed — ytmgo works fine without it (no visualiser)"
-    fi
-  fi
 fi
 
 # ─── Done ───────────────────────────────────────────────────────────
