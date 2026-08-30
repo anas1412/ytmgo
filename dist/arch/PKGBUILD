@@ -18,6 +18,7 @@ sha256sums=('SKIP')
 build() {
   cd "$srcdir/$pkgname-$pkgver"
   CGO_ENABLED=0 go build \
+    -trimpath \
     -ldflags="-s -w -X ytmgo/internal/version.Version=v$pkgver" \
     -o ytmgo .
 }
