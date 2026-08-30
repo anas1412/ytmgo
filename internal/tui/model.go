@@ -330,16 +330,13 @@ type Model struct {
 	// ── MPRIS (media keys / desktop integration) ──
 	mpris *mpris.Service
 
-	// ── Visualizer (optional; needs cava) ──
-	// Takes over the left panel when on, so the panel's dimensions
-	// never change and the mouse hit zones stay put.
-	viz      *visualizer.Visualizer
-	vizOn    bool
-	vizFrame visualizer.Frame
-
-	// ── Cover art (i) ──
-	// Shares the left panel with the visualizer: only one can be on.
-	coverOn      bool
+	// ── Now-playing panel (v) ──
+	// One sub-panel beneath the results list, split left/right: album
+	// art beside the spectrum. Mirrors the queue/downloads split on the
+	// right, so the results list stays visible while it is open.
+	npOn         bool
+	viz          *visualizer.Visualizer
+	vizFrame     visualizer.Frame
 	coverImg     image.Image
 	coverURL     string // URL currently decoded into coverImg
 	coverLoading bool
@@ -705,7 +702,7 @@ func (m *Model) updateDiscordRPC() {
 // showing and the art on screen belongs to a different track. Returns
 // nil when there is nothing to do.
 func (m *Model) refreshCoverCmd() tea.Cmd {
-	if !m.coverOn {
+	if !m.npOn {
 		return nil
 	}
 	t, ok := m.queue.Current()

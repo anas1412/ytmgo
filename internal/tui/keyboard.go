@@ -342,54 +342,43 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case "v":
-		// Toggle the spectrum visualizer over the left panel. Optional:
-		// without cava the feature simply isn't offered.
+		// Open the now-playing panel beneath the results: album art
+		// beside the spectrum, with the list still visible above.
 		if m.activePage != PageStream {
 			return m, nil
 		}
-		if m.vizOn {
-			m.vizOn = false
+		if m.npOn {
+			m.npOn = false
 			m.viz.Close()
 			m.viz = nil
 			m.vizFrame = nil
-			m.setStatus("Visualizer off")
+			m.setStatus("Now playing panel off")
 			return m, nil
 		}
-		if !visualizer.Available() {
-			m.setStatus("Visualizer needs cava —  " + visualizer.InstallHint())
+		if !m.npFits() {
+			m.setStatus("Terminal too short for the now-playing panel — make the window taller")
 			return m, nil
 		}
-		v, err := visualizer.Start(m.vizBars())
-		if err != nil {
-			m.setStatus("Visualizer unavailable: " + err.Error())
-			return m, nil
+		m.npOn = true
+		var cmds []tea.Cmd
+		if cmd := m.refreshCoverCmd(); cmd != nil {
+			cmds = append(cmds, cmd)
 		}
-		m.viz = v
-		m.vizOn = true
-		m.coverOn = false
-		m.setStatus("Visualizer on  ([v] off)")
-		return m, vizFrameCmd(m.viz)
-
-	case "i":
-		// Toggle album art over the left panel. Shares the panel with
-		// the visualizer, so turning one on turns the other off.
-		if m.activePage != PageStream {
-			return m, nil
+		if visualizer.Available() {
+			if v, err := visualizer.Start(m.vizBars()); err == nil {
+				m.viz = v
+				cmds = append(cmds, vizFrameCmd(m.viz))
+			} else {
+				m.setStatus("Spectrum unavailable: " + err.Error())
+			}
+		} else {
+			m.setStatus("Spectrum needs cava —  " + visualizer.InstallHint())
 		}
-		if m.coverOn {
-			m.coverOn = false
-			m.setStatus("Cover art off")
-			return m, nil
+		if m.statusMessage == "" {
+			m.setStatus("Now playing panel on  ([v] off)")
 		}
-		if m.vizOn {
-			m.vizOn = false
-			m.viz.Close()
-			m.viz = nil
-			m.vizFrame = nil
-		}
-		m.coverOn = true
-		m.setStatus("Cover art on  ([i] off)")
-		return m, m.refreshCoverCmd()
+		m.clampSearchOffset()
+		return m, tea.Batch(cmds...)
 
 	case "g":
 		m.moveCursorToEdge(false)

@@ -88,8 +88,7 @@ System dependencies (mpv, yt-dlp, ffmpeg) are **not** touched — they may be us
 - **Favorites, history, library** — `f` to bookmark, a listening-history page, and a filterable page for everything on disk.
 - **Full mouse support** — Click tabs, click panels, click the progress bar to seek. Most terminal apps can't do this.
 - **Media keys** — Play, pause, and skip with your keyboard's media keys, or from your desktop's media widget (Linux).
-- **Audio visualiser** — Press `v` for a live spectrum across the panel.
-- **Cover art** — Press `i` to show the current track's album art. On kitty it renders at full resolution via the graphics protocol; everywhere else it falls back to coloured half-blocks.
+- **Now playing panel** — Press `v` for album art beside a live spectrum, in a panel under your results so the list stays visible. Art renders at full resolution on kitty, as coloured half-blocks elsewhere.
 - **Discord Rich Presence** — Show what you're listening to — track, artist, play status — live on your Discord profile.
 - **Static binary, no bloat** — Pure Go, no Electron, no browser engine. Starts instantly, sips RAM, gets out of your way.
 
@@ -240,8 +239,7 @@ Tab cycles focus through: search input → result list → queue panel → searc
 | `R` | Refresh recommendations |
 | `A` | Toggle search between songs and albums |
 | `a` | Queue every track of the open album |
-| `v` | Toggle the audio visualiser |
-| `i` | Toggle album cover art |
+| `v` | Toggle the now-playing panel (art + spectrum) |
 | `U` | Check for updates / confirm install |
 | `1` … `5` | Switch page: Stream / Favorites / Library / History / Settings |
 | `L` | Jump straight to the Library page |

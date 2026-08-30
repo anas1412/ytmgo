@@ -62,7 +62,15 @@ func (m Model) panelHeight() int {
 // receive height = panelHeight - 3 and then compute
 // maxItems = (height - 1) / 2 = (panelHeight - 4) / 2.
 func (m Model) visibleItems() int {
-	n := (m.panelHeight() - 4) / 2
+	resultsH, npH := m.leftPanelSplit()
+	// Closed: the panel is rendered with content height panelHeight-3,
+	// showing (h-1)/2 two-line rows. Open: the results sub-panel gets
+	// resultsH content rows on the same basis.
+	h := m.panelHeight() - 3
+	if npH > 0 {
+		h = resultsH
+	}
+	n := (h - 1) / 2
 	if n < 1 {
 		n = 1
 	}
@@ -93,6 +101,45 @@ func (m Model) rightPanelSplit() (queueContentH, downloadsContentH int) {
 	}
 	queueContentH = total / 2
 	return queueContentH, total - queueContentH
+}
+
+// Minimum content rows each half of the left column needs to stay
+// usable. Below this the now-playing panel refuses to open rather than
+// crushing the results list into two or three visible items.
+const (
+	npMinRows      = 6
+	resultsMinRows = 7
+)
+
+// leftPanelSplit returns the Height() values for the results panel and
+// the now-playing sub-panel beneath it, mirroring rightPanelSplit. A
+// zero second value means the column is one full-height panel — either
+// the panel is closed, or the terminal is too short to split.
+func (m Model) leftPanelSplit() (resultsH, npH int) {
+	full := m.panelHeight() - 2
+	if !m.npOn {
+		return full, 0
+	}
+	// Two stacked sub-panels cost 6 lines of chrome, exactly as the
+	// queue and downloads pair does.
+	total := m.panelHeight() - 6
+	if total < npMinRows+resultsMinRows {
+		return full, 0
+	}
+	npH = total * 45 / 100
+	if npH < npMinRows {
+		npH = npMinRows
+	}
+	if total-npH < resultsMinRows {
+		npH = total - resultsMinRows
+	}
+	return total - npH, npH
+}
+
+// npFits reports whether the terminal is tall enough to open the
+// now-playing panel.
+func (m Model) npFits() bool {
+	return m.panelHeight()-6 >= npMinRows+resultsMinRows
 }
 
 // queueVisibleItems returns how many list rows fit in the queue

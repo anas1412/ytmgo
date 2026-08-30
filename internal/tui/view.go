@@ -226,9 +226,8 @@ func (m Model) renderHeader() string {
 	// Tab hint — shown inline so users discover focus cycling without
 	// glancing down at the help bar.
 	tabHint := styleKeyHint.Render("[tab]") + styleTextDim.Render(" cycle")
-	vizHint := styleKeyHint.Render("[v]") + styleTextDim.Render(" visualiser")
-	coverHint := styleKeyHint.Render("[i]") + styleTextDim.Render(" cover")
-	left := lipgloss.JoinHorizontal(lipgloss.Center, logo, "   ", searchView, "  ", tabHint, "  ", vizHint, "  ", coverHint)
+	npHint := styleKeyHint.Render("[v]") + styleTextDim.Render(" now playing")
+	left := lipgloss.JoinHorizontal(lipgloss.Center, logo, "   ", searchView, "  ", tabHint, "  ", npHint)
 
 	gap := m.width - lipgloss.Width(left) - lipgloss.Width(tabsStr) - 2
 	if gap < 1 {
@@ -297,12 +296,6 @@ func (m Model) renderPanels() string {
 		}
 	case PageStream:
 		switch {
-		case m.vizOn:
-			vHint := styleKeyHint.Render("[v]")
-			panelLabel = "VISUALIZER  " + vHint + " off"
-		case m.coverOn:
-			iHint := styleKeyHint.Render("[i]")
-			panelLabel = "COVER ART  " + iHint + " off"
 		case m.openAlbum != nil:
 			aHint := styleKeyHint.Render("[a]")
 			escHint := styleKeyHint.Render("[esc]")
@@ -337,15 +330,36 @@ func (m Model) renderPanels() string {
 	// renderSearchResults(panelWidth, contentH). So total rendered = (1 +
 	// contentH) + 2 = contentH + 3. We want total = panelHeight, so
 	// contentH = panelHeight - 3.
-	searchContent := m.renderSearchResults(panelWidth, panelHeight-3)
+	// The left column splits like the right one when the now-playing
+	// panel is open: results on top, art + spectrum beneath.
+	resultsH, npH := m.leftPanelSplit()
+	contentH := panelHeight - 3
+	if npH > 0 {
+		contentH = resultsH
+	}
+	searchContent := m.renderSearchResults(panelWidth, contentH)
 	leftPanel := lipgloss.JoinVertical(lipgloss.Top,
 		searchTitle,
 		searchContent,
 	)
+	leftHeight := panelHeight - 2
+	if npH > 0 {
+		leftHeight = resultsH
+	}
 	leftPanel = leftBorder.
 		Width(panelWidth).
-		Height(panelHeight - 2).
+		Height(leftHeight).
 		Render(leftPanel)
+
+	if npH > 0 {
+		npTitle := stylePanelTitle.Render(truncate(m.npPanelTitle(), titleW))
+		npPanel := lipgloss.JoinVertical(lipgloss.Top,
+			npTitle,
+			m.renderNowPlayingPanel(panelWidth, npH),
+		)
+		leftPanel = lipgloss.JoinVertical(lipgloss.Top, leftPanel,
+			panelBorder.Width(panelWidth).Height(npH).Render(npPanel))
+	}
 
 	// Split right panel into queue (top) and downloads (bottom).
 	// Each sub-panel renders as: border-top (1) + title (1) + content (N) + border-bottom (1)
@@ -418,13 +432,7 @@ func (m Model) renderSearchResults(width, height int) string {
 	case PageHistory:
 		return m.renderHistory(width, height)
 	}
-	if m.coverOn {
-		return m.renderCover(width, height)
-	}
-	// A kitty image stays on screen until it is deleted, so every other
-	// view of this panel prefixes the delete. The escape is zero-width
-	// and costs nothing to repeat.
-	return m.clearCover() + m.renderStreamList(width, height)
+	return m.renderStreamList(width, height)
 }
 
 // clearCover removes a kitty cover image, or "" when there can't be one.
@@ -437,9 +445,6 @@ func (m Model) clearCover() string {
 
 // renderStreamList draws whichever list the Stream page is showing.
 func (m Model) renderStreamList(width, height int) string {
-	if m.vizOn {
-		return m.renderVisualizer(width, height)
-	}
 	if m.openAlbum != nil {
 		return m.renderAlbumTracks(width, height)
 	}
@@ -500,8 +505,12 @@ func (m Model) renderStreamList(width, height int) string {
 // vizBars is how many spectrum columns fit the left panel. Each bar is
 // drawn two cells wide with a gap, so the panel width divides by three.
 func (m Model) vizBars() int {
-	outer := (m.width - 2) / 2
-	n := (outer - 4) / 3
+	outer := (m.width-2)/2 - 4 // left panel inner width
+	_, npH := m.leftPanelSplit()
+	if npH > 0 {
+		outer -= int(float64(npH) * coverart.CellAspect) // art takes its square
+	}
+	n := (outer - 2) / 3
 	if n < 4 {
 		n = 4
 	}
@@ -566,82 +575,9 @@ func (m Model) renderVisualizer(width, height int) string {
 	return padPanel(strings.Join(rows, "\n"), width, height)
 }
 
-// renderCover draws the current track's album art as half-block cells,
-// centred in the panel. Each glyph carries two pixels: its foreground
-// is the upper one, its background the lower.
-func (m Model) renderCover(width, height int) string {
-	innerW := max(1, width-2)
-	if height < 1 {
-		height = 1
-	}
-	msg := ""
-	switch {
-	case m.coverErr != "":
-		msg = "No cover art — " + m.coverErr
-	case m.coverLoading:
-		msg = m.spinner() + "  Loading cover…"
-	case m.coverImg == nil:
-		msg = "No cover art for this track"
-	}
-	if msg != "" {
-		return padPanel(styleEmpty.Width(innerW).Render(truncate(msg, innerW)), width, height)
-	}
-
-	// On kitty, draw the real image instead of approximating it with
-	// block characters. The escapes measure zero cells wide, so the
-	// padding below is unaffected; the covered cells are still emitted
-	// as spaces so the text layout is identical either way.
-	if coverart.KittySupported() {
-		cols, rows := coverFitCells(m.coverImg, innerW, height)
-		if cols > 0 && rows > 0 {
-			if esc, err := coverart.KittyPlace(m.coverImg, cols, rows); err == nil {
-				leftPad := coverart.Blank(max(0, (innerW-cols)/2))
-				topPad := max(0, (height-rows)/2)
-				lines := make([]string, 0, height)
-				for i := 0; i < topPad; i++ {
-					lines = append(lines, "")
-				}
-				lines = append(lines, leftPad+esc+coverart.Blank(cols))
-				for i := 1; i < rows; i++ {
-					lines = append(lines, leftPad+coverart.Blank(cols))
-				}
-				return padPanel(strings.Join(lines, "\n"), width, height)
-			}
-		}
-		// Fall through to half-blocks if anything above failed.
-	}
-
-	rows := coverart.Grid(m.coverImg, innerW, height)
-	gridW, gridH := coverart.Describe(rows)
-	if gridH == 0 {
-		return padPanel(styleEmpty.Width(innerW).Render("Cover too small to draw"), width, height)
-	}
-
-	// Centre horizontally; vertical centring comes from the top pad plus
-	// padPanel filling the remainder.
-	leftPad := coverart.Blank(max(0, (innerW-gridW)/2))
-	topPad := max(0, (height-gridH)/2)
-
-	lines := make([]string, 0, height)
-	for i := 0; i < topPad; i++ {
-		lines = append(lines, "")
-	}
-	for _, row := range rows {
-		var b strings.Builder
-		b.WriteString(leftPad)
-		for _, c := range row {
-			b.WriteString(lipgloss.NewStyle().
-				Foreground(lipgloss.Color(c.Top.Hex())).
-				Background(lipgloss.Color(c.Bottom.Hex())).
-				Render(coverart.HalfBlock))
-		}
-		lines = append(lines, b.String())
-	}
-	return padPanel(strings.Join(lines, "\n"), width, height)
-}
-
-// coverFitCells sizes the image in whole cells, preserving its aspect
-// ratio on screen (a cell is CellAspect times taller than it is wide).
+// coverFitCells sizes the art in whole cells, preserving its aspect
+// ratio on screen (a cell is CellAspect times taller than it is wide),
+// so a square cover stays square.
 func coverFitCells(img image.Image, maxCols, maxRows int) (cols, rows int) {
 	if img == nil || maxCols < 1 || maxRows < 1 {
 		return 0, 0
@@ -651,19 +587,156 @@ func coverFitCells(img image.Image, maxCols, maxRows int) (cols, rows int) {
 		return 0, 0
 	}
 	ratio := float64(b.Dy()) / float64(b.Dx()) // height / width
-	cols = maxCols
-	rows = int(float64(cols) * ratio / coverart.CellAspect)
-	if rows > maxRows {
-		rows = maxRows
-		cols = int(float64(rows) * coverart.CellAspect / ratio)
-		if cols > maxCols {
-			cols = maxCols
-		}
+	rows = maxRows
+	cols = int(float64(rows) * coverart.CellAspect / ratio)
+	if cols > maxCols {
+		cols = maxCols
+		rows = int(float64(cols) * ratio / coverart.CellAspect)
 	}
 	if cols < 1 || rows < 1 {
 		return 0, 0
 	}
 	return cols, rows
+}
+
+// npPanelTitle labels the now-playing panel with whatever is playing.
+func (m Model) npPanelTitle() string {
+	vHint := styleKeyHint.Render("[v]")
+	if t, ok := m.queue.Current(); ok && t.Title != "" {
+		return "NOW PLAYING  " + vHint + " off   " + t.Title
+	}
+	return "NOW PLAYING  " + vHint + " off"
+}
+
+// renderNowPlayingPanel draws album art on the left and the spectrum on
+// the right. The art is square, so it only needs rows*CellAspect cells
+// of width — the rest goes to the bars, which want the space.
+func (m Model) renderNowPlayingPanel(width, height int) string {
+	innerW := max(1, width-2)
+	if height < 1 {
+		height = 1
+	}
+
+	coverCols, coverRows := 0, 0
+	if m.coverImg != nil {
+		coverCols, coverRows = coverFitCells(m.coverImg, innerW/2, height)
+	}
+
+	coverBlock := m.renderCoverBlock(coverCols, coverRows, height)
+	vizW := innerW - coverCols
+	if coverCols > 0 {
+		vizW-- // a column of breathing space between the two
+	}
+	vizBlock := m.renderSpectrum(max(0, vizW), height)
+
+	lines := make([]string, height)
+	for i := 0; i < height; i++ {
+		left, right := "", ""
+		if i < len(coverBlock) {
+			left = coverBlock[i]
+		}
+		left += coverart.Blank(coverCols - lipgloss.Width(left))
+		if coverCols > 0 {
+			left += " "
+		}
+		if i < len(vizBlock) {
+			right = vizBlock[i]
+		}
+		lines[i] = left + right
+	}
+	return padPanel(strings.Join(lines, "\n"), width, height)
+}
+
+// renderCoverBlock returns the art's rows, vertically centred. Uses
+// kitty's graphics protocol where available and half-blocks otherwise.
+func (m Model) renderCoverBlock(cols, rows, height int) []string {
+	if cols < 1 || rows < 1 {
+		msg := ""
+		switch {
+		case m.coverErr != "":
+			msg = "no art"
+		case m.coverLoading:
+			msg = m.spinner()
+		}
+		if msg == "" {
+			return nil
+		}
+		return []string{styleTextDim.Render(msg)}
+	}
+
+	top := max(0, (height-rows)/2)
+	out := make([]string, 0, height)
+	for i := 0; i < top; i++ {
+		out = append(out, "")
+	}
+
+	if coverart.KittySupported() {
+		if esc, err := coverart.KittyPlace(m.coverImg, cols, rows); err == nil {
+			out = append(out, esc+coverart.Blank(cols))
+			for i := 1; i < rows; i++ {
+				out = append(out, coverart.Blank(cols))
+			}
+			return out
+		}
+	}
+	for _, row := range coverart.Grid(m.coverImg, cols, rows) {
+		var b strings.Builder
+		for _, c := range row {
+			b.WriteString(lipgloss.NewStyle().
+				Foreground(lipgloss.Color(c.Top.Hex())).
+				Background(lipgloss.Color(c.Bottom.Hex())).
+				Render(coverart.HalfBlock))
+		}
+		out = append(out, b.String())
+	}
+	return out
+}
+
+// renderSpectrum returns the bar rows for the given area.
+func (m Model) renderSpectrum(width, height int) []string {
+	if width < 4 || height < 1 {
+		return nil
+	}
+	frame := m.vizFrame
+	if len(frame) == 0 {
+		msg := m.spinner() + "  Listening…"
+		if m.viz == nil {
+			msg = "spectrum off"
+		}
+		return []string{styleTextDim.Render(truncate(msg, width))}
+	}
+
+	heights := make([]int, len(frame))
+	for i, val := range frame {
+		h := val * height / 100
+		heights[i] = max(0, min(h, height))
+	}
+
+	rows := make([]string, 0, height)
+	for row := 0; row < height; row++ {
+		remaining := height - row
+		var b strings.Builder
+		for _, h := range heights {
+			if lipgloss.Width(b.String())+3 > width {
+				break
+			}
+			if h >= remaining {
+				style := styleVizLow
+				switch {
+				case remaining > height*2/3:
+					style = styleVizHigh
+				case remaining > height/3:
+					style = styleVizMid
+				}
+				b.WriteString(style.Render("██"))
+			} else {
+				b.WriteString("  ")
+			}
+			b.WriteString(" ")
+		}
+		rows = append(rows, truncate(b.String(), width))
+	}
+	return rows
 }
 
 // renderAlbums draws the album search results.

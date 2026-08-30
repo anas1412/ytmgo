@@ -169,17 +169,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	// ── Visualizer frame ────────────────────────────────────────
 	case VizFrameMsg:
-		if !m.vizOn {
+		if !m.npOn {
 			return m, nil // toggled off while this frame was in flight
 		}
 		m.vizFrame = msg.Frame
 		return m, vizFrameCmd(m.viz)
 
 	case VizStoppedMsg:
-		if !m.vizOn {
+		if m.viz == nil {
 			return m, nil
 		}
-		m.vizOn = false
 		m.viz.Close()
 		m.viz = nil
 		m.vizFrame = nil
