@@ -2,6 +2,7 @@ package visualizer
 
 import (
 	"os/exec"
+	"strings"
 	"testing"
 	"time"
 )
@@ -80,4 +81,17 @@ func TestBarClamp(t *testing.T) {
 		}
 		v.Close()
 	}
+}
+
+// TestInstallHint: a missing optional dependency must come with the
+// exact command to fix it, never a vague pointer.
+func TestInstallHint(t *testing.T) {
+	h := InstallHint()
+	if h == "" {
+		t.Fatal("empty hint")
+	}
+	if !strings.Contains(h, "cava") {
+		t.Errorf("hint %q does not name cava", h)
+	}
+	t.Logf("hint on this system: %q", h)
 }

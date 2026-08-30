@@ -214,3 +214,23 @@ noise_reduction = 30
 	}
 	return path, nil
 }
+
+// InstallHint returns the exact command that installs cava on this
+// system, so a missing optional dependency is a one-line fix rather
+// than a dead end. Falls back to a generic hint when no known package
+// manager is present.
+func InstallHint() string {
+	for _, pm := range []struct{ bin, cmd string }{
+		{"pacman", "sudo pacman -S cava"},
+		{"apt", "sudo apt install cava"},
+		{"dnf", "sudo dnf install cava"},
+		{"zypper", "sudo zypper install cava"},
+		{"apk", "sudo apk add cava"},
+		{"brew", "brew install cava"},
+	} {
+		if _, err := exec.LookPath(pm.bin); err == nil {
+			return pm.cmd
+		}
+	}
+	return "install cava with your package manager"
+}

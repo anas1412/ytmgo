@@ -356,7 +356,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		if !visualizer.Available() {
-			m.setStatus("Visualizer needs cava — install it with your package manager")
+			m.setStatus("Visualizer needs cava —  " + visualizer.InstallHint())
 			return m, nil
 		}
 		v, err := visualizer.Start(m.vizBars())
