@@ -129,3 +129,30 @@ func TestLibraryCacheRoundTrip(t *testing.T) {
 		t.Fatalf("cache round trip mismatch: %+v", got)
 	}
 }
+
+// TestThemeRoundTrips: the theme is the setting most likely to be
+// noticed if it silently resets, and it shipped without a column — saved
+// fine for the session, then came back empty on the next launch.
+func TestThemeRoundTrips(t *testing.T) {
+	d := openTestDB(t)
+
+	s, err := d.LoadSettings()
+	if err != nil {
+		t.Fatalf("LoadSettings: %v", err)
+	}
+	if s.Theme == "" {
+		t.Error("a fresh database should carry the default theme, not an empty string")
+	}
+
+	s.Theme = "gruvbox"
+	if err := d.SaveSettings(s); err != nil {
+		t.Fatalf("SaveSettings: %v", err)
+	}
+	got, err := d.LoadSettings()
+	if err != nil {
+		t.Fatalf("LoadSettings: %v", err)
+	}
+	if got.Theme != "gruvbox" {
+		t.Errorf("theme came back as %q, want gruvbox", got.Theme)
+	}
+}
