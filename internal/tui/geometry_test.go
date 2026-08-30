@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"ytmgo/internal/coverart"
 	"ytmgo/internal/queue"
 	"ytmgo/internal/search"
 	"ytmgo/internal/visualizer"
@@ -370,5 +371,70 @@ func TestDownloadsPanelStartsHiddenAndReveals(t *testing.T) {
 	m.revealDownloads()
 	if m.downloadsHidden {
 		t.Error("a second download must not hide the panel again")
+	}
+}
+
+// TestNowPlayingOnEveryPage: the panel used to be wired to the stream
+// page only. It belongs on every page that has a results list, and must
+// never appear on settings, which draws its own layout.
+func TestNowPlayingOnEveryPage(t *testing.T) {
+	pages := []struct {
+		page Page
+		name string
+		want bool
+	}{
+		{PageStream, "stream", true},
+		{PageFavorites, "favorites", true},
+		{PageLibrary, "library", true},
+		{PageHistory, "history", true},
+		{PageSettings, "settings", false},
+	}
+	for _, size := range [][2]int{{200, 50}, {150, 40}, {120, 35}, {90, 26}} {
+		w, h := size[0], size[1]
+		for _, p := range pages {
+			m := worstCaseModel(t, w, h)
+			m.switchPage(p.page)
+			m.npOn = true // the user's toggle is on everywhere
+
+			if got := m.npVisible(); got != p.want {
+				t.Errorf("%dx%d %s: npVisible()=%v, want %v", w, h, p.name, got, p.want)
+			}
+			_, npH := m.leftPanelSplit()
+			if p.want && npH == 0 && m.npFits() {
+				t.Errorf("%dx%d %s: panel is visible but got no rows", w, h, p.name)
+			}
+			if !p.want && npH != 0 {
+				t.Errorf("%dx%d %s: panel claimed %d rows on a page that never shows it", w, h, p.name, npH)
+			}
+			checkPanelGeometry(t, m, w, h, "now-playing on "+p.name)
+		}
+	}
+}
+
+// TestSettingsPageClearsCoverImage: a kitty image outlives the frame
+// that drew it, so stepping onto the page that cannot show the panel
+// must carry the delete — otherwise the artwork stays painted over it.
+func TestSettingsPageClearsCoverImage(t *testing.T) {
+	t.Setenv("TMUX", "")
+	t.Setenv("KITTY_WINDOW_ID", "1")
+
+	m := worstCaseModel(t, 150, 40)
+	m.npOn = true
+	if !m.npVisible() {
+		t.Fatal("panel should be visible before the page switch")
+	}
+
+	wasVisible := m.npVisible()
+	m.switchPage(PageSettings)
+	m.syncNowPlaying(wasVisible)
+
+	if m.npVisible() {
+		t.Error("panel must not be visible on the settings page")
+	}
+	if m.coverClearN <= 0 {
+		t.Fatal("leaving the panel did not schedule the image delete")
+	}
+	if got := m.View(); !strings.Contains(got, coverart.KittyClear()) {
+		t.Error("settings page does not carry the delete escape")
 	}
 }

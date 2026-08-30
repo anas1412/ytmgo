@@ -6,7 +6,6 @@ import (
 	"ytmgo/internal/player"
 	"ytmgo/internal/queue"
 	ver "ytmgo/internal/version"
-	"ytmgo/internal/visualizer"
 
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
@@ -342,51 +341,29 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case "v":
-		// Open the now-playing panel beneath the results: album art
-		// beside the spectrum, with the list still visible above.
-		if m.activePage != PageStream {
+		// The now-playing panel: album art beside the spectrum, beneath
+		// the results, on every page that has a results list.
+		if m.activePage == PageSettings {
+			m.setStatus("The now-playing panel is not shown on the settings page")
 			return m, nil
 		}
-		if m.npOn {
-			m.npOn = false
-			m.viz.Close()
-			m.viz = nil
-			m.vizFrame = nil
-			m.setStatus("Now playing panel off")
-			// Kitty images persist until deleted; ask the next frames to
-			// carry the delete.
-			m.coverClearN = coverSendFrames
-			m.coverSendN = 0
-			// The spectrum was clocking redraws; restart the ticker.
-			return m, m.resumePlayerTick()
-		}
-		if !m.npFits() {
+		if !m.npOn && !m.npFits() {
 			m.setStatus("Terminal too short for the now-playing panel — make the window taller")
 			return m, nil
 		}
-		m.npOn = true
-		if m.coverImg != nil {
-			m.coverSendN = coverSendFrames // re-send: it was deleted on close
-		}
-		var cmds []tea.Cmd
-		if cmd := m.refreshCoverCmd(); cmd != nil {
-			cmds = append(cmds, cmd)
-		}
-		if visualizer.Available() {
-			if v, err := visualizer.Start(m.vizBars()); err == nil {
-				m.viz = v
-				cmds = append(cmds, vizFrameCmd(m.viz))
-			} else {
-				m.setStatus("Spectrum unavailable: " + err.Error())
-			}
-		} else {
-			m.setStatus("Spectrum needs cava —  " + visualizer.InstallHint())
-		}
-		if m.statusMessage == "" {
+		// Only the flag is flipped here. Starting and stopping the
+		// spectrum, and the cover's kitty escapes, are reconciled from
+		// the visibility change in Update, which also covers the panel
+		// going off screen because the page changed.
+		m.npOn = !m.npOn
+		if m.npOn {
 			m.setStatus("Now playing panel on  ([v] off)")
+			m.clampSearchOffset()
+			return m, m.refreshCoverCmd()
 		}
-		m.clampSearchOffset()
-		return m, tea.Batch(cmds...)
+		m.setStatus("Now playing panel off")
+		// The spectrum was clocking redraws; restart the ticker.
+		return m, m.resumePlayerTick()
 
 	case "X":
 		// Collapse the downloads panel so the queue gets the whole

@@ -85,5 +85,5 @@ func (m Model) handlePlayerTick(msg playerTickMsg) (tea.Model, tea.Cmd) {
 // vizDrivesRedraw reports whether spectrum frames are already causing
 // redraws often enough to animate the progress bar.
 func (m Model) vizDrivesRedraw() bool {
-	return m.npOn && m.viz != nil
+	return m.npVisible() && m.viz != nil
 }

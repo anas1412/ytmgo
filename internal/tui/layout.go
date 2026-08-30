@@ -123,7 +123,7 @@ const (
 // the panel is closed, or the terminal is too short to split.
 func (m Model) leftPanelSplit() (resultsH, npH int) {
 	full := m.panelHeight() - 2
-	if !m.npOn {
+	if !m.npVisible() {
 		return full, 0
 	}
 	// Two stacked sub-panels cost 6 lines of chrome, exactly as the

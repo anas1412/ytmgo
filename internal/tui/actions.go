@@ -6,6 +6,7 @@ import (
 	"ytmgo/internal/player"
 	"ytmgo/internal/queue"
 	"ytmgo/internal/settings"
+	"ytmgo/internal/visualizer"
 
 	tea "github.com/charmbracelet/bubbletea"
 )
@@ -94,6 +95,50 @@ func (m *Model) activateSelection() tea.Cmd {
 
 	}
 	return nil
+}
+
+// npVisible reports whether the now-playing panel is actually on
+// screen. npOn is the user's choice; the settings page draws its own
+// layout with no room for the panel, so it is never shown there.
+func (m Model) npVisible() bool {
+	return m.npOn && m.activePage != PageSettings
+}
+
+// syncNowPlaying starts or stops the spectrum so it runs exactly while
+// the panel is on screen, and takes the artwork with it. Called once
+// per message with the visibility from before the message was handled,
+// so leaving the panel open and stepping onto the settings page shuts
+// cava down, and stepping back off brings it and the cover back.
+func (m *Model) syncNowPlaying(wasVisible bool) tea.Cmd {
+	if m.npVisible() == wasVisible {
+		return nil
+	}
+	if !m.npVisible() {
+		if m.viz != nil {
+			m.viz.Close()
+			m.viz = nil
+			m.vizFrame = nil
+		}
+		// Kitty images outlive the frame that drew them, so a panel
+		// going off screen must take its artwork with it.
+		m.coverClearN = coverSendFrames
+		m.coverSendN = 0
+		return nil
+	}
+	if m.coverImg != nil {
+		m.coverSendN = coverSendFrames // re-send: it was deleted on the way out
+	}
+	if !visualizer.Available() {
+		m.setStatus("Spectrum needs cava —  " + visualizer.InstallHint())
+		return nil
+	}
+	v, err := visualizer.Start(m.vizBars())
+	if err != nil {
+		m.setStatus("Spectrum unavailable: " + err.Error())
+		return nil
+	}
+	m.viz = v
+	return vizFrameCmd(m.viz)
 }
 
 // revealDownloads opens the downloads panel. Called wherever a job is

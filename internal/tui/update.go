@@ -49,6 +49,24 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.coverClearN--
 	}
 
+	// Whether the now-playing panel is on screen is derived from two
+	// things — the user's toggle and the current page — so rather than
+	// have every path that changes either remember to start or stop the
+	// spectrum, the visibility is compared before and after and
+	// reconciled here, once.
+	wasVisible := m.npVisible()
+	updated, cmd := m.dispatch(msg)
+	next, ok := updated.(Model)
+	if !ok {
+		return updated, cmd
+	}
+	if sync := next.syncNowPlaying(wasVisible); sync != nil {
+		cmd = tea.Batch(cmd, sync)
+	}
+	return next, cmd
+}
+
+func (m Model) dispatch(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 
 	// ── Window resize ────────────────────────────────────────────

@@ -123,7 +123,9 @@ func (m Model) renderPage() string {
 // renderSettingsPage renders the settings layout with a two-column panel:
 // left = settings list, right = keyboard shortcuts.
 func (m Model) renderSettingsPage() string {
-	header := m.renderHeader()
+	// This page never shows the now-playing panel, so it is where a
+	// resident kitty image would otherwise stay drawn over the layout.
+	header := m.clearCoverImage() + m.renderHeader()
 	panels := m.renderSettingsPanels()
 	status := m.renderStatus()
 	player := m.renderPlayerBar()
@@ -382,13 +384,6 @@ func (m Model) renderPanels() string {
 	}
 	queueTitle := fmt.Sprintf("QUEUE  %s  %s remove  %s clear  %s reorder",
 		queueCount, dHint, dCapHint, reorderHint)
-	if m.downloadsHidden {
-		// Ahead of the other hints: with the panel closed this is the
-		// only place that says how to get it back, so it must not be
-		// the first thing a narrow title truncates away.
-		queueTitle = fmt.Sprintf("QUEUE  %s  %s downloads  %s remove  %s clear  %s reorder",
-			queueCount, styleKeyHint.Render("[X]"), dHint, dCapHint, reorderHint)
-	}
 	queueTitleStyled := stylePanelTitle.Render(truncate(queueTitle, titleW))
 	queueContent := m.renderQueue(panelWidth, queueContentH)
 	queuePanel := lipgloss.JoinVertical(lipgloss.Top,
