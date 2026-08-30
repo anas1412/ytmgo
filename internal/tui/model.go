@@ -448,6 +448,7 @@ func InitialModel() Model {
 	return Model{
 		activePage:             PageStream,
 		downloadsHidden:        true,
+		npOn:                   true,
 		activePanel:            PanelSearch,
 		searchInput:            ti,
 		results:                []search.Result{},

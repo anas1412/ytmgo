@@ -357,7 +357,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		// going off screen because the page changed.
 		m.npOn = !m.npOn
 		if m.npOn {
-			m.setStatus("Now playing panel on  ([v] off)")
+			m.setStatus("Now playing panel on  ([v] hide)")
 			m.clampSearchOffset()
 			return m, m.refreshCoverCmd()
 		}

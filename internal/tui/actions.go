@@ -98,10 +98,16 @@ func (m *Model) activateSelection() tea.Cmd {
 }
 
 // npVisible reports whether the now-playing panel is actually on
-// screen. npOn is the user's choice; the settings page draws its own
-// layout with no room for the panel, so it is never shown there.
+// screen. npOn is the user's choice, which is on by default; the panel
+// is additionally kept off the settings page, which draws its own
+// layout with no room for it, and off terminals too short to give both
+// it and the results list a usable number of rows. Since the spectrum
+// is started and stopped from changes to this, it also means a window
+// resized below the threshold shuts cava down rather than leaving it
+// running for a panel that is not drawn — and before the first
+// WindowSizeMsg there is no size, so nothing starts too early.
 func (m Model) npVisible() bool {
-	return m.npOn && m.activePage != PageSettings
+	return m.npOn && m.activePage != PageSettings && m.npFits()
 }
 
 // syncNowPlaying starts or stops the spectrum so it runs exactly while

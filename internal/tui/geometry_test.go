@@ -396,14 +396,15 @@ func TestNowPlayingOnEveryPage(t *testing.T) {
 			m.switchPage(p.page)
 			m.npOn = true // the user's toggle is on everywhere
 
-			if got := m.npVisible(); got != p.want {
-				t.Errorf("%dx%d %s: npVisible()=%v, want %v", w, h, p.name, got, p.want)
+			want := p.want && m.npFits() // a short terminal refuses it everywhere
+			if got := m.npVisible(); got != want {
+				t.Errorf("%dx%d %s: npVisible()=%v, want %v", w, h, p.name, got, want)
 			}
 			_, npH := m.leftPanelSplit()
-			if p.want && npH == 0 && m.npFits() {
+			if want && npH == 0 {
 				t.Errorf("%dx%d %s: panel is visible but got no rows", w, h, p.name)
 			}
-			if !p.want && npH != 0 {
+			if !want && npH != 0 {
 				t.Errorf("%dx%d %s: panel claimed %d rows on a page that never shows it", w, h, p.name, npH)
 			}
 			checkPanelGeometry(t, m, w, h, "now-playing on "+p.name)
