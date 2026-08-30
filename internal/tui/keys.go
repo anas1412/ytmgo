@@ -151,11 +151,11 @@ var Keys = KeyMap{
 	),
 	Visualizer: key.NewBinding(
 		key.WithKeys("v"),
-		key.WithHelp("v", "now playing panel"),
+		key.WithHelp("v", "now playing"),
 	),
 	Downloads: key.NewBinding(
 		key.WithKeys("X"),
-		key.WithHelp("X", "downloads panel"),
+		key.WithHelp("X", "downloads"),
 	),
 	Open: key.NewBinding(
 		key.WithKeys("o"),
@@ -195,12 +195,16 @@ var Keys = KeyMap{
 	),
 }
 
-// ShortHelp returns key bindings for the compact help line.
-// Only general-purpose utilities live here — all playback and
-// navigation hints are rendered inline next to their contextual
-// UI element (player bar controls, panel titles, header).
+// ShortHelp returns key bindings for the compact help line: the panel
+// toggles plus the general-purpose utilities. Playback and navigation
+// hints stay inline next to their contextual UI element (player bar
+// controls, panel titles, header), but the two panel toggles have no
+// permanent home of their own — the panel each one reopens is exactly
+// the thing that is not on screen — so they live here.
 func (k KeyMap) ShortHelp() []key.Binding {
 	return []key.Binding{
+		k.Visualizer,
+		k.Downloads,
 		k.Help,
 		k.Quit,
 	}

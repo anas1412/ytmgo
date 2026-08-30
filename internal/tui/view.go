@@ -226,8 +226,9 @@ func (m Model) renderHeader() string {
 	// Tab hint — shown inline so users discover focus cycling without
 	// glancing down at the help bar.
 	tabHint := styleKeyHint.Render("[tab]") + styleTextDim.Render(" cycle")
-	npHint := styleKeyHint.Render("[v]") + styleTextDim.Render(" now playing")
-	left := lipgloss.JoinHorizontal(lipgloss.Center, logo, "   ", searchView, "  ", tabHint, "  ", npHint)
+	// [v] used to sit here too; it lives in the help bar now, next to
+	// [X], so the two panel toggles are advertised together in one place.
+	left := lipgloss.JoinHorizontal(lipgloss.Center, logo, "   ", searchView, "  ", tabHint)
 
 	gap := m.width - lipgloss.Width(left) - lipgloss.Width(tabsStr) - 2
 	if gap < 1 {
@@ -340,7 +341,7 @@ func (m Model) renderPanels() string {
 	searchContent := m.renderSearchResults(panelWidth, contentH)
 	leftPanel := lipgloss.JoinVertical(lipgloss.Top,
 		searchTitle,
-		searchContent,
+		indentBlock(searchContent),
 	)
 	leftHeight := panelHeight - 2
 	if npH > 0 {
@@ -358,7 +359,7 @@ func (m Model) renderPanels() string {
 		npTitle := stylePanelTitle.Render(truncate(m.npPanelTitle(), titleW))
 		npPanel := lipgloss.JoinVertical(lipgloss.Top,
 			npTitle,
-			m.renderNowPlayingPanel(panelWidth, npH),
+			indentBlock(m.renderNowPlayingPanel(panelWidth, npH)),
 		)
 		leftPanel = lipgloss.JoinVertical(lipgloss.Top, leftPanel,
 			panelBorder.Width(panelWidth).Height(npH).Render(npPanel))
@@ -389,10 +390,10 @@ func (m Model) renderPanels() string {
 			queueCount, styleKeyHint.Render("[X]"), dHint, dCapHint, reorderHint)
 	}
 	queueTitleStyled := stylePanelTitle.Render(truncate(queueTitle, titleW))
-	queueContent := m.renderQueue(panelWidth-2, queueContentH)
+	queueContent := m.renderQueue(panelWidth, queueContentH)
 	queuePanel := lipgloss.JoinVertical(lipgloss.Top,
 		queueTitleStyled,
-		queueContent,
+		indentBlock(queueContent),
 	)
 	queueBoxH := queueContentH
 	if downloadsContentH == 0 {
@@ -412,12 +413,15 @@ func (m Model) renderPanels() string {
 		}
 		oHint := styleKeyHint.Render("[o]")
 		xHint2 := styleKeyHint.Render("[X]")
-		downloadsTitle := fmt.Sprintf("DOWNLOADS  [%d]  %s open folder  %s hide", dlCount, oHint, xHint2)
+		// Toggle straight after the count, as the now-playing title
+		// does: the panel's own show/hide hint sits in the same place
+		// everywhere, and a narrow title never truncates it away.
+		downloadsTitle := fmt.Sprintf("DOWNLOADS  [%d]  %s hide  %s open folder", dlCount, xHint2, oHint)
 		downloadsTitleStyled := stylePanelTitle.Render(truncate(downloadsTitle, titleW))
-		downloadsContent := m.renderDownloadQueue(panelWidth-2, downloadsContentH)
+		downloadsContent := m.renderDownloadQueue(panelWidth, downloadsContentH)
 		downloadsPanel := lipgloss.JoinVertical(lipgloss.Top,
 			downloadsTitleStyled,
-			downloadsContent,
+			indentBlock(downloadsContent),
 		)
 		// Bottom sub-panel uses unfocused border (queue owns the focus)
 		downloadsPanel = panelBorder.
@@ -570,9 +574,9 @@ func coverFitCells(img image.Image, maxCols, maxRows int) (cols, rows int) {
 func (m Model) npPanelTitle() string {
 	vHint := styleKeyHint.Render("[v]")
 	if t, ok := m.queue.Current(); ok && t.Title != "" {
-		return "NOW PLAYING  " + vHint + " off   " + t.Title
+		return "NOW PLAYING  " + vHint + " hide  " + t.Title
 	}
-	return "NOW PLAYING  " + vHint + " off"
+	return "NOW PLAYING  " + vHint + " hide"
 }
 
 // renderNowPlayingPanel draws album art on the left and the spectrum on
@@ -727,7 +731,13 @@ func (m Model) renderSpectrum(width, height int) []string {
 			if span < 1 {
 				continue
 			}
-			fill := max(1, span-1) // leave a column of gap where there is room
+			// The gap separates this bar from the next, so the last
+			// bar does not need one — without this the spectrum always
+			// stopped a column short of its own right edge.
+			fill := span
+			if i < n-1 {
+				fill = max(1, span-1)
+			}
 			gap := span - fill
 			if heights[i] >= remaining {
 				style := styleVizLow
@@ -758,6 +768,10 @@ func (m Model) renderAlbums(width, height int) string {
 			"Type an album name and press Enter  ([A] back to songs)")
 	}
 
+	// Rows are two columns narrower than the panel, the same as the
+	// stream list and the queue, so a page switch does not shift the
+	// right-hand column.
+	rowW := max(1, width-2)
 	var lines []string
 	maxItems := (height - 1) / 2
 	if maxItems < 1 {
@@ -770,7 +784,7 @@ func (m Model) renderAlbums(width, height int) string {
 		a := m.albums[i]
 		isSelected := !m.searchFocused && m.activePanel == PanelSearch && i == m.searchCursor
 		prefix := fmt.Sprintf("%d. ", i+1)
-		title := truncate(a.Title, max(4, width-lipgloss.Width(prefix)-2))
+		title := truncate(a.Title, max(4, rowW-lipgloss.Width(prefix)-2))
 
 		artist := a.Artist
 		if artist == "" {
@@ -778,13 +792,13 @@ func (m Model) renderAlbums(width, height int) string {
 		}
 		leftInfo := "   " + artist
 		rightInfo := a.Year
-		maxLeft := width - lipgloss.Width(rightInfo) - 2
+		maxLeft := rowW - lipgloss.Width(rightInfo) - 2
 		if maxLeft > 3 {
 			leftInfo = truncate(leftInfo, maxLeft)
 		}
-		spacing := max(1, width-lipgloss.Width(leftInfo)-lipgloss.Width(rightInfo))
+		spacing := max(1, rowW-lipgloss.Width(leftInfo)-lipgloss.Width(rightInfo))
 		info := leftInfo + strings.Repeat(" ", spacing) + rightInfo
-		lines = append(lines, renderListItemBlock(prefix+title, info, isSelected, false, width))
+		lines = append(lines, renderListItemBlock(prefix+title, info, isSelected, false, rowW))
 	}
 
 	if ind := scrollIndicator(start, len(m.albums)-end, m.searchCursor+1, len(m.albums)); ind != "" {
@@ -802,6 +816,10 @@ func (m Model) renderAlbumTracks(width, height int) string {
 		return styleEmpty.Width(width - 2).Height(height).Render("This album has no playable tracks")
 	}
 
+	// Rows are two columns narrower than the panel, the same as the
+	// stream list and the queue, so a page switch does not shift the
+	// right-hand column.
+	rowW := max(1, width-2)
 	var lines []string
 	maxItems := (height - 1) / 2
 	if maxItems < 1 {
@@ -816,7 +834,7 @@ func (m Model) renderAlbumTracks(width, height int) string {
 		r := m.albumTracks[i]
 		isSelected := !m.searchFocused && m.activePanel == PanelSearch && i == m.searchCursor
 		prefix := fmt.Sprintf("%0*d. ", numW, i+1)
-		title := truncate(r.Title, max(4, width-lipgloss.Width(prefix)-2))
+		title := truncate(r.Title, max(4, rowW-lipgloss.Width(prefix)-2))
 
 		leftInfo := "   " + m.openAlbum.Artist
 		heart := ""
@@ -824,13 +842,13 @@ func (m Model) renderAlbumTracks(width, height int) string {
 			heart = "♥  "
 		}
 		rightInfo := heart + formatDuration(r.Duration)
-		maxLeft := width - lipgloss.Width(rightInfo) - 2
+		maxLeft := rowW - lipgloss.Width(rightInfo) - 2
 		if maxLeft > 3 {
 			leftInfo = truncate(leftInfo, maxLeft)
 		}
-		spacing := max(1, width-lipgloss.Width(leftInfo)-lipgloss.Width(rightInfo))
+		spacing := max(1, rowW-lipgloss.Width(leftInfo)-lipgloss.Width(rightInfo))
 		info := leftInfo + strings.Repeat(" ", spacing) + rightInfo
-		lines = append(lines, renderListItemBlock(prefix+title, info, isSelected, false, width))
+		lines = append(lines, renderListItemBlock(prefix+title, info, isSelected, false, rowW))
 	}
 
 	if ind := scrollIndicator(start, len(m.albumTracks)-end, m.searchCursor+1, len(m.albumTracks)); ind != "" {
@@ -841,6 +859,19 @@ func (m Model) renderAlbumTracks(width, height int) string {
 
 // padPanel pads rendered rows to the panel's full width and height so
 // no stale content from a previous frame shows through.
+// indentBlock shifts a panel's content one column right so it lines up
+// under the panel title, which the border style already insets by one.
+// Content blocks are two columns narrower than the box, so this spends
+// one of those columns on the left and leaves the other on the right —
+// the same gutter on both sides instead of all of it on the right.
+func indentBlock(s string) string {
+	lines := strings.Split(s, "\n")
+	for i, line := range lines {
+		lines[i] = " " + line
+	}
+	return strings.Join(lines, "\n")
+}
+
 func padPanel(s string, width, height int) string {
 	paddedW := max(1, width-2)
 	out := padToWidth(s, paddedW)
@@ -868,6 +899,10 @@ func (m Model) renderLibrary(width, height int) string {
 		)
 	}
 
+	// Rows are two columns narrower than the panel, the same as the
+	// stream list and the queue, so a page switch does not shift the
+	// right-hand column.
+	rowW := max(1, width-2)
 	var lines []string
 	maxItems := (height - 1) / 2
 	if maxItems < 1 {
@@ -884,7 +919,7 @@ func (m Model) renderLibrary(width, height int) string {
 		t := tracks[i]
 		prefix := fmt.Sprintf("%d. ", i+1)
 		title := t.Title
-		maxTitle := width - lipgloss.Width(prefix) - 2
+		maxTitle := rowW - lipgloss.Width(prefix) - 2
 		if maxTitle > 3 {
 			title = truncate(title, maxTitle)
 		}
@@ -898,23 +933,24 @@ func (m Model) renderLibrary(width, height int) string {
 		if dur == "" {
 			dur = "0:00"
 		}
-		leftInfo := "   " + artist
+		// Same fixed slot as the queue — every library track is on disk.
+		leftInfo := " ✓ " + artist
 		heart := ""
 		if m.favoriteSet[t.ID] {
 			heart = "♥  "
 		}
-		rightInfo := heart + dur + "  ✓"
-		maxLeft := width - lipgloss.Width(rightInfo) - 2
+		rightInfo := heart + dur
+		maxLeft := rowW - lipgloss.Width(rightInfo) - 2
 		if maxLeft > 3 {
 			leftInfo = truncate(leftInfo, maxLeft)
 		}
-		spacing := width - lipgloss.Width(leftInfo) - lipgloss.Width(rightInfo)
+		spacing := rowW - lipgloss.Width(leftInfo) - lipgloss.Width(rightInfo)
 		if spacing < 1 {
 			spacing = 1
 		}
 		info := leftInfo + strings.Repeat(" ", spacing) + rightInfo
 
-		lines = append(lines, renderListItemBlock(line, info, isSelected, false, width))
+		lines = append(lines, renderListItemBlock(line, info, isSelected, false, rowW))
 	}
 
 	if ind := scrollIndicator(start, len(tracks)-end, m.libraryCursor+1, len(tracks)); ind != "" {
@@ -943,6 +979,10 @@ func (m Model) renderFavorites(width, height int) string {
 		)
 	}
 
+	// Rows are two columns narrower than the panel, the same as the
+	// stream list and the queue, so a page switch does not shift the
+	// right-hand column.
+	rowW := max(1, width-2)
 	var lines []string
 	maxItems := (height - 1) / 2
 	if maxItems < 1 {
@@ -959,7 +999,7 @@ func (m Model) renderFavorites(width, height int) string {
 		t := tracks[i]
 		prefix := fmt.Sprintf("%d. ", i+1)
 		title := t.Title
-		maxTitle := width - lipgloss.Width(prefix) - 2
+		maxTitle := rowW - lipgloss.Width(prefix) - 2
 		if maxTitle > 3 {
 			title = truncate(title, maxTitle)
 		}
@@ -975,17 +1015,17 @@ func (m Model) renderFavorites(width, height int) string {
 		}
 		leftInfo := "   " + artist
 		rightInfo := "♥  " + dur
-		maxLeft := width - lipgloss.Width(rightInfo) - 2
+		maxLeft := rowW - lipgloss.Width(rightInfo) - 2
 		if maxLeft > 3 {
 			leftInfo = truncate(leftInfo, maxLeft)
 		}
-		spacing := width - lipgloss.Width(leftInfo) - lipgloss.Width(rightInfo)
+		spacing := rowW - lipgloss.Width(leftInfo) - lipgloss.Width(rightInfo)
 		if spacing < 1 {
 			spacing = 1
 		}
 		info := leftInfo + strings.Repeat(" ", spacing) + rightInfo
 
-		lines = append(lines, renderListItemBlock(line, info, isSelected, false, width))
+		lines = append(lines, renderListItemBlock(line, info, isSelected, false, rowW))
 	}
 
 	if ind := scrollIndicator(start, len(tracks)-end, m.favCursor+1, len(tracks)); ind != "" {
@@ -1017,6 +1057,10 @@ func (m Model) renderHistory(width, height int) string {
 		)
 	}
 
+	// Rows are two columns narrower than the panel, the same as the
+	// stream list and the queue, so a page switch does not shift the
+	// right-hand column.
+	rowW := max(1, width-2)
 	var lines []string
 	maxItems := (height - 1) / 2
 	if maxItems < 1 {
@@ -1034,7 +1078,7 @@ func (m Model) renderHistory(width, height int) string {
 
 		prefix := fmt.Sprintf("%d. ", i+1)
 		title := e.Title
-		maxTitle := width - lipgloss.Width(prefix) - 2
+		maxTitle := rowW - lipgloss.Width(prefix) - 2
 		if maxTitle > 3 {
 			title = truncate(title, maxTitle)
 		}
@@ -1046,17 +1090,17 @@ func (m Model) renderHistory(width, height int) string {
 		}
 		timeAgo := relativeTime(e.PlayedAt)
 		leftInfo := "   " + artist
-		maxLeft := width - lipgloss.Width(timeAgo) - 2
+		maxLeft := rowW - lipgloss.Width(timeAgo) - 2
 		if maxLeft > 3 {
 			leftInfo = truncate(leftInfo, maxLeft)
 		}
-		spacing := width - lipgloss.Width(leftInfo) - lipgloss.Width(timeAgo)
+		spacing := rowW - lipgloss.Width(leftInfo) - lipgloss.Width(timeAgo)
 		if spacing < 1 {
 			spacing = 1
 		}
 		info := leftInfo + strings.Repeat(" ", spacing) + timeAgo
 
-		lines = append(lines, renderListItemBlock(line, info, isSelected, false, width))
+		lines = append(lines, renderListItemBlock(line, info, isSelected, false, rowW))
 	}
 
 	if ind := scrollIndicator(start, len(entries)-end, m.historyCursor+1, len(entries)); ind != "" {
@@ -1172,16 +1216,20 @@ func (m Model) formatQueueRow(idx int, t queue.Track, width int) string {
 	}
 	line := prefix + title
 
-	dlIndicator := ""
+	// The downloaded marker sits in a fixed-width slot on the left. It
+	// used to be appended after the duration, which pushed the duration
+	// three columns left on exactly those tracks that were downloaded,
+	// so the column never lined up.
+	slot := "   "
 	if t.Downloaded {
-		dlIndicator = "  ✓"
+		slot = " ✓ "
 	}
-	leftInfo := "   " + t.Artist
+	leftInfo := slot + t.Artist
 	heart := ""
 	if m.favoriteSet[t.ID] {
 		heart = "♥  "
 	}
-	rightInfo := heart + t.Duration + dlIndicator
+	rightInfo := heart + t.Duration
 	maxLeft := width - lipgloss.Width(rightInfo) - 2
 	if maxLeft > 3 {
 		leftInfo = truncate(leftInfo, maxLeft)
