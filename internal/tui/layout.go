@@ -1,9 +1,7 @@
 package tui
 
 import (
-	"os"
 	"os/exec"
-	"path/filepath"
 	"runtime"
 
 	"ytmgo/internal/downloader"
@@ -25,46 +23,10 @@ func (m *Model) ensureDownloader() {
 }
 
 // downloadDir returns the directory where downloaded tracks are stored.
-//
-// Resolution order:
-//  1. If the user has set a custom path via the Settings page, use it.
-//  2. Otherwise, fall back to the platform-appropriate user data directory
-//     (XDG_DATA_HOME/ytmgo/downloads on Linux,
-//     ~/Library/Application Support/ytmgo/downloads on macOS).
-//
-// The legacy default value "downloads" is treated as "unset" so existing
-// users get the new XDG location instead of a stray "downloads" folder
-// next to the binary after upgrading.
+// The resolution logic lives in the settings package so the CLI
+// subcommands write to the same place.
 func (m *Model) downloadDir() string {
-	if dir := m.settings.DownloadDir; dir != "" && dir != "downloads" {
-		os.MkdirAll(dir, 0755)
-		return dir
-	}
-	base, err := userDataDir()
-	if err != nil {
-		return "downloads" // last-ditch fallback
-	}
-	dir := filepath.Join(base, "ytmgo", "downloads")
-	os.MkdirAll(dir, 0755)
-	return dir
-}
-
-// userDataDir returns the platform-appropriate base directory for app data
-// (NOT configuration — for that, see settings.configPath).
-//   - Linux:   $XDG_DATA_HOME, or ~/.local/share if unset
-//   - macOS:   ~/Library/Application Support
-func userDataDir() (string, error) {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", err
-	}
-	if runtime.GOOS == "darwin" {
-		return filepath.Join(home, "Library", "Application Support"), nil
-	}
-	if xdg := os.Getenv("XDG_DATA_HOME"); xdg != "" {
-		return xdg, nil
-	}
-	return filepath.Join(home, ".local", "share"), nil
+	return m.settings.ResolveDownloadDir()
 }
 
 // openInOS opens the given path in the system's default file manager

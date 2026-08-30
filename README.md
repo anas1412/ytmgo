@@ -140,6 +140,31 @@ go build -o ytmgo .
 
 ---
 
+## Command line
+
+Run without arguments to open the player. There are also headless
+subcommands for quick lookups and scripting:
+
+```bash
+ytmgo                    # open the interactive player
+ytmgo search homage      # print matching tracks
+ytmgo play homage        # play the first match (ctrl+c to stop)
+ytmgo download homage    # download the first match
+```
+
+Quotes are optional — `ytmgo play mild high club homage` works as typed.
+Downloads use the same folder and format configured on the Settings page.
+
+While the player is running, it also answers to media keys and `playerctl`:
+
+```bash
+playerctl -p ytmgo play-pause
+playerctl -p ytmgo next
+playerctl -p ytmgo metadata --format '{{artist}} — {{title}}'
+```
+
+---
+
 ## Usage
 
 | Step | Action |

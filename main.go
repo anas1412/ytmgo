@@ -37,10 +37,17 @@ func setupLogging() *os.File {
 
 func main() {
 	versionFlag := flag.Bool("version", false, "print version and exit")
+	flag.Usage = func() { fmt.Print(cliUsage) }
 	flag.Parse()
 	if *versionFlag {
 		fmt.Println("ytmgo", version.Full())
 		os.Exit(0)
+	}
+
+	// Headless subcommands (search / play / download) run without the
+	// TUI; anything else falls through and opens the player.
+	if handled, code := runCLI(flag.Args()); handled {
+		os.Exit(code)
 	}
 
 	if f := setupLogging(); f != nil {

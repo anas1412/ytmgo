@@ -2,6 +2,12 @@
 // Persistence is handled by the db package.
 package settings
 
+import (
+	"os"
+	"path/filepath"
+	"runtime"
+)
+
 // Playback mode constants.
 const (
 	PlaybackStream  = 0 // play via URL, no download
@@ -77,4 +83,47 @@ func PlaybackModeLabel(mode int) string {
 	default:
 		return "Hybrid"
 	}
+}
+
+// ─── Paths ──────────────────────────────────────────────────────────
+
+// ResolveDownloadDir returns the directory downloaded tracks are stored
+// in, creating it if needed. Shared by the TUI and the CLI subcommands
+// so both write to the same place.
+//
+// Resolution order:
+//  1. A custom path set on the Settings page.
+//  2. The platform user-data dir (XDG_DATA_HOME/ytmgo/downloads on
+//     Linux, ~/Library/Application Support/ytmgo/downloads on macOS).
+//
+// The legacy default "downloads" counts as unset, so upgrading users get
+// the XDG location instead of a stray folder next to the binary.
+func (s *Settings) ResolveDownloadDir() string {
+	if dir := s.DownloadDir; dir != "" && dir != "downloads" {
+		os.MkdirAll(dir, 0755)
+		return dir
+	}
+	base, err := userDataDir()
+	if err != nil {
+		return "downloads" // last-ditch fallback
+	}
+	dir := filepath.Join(base, "ytmgo", "downloads")
+	os.MkdirAll(dir, 0755)
+	return dir
+}
+
+// userDataDir returns the platform base directory for app data (NOT
+// configuration — that lives beside the database in ~/.config/ytmgo).
+func userDataDir() (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	if runtime.GOOS == "darwin" {
+		return filepath.Join(home, "Library", "Application Support"), nil
+	}
+	if xdg := os.Getenv("XDG_DATA_HOME"); xdg != "" {
+		return xdg, nil
+	}
+	return filepath.Join(home, ".local", "share"), nil
 }
