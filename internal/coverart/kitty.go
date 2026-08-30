@@ -8,6 +8,7 @@ import (
 	"image/png"
 	"os"
 	"strings"
+	"sync"
 )
 
 // Kitty's graphics protocol draws the real image instead of
@@ -45,6 +46,35 @@ func KittySupported() bool {
 		return true
 	}
 	return strings.Contains(strings.ToLower(os.Getenv("TERM")), "kitty")
+}
+
+// transmitCache memoises the encoded transmit, so emitting it across a
+// few frames costs one encode rather than several.
+var (
+	transmitMu    sync.Mutex
+	transmitKey   string
+	transmitValue string
+)
+
+// KittyTransmitCached is KittyTransmit memoised on the artwork and size.
+func KittyTransmitCached(img image.Image, key string, cols, rows int) (string, error) {
+	full := fmt.Sprintf("%s|%d|%d", key, cols, rows)
+	transmitMu.Lock()
+	if transmitKey == full {
+		v := transmitValue
+		transmitMu.Unlock()
+		return v, nil
+	}
+	transmitMu.Unlock()
+
+	esc, err := KittyTransmit(img, cols, rows)
+	if err != nil {
+		return "", err
+	}
+	transmitMu.Lock()
+	transmitKey, transmitValue = full, esc
+	transmitMu.Unlock()
+	return esc, nil
 }
 
 // KittyTransmit sends the image to the terminal under a fixed id,

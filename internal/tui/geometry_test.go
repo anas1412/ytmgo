@@ -236,12 +236,13 @@ func TestNowPlayingRefusesShortTerminals(t *testing.T) {
 	}
 }
 
-// TestCoverImageIsCleared guards the bug where the kitty image stayed
-// on screen after closing the panel: images persist until deleted, so
-// the frame must carry the delete once the panel stops showing one.
-// This cannot be exercised through tmux, which falls back to
-// half-blocks, so it is asserted on the rendered frame directly.
-func TestCoverImageIsCleared(t *testing.T) {
+// TestCoverEscapesSurviveDiscardedFrames guards the bug that left the
+// artwork stuck on the first track and still on screen after closing:
+// the transmit and delete used to be emitted from inside View, which
+// Bubble Tea calls more often than it flushes, so whichever frame
+// carried them could simply be thrown away. Update now owns the
+// decision and each escape is repeated across several frames.
+func TestCoverEscapesSurviveDiscardedFrames(t *testing.T) {
 	t.Setenv("TMUX", "")
 	t.Setenv("KITTY_WINDOW_ID", "1")
 
@@ -256,28 +257,69 @@ func TestCoverImageIsCleared(t *testing.T) {
 	m.npOn = true
 	m.coverImg = img
 	m.coverURL = "https://example/a.jpg"
+	m.coverSendN = coverSendFrames
 
+	// Rendering the same state repeatedly must keep carrying the
+	// transmit — View is pure, so a discarded frame changes nothing.
+	for i := 0; i < 3; i++ {
+		if !strings.Contains(m.View(), "\x1b_Ga=t") {
+			t.Fatalf("render %d dropped the transmit even though Update still owes it", i)
+		}
+	}
+
+	// Once Update has counted the frames down, only the cheap placement
+	// is emitted — re-sending the pixels every frame is what caused the
+	// lag.
+	for i := 0; i < coverSendFrames; i++ {
+		nm, _ := m.Update(tickMsg{})
+		m = nm.(Model)
+	}
 	frame := m.View()
-	if !strings.Contains(frame, "\x1b_Ga=t") {
-		t.Fatal("open panel: image was never transmitted")
+	if strings.Contains(frame, "\x1b_Ga=t") {
+		t.Error("still re-transmitting the image after the countdown")
 	}
-	// A second render must not re-send the pixels — doing that on every
-	// frame is what made the UI lag.
-	if second := m.View(); strings.Contains(second, "\x1b_Ga=t") {
-		t.Error("image re-transmitted on a later frame; it should only be placed")
-	} else if !strings.Contains(second, "\x1b_Ga=p") {
-		t.Error("later frame does not place the resident image")
+	if !strings.Contains(frame, "\x1b_Ga=p") {
+		t.Error("resident image is no longer being placed")
 	}
 
-	// Closing the panel must delete it.
+	// Closing the panel must carry the delete, repeatedly, or the image
+	// stays on screen over whatever is drawn next.
 	m.npOn = false
-	if closed := m.View(); !strings.Contains(closed, "\x1b_Ga=d") {
-		t.Error("closing the panel did not delete the image — it would stay on screen")
+	m.coverClearN = coverSendFrames
+	for i := 0; i < 3; i++ {
+		if !strings.Contains(m.View(), "\x1b_Ga=d") {
+			t.Fatalf("render %d after closing dropped the delete", i)
+		}
 	}
+	for i := 0; i < coverSendFrames; i++ {
+		nm, _ := m.Update(tickMsg{})
+		m = nm.(Model)
+	}
+	if strings.Contains(m.View(), "\x1b_Ga=d") {
+		t.Error("still emitting the delete long after closing")
+	}
+}
 
-	// Reopening must transmit again, since the image was deleted.
+// TestNewArtworkReplacesOld: a track change must delete the resident
+// image and send the new one, or the first song's cover stays forever.
+func TestNewArtworkReplacesOld(t *testing.T) {
+	t.Setenv("TMUX", "")
+	t.Setenv("KITTY_WINDOW_ID", "1")
+
+	img := image.NewRGBA(image.Rect(0, 0, 64, 64))
+	m := worstCaseModel(t, 150, 40)
 	m.npOn = true
-	if reopened := m.View(); !strings.Contains(reopened, "\x1b_Ga=t") {
-		t.Error("reopening did not re-transmit the deleted image")
+
+	nm, _ := m.Update(CoverLoadedMsg{URL: "https://example/second.jpg", Img: img})
+	m = nm.(Model)
+	if m.coverSendN <= 0 {
+		t.Fatal("new artwork did not schedule a transmit")
+	}
+	if m.coverClearN <= 0 {
+		t.Fatal("new artwork did not schedule a delete of the old image")
+	}
+	frame := m.View()
+	if !strings.Contains(frame, "\x1b_Ga=d") || !strings.Contains(frame, "\x1b_Ga=t") {
+		t.Error("frame should both drop the old image and send the new one")
 	}
 }

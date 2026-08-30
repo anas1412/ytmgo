@@ -32,7 +32,23 @@ func (m Model) Init() tea.Cmd {
 
 // Update satisfies tea.Model. It handles all messages without making
 // any actual backend calls — purely UI state transitions.
+// coverSendFrames is how many consecutive frames must carry a kitty
+// transmit or delete. Bubble Tea discards frames rendered between
+// flushes, so emitting once can be lost; three is comfortably more than
+// the renderer ever drops.
+const coverSendFrames = 3
+
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	// Count down the escapes owed to the terminal. Doing this here — not
+	// in View — is what makes it reliable: Update runs exactly once per
+	// message, while View may run and be thrown away.
+	if m.coverSendN > 0 {
+		m.coverSendN--
+	}
+	if m.coverClearN > 0 {
+		m.coverClearN--
+	}
+
 	switch msg := msg.(type) {
 
 	// ── Window resize ────────────────────────────────────────────
@@ -198,6 +214,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.coverImg = msg.Img
 		m.coverURL = msg.URL
 		m.coverErr = ""
+		// New artwork: replace whatever the terminal is holding.
+		m.coverClearN = coverSendFrames
+		m.coverSendN = coverSendFrames
 		return m, nil
 
 	// ── URL prefetched (background cache populate) ──────────────

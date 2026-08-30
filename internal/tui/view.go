@@ -351,11 +351,9 @@ func (m Model) renderPanels() string {
 		Height(leftHeight).
 		Render(leftPanel)
 
-	if npH == 0 {
-		// The panel is closed (or the page changed): drop any resident
-		// image, or it stays on screen over whatever is drawn next.
-		leftPanel = clearCoverImage() + leftPanel
-	}
+	// A closed panel must drop any resident image, or it stays on screen
+	// over whatever is drawn next.
+	leftPanel = m.clearCoverImage() + leftPanel
 	if npH > 0 {
 		npTitle := stylePanelTitle.Render(truncate(m.npPanelTitle(), titleW))
 		npPanel := lipgloss.JoinVertical(lipgloss.Top,
@@ -509,13 +507,19 @@ func (m Model) renderStreamList(width, height int) string {
 
 // vizBars is how many spectrum columns fit the left panel. Each bar is
 // drawn two cells wide with a gap, so the panel width divides by three.
+// vizBars picks how many bars to ask cava for. The count is fixed for
+// the life of the process, so it is sized for the steady state: the
+// panel open with artwork loaded beside it. renderSpectrum stretches
+// whatever arrives to the real width, so an imperfect guess here costs
+// nothing but bar thickness.
 func (m Model) vizBars() int {
-	outer := (m.width-2)/2 - 4 // left panel inner width
+	innerW := (m.width-2)/2 - 2 - 2
 	_, npH := m.leftPanelSplit()
-	if npH > 0 {
-		outer -= int(float64(npH) * coverart.CellAspect) // art takes its square
+	if npH == 0 {
+		npH = (m.panelHeight() - 6) * 45 / 100 // the height it will get once open
 	}
-	n := (outer - 2) / 3
+	avail := innerW - int(float64(npH)*coverart.CellAspect) - 1
+	n := avail / 3 // roughly two cells per bar plus a gap
 	if n < 4 {
 		n = 4
 	}
@@ -523,61 +527,6 @@ func (m Model) vizBars() int {
 		n = 128
 	}
 	return n
-}
-
-// renderVisualizer draws the spectrum as vertical bars filling the
-// panel, brightest at the peaks.
-func (m Model) renderVisualizer(width, height int) string {
-	innerW := max(1, width-2)
-	if height < 1 {
-		height = 1
-	}
-	frame := m.vizFrame
-	if len(frame) == 0 {
-		return padPanel(styleEmpty.Width(innerW).Render(m.spinner()+"  Loading…"), width, height)
-	}
-
-	// Map each bar's 0..100 value to a column height.
-	heights := make([]int, len(frame))
-	for i, val := range frame {
-		h := val * height / 100
-		if h > height {
-			h = height
-		}
-		if h < 0 {
-			h = 0
-		}
-		heights[i] = h
-	}
-
-	// Draw top row down: a cell is lit when its column reaches that row.
-	rows := make([]string, 0, height)
-	for row := 0; row < height; row++ {
-		remaining := height - row // a column of this height reaches this row
-		var b strings.Builder
-		for _, h := range heights {
-			if h >= remaining {
-				// Brighter towards the peak of each column.
-				style := styleVizLow
-				switch {
-				case remaining > height*2/3:
-					style = styleVizHigh
-				case remaining > height/3:
-					style = styleVizMid
-				}
-				b.WriteString(style.Render("██"))
-			} else {
-				b.WriteString("  ")
-			}
-			b.WriteString(" ")
-		}
-		line := b.String()
-		if lipgloss.Width(line) > innerW {
-			line = truncate(line, innerW)
-		}
-		rows = append(rows, line)
-	}
-	return padPanel(strings.Join(rows, "\n"), width, height)
 }
 
 // coverFitCells sizes the art in whole cells, preserving its aspect
@@ -661,11 +610,6 @@ var coverRender struct {
 	lines []string
 }
 
-// kittySent records which artwork is currently resident in the
-// terminal, so the expensive transmit happens once rather than per
-// frame. Cleared whenever the image is deleted.
-var kittySent string
-
 // renderCoverBlock returns the art's rows, vertically centred. Uses
 // kitty's graphics protocol where available and half-blocks otherwise.
 func (m Model) renderCoverBlock(cols, rows, height int) []string {
@@ -690,25 +634,20 @@ func (m Model) renderCoverBlock(cols, rows, height int) []string {
 	}
 
 	if coverart.KittySupported() {
-		key := fmt.Sprintf("kitty|%s|%d|%d", m.coverURL, cols, rows)
 		esc := ""
-		if kittySent != key {
-			// New artwork or new size: send the pixels once.
-			if t, err := coverart.KittyTransmit(m.coverImg, cols, rows); err == nil {
+		if m.coverSendN > 0 {
+			// Update has flagged this artwork as owed to the terminal.
+			// The encode is cached, so repeating it costs nothing.
+			if t, err := coverart.KittyTransmitCached(m.coverImg, m.coverURL, cols, rows); err == nil {
 				esc = t
-				kittySent = key
 			}
 		}
-		if kittySent == key {
-			// Cheap per-frame placement of the resident image.
-			esc += coverart.KittyDisplay(cols, rows)
-			out = append(out, esc+coverart.Blank(cols))
-			for i := 1; i < rows; i++ {
-				out = append(out, coverart.Blank(cols))
-			}
-			return out
+		esc += coverart.KittyDisplay(cols, rows)
+		out = append(out, esc+coverart.Blank(cols))
+		for i := 1; i < rows; i++ {
+			out = append(out, coverart.Blank(cols))
 		}
-		// Transmission failed — fall through to half-blocks.
+		return out
 	}
 
 	key := fmt.Sprintf("blocks|%s|%d|%d", m.coverURL, cols, rows)
@@ -729,17 +668,20 @@ func (m Model) renderCoverBlock(cols, rows, height int) []string {
 	return append(out, coverRender.lines...)
 }
 
-// clearCoverImage deletes a resident kitty image. Returns the escape to
-// emit, or "" when there is nothing to clear.
-func clearCoverImage() string {
-	if kittySent == "" || !coverart.KittySupported() {
+// clearCoverImage returns the delete escape while Update says one is
+// owed to the terminal. Pure: the countdown lives in the model.
+func (m Model) clearCoverImage() string {
+	if m.coverClearN <= 0 || !coverart.KittySupported() {
 		return ""
 	}
-	kittySent = ""
 	return coverart.KittyClear()
 }
 
-// renderSpectrum returns the bar rows for the given area.
+// renderSpectrum returns the bar rows, stretched to fill the width it
+// is given. The bar count is fixed when cava starts, but the available
+// width is not — the artwork loads afterwards and takes its share, and
+// the terminal can be resized — so the bars are spread across whatever
+// space they actually get rather than assuming a fixed cell each.
 func (m Model) renderSpectrum(width, height int) []string {
 	if width < 4 || height < 1 {
 		return nil
@@ -753,21 +695,28 @@ func (m Model) renderSpectrum(width, height int) []string {
 		return []string{styleTextDim.Render(truncate(msg, width))}
 	}
 
-	heights := make([]int, len(frame))
+	n := len(frame)
+	heights := make([]int, n)
 	for i, val := range frame {
-		h := val * height / 100
-		heights[i] = max(0, min(h, height))
+		heights[i] = max(0, min(val*height/100, height))
 	}
+
+	// Each bar owns the slice of columns between these boundaries, so
+	// the row always adds up to exactly the available width.
+	edge := func(i int) int { return i * width / n }
 
 	rows := make([]string, 0, height)
 	for row := 0; row < height; row++ {
 		remaining := height - row
 		var b strings.Builder
-		for _, h := range heights {
-			if lipgloss.Width(b.String())+3 > width {
-				break
+		for i := 0; i < n; i++ {
+			span := edge(i+1) - edge(i)
+			if span < 1 {
+				continue
 			}
-			if h >= remaining {
+			fill := max(1, span-1) // leave a column of gap where there is room
+			gap := span - fill
+			if heights[i] >= remaining {
 				style := styleVizLow
 				switch {
 				case remaining > height*2/3:
@@ -775,13 +724,13 @@ func (m Model) renderSpectrum(width, height int) []string {
 				case remaining > height/3:
 					style = styleVizMid
 				}
-				b.WriteString(style.Render("██"))
+				b.WriteString(style.Render(strings.Repeat("█", fill)))
 			} else {
-				b.WriteString("  ")
+				b.WriteString(strings.Repeat(" ", fill))
 			}
-			b.WriteString(" ")
+			b.WriteString(strings.Repeat(" ", gap))
 		}
-		rows = append(rows, truncate(b.String(), width))
+		rows = append(rows, b.String())
 	}
 	return rows
 }

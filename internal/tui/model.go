@@ -341,6 +341,15 @@ type Model struct {
 	coverURL     string // URL currently decoded into coverImg
 	coverLoading bool
 	coverErr     string
+	// Bubble Tea calls View more often than it flushes, and only the
+	// last frame before a flush is written. Emitting the kitty transmit
+	// or delete from inside View therefore loses it whenever that frame
+	// is discarded — which left the artwork stuck on the first track and
+	// still on screen after closing. The decision lives in Update
+	// instead, and each escape is repeated over a few frames so a
+	// dropped one cannot swallow it.
+	coverSendN  int // frames still carrying the image transmit
+	coverClearN int // frames still carrying the image delete
 
 	// ── Async URL resolution ──
 	// pendingResolve stores the context of an in-flight YouTube URL

@@ -353,6 +353,10 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.viz = nil
 			m.vizFrame = nil
 			m.setStatus("Now playing panel off")
+			// Kitty images persist until deleted; ask the next frames to
+			// carry the delete.
+			m.coverClearN = coverSendFrames
+			m.coverSendN = 0
 			// The spectrum was clocking redraws; restart the ticker.
 			return m, m.resumePlayerTick()
 		}
@@ -361,6 +365,9 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.npOn = true
+		if m.coverImg != nil {
+			m.coverSendN = coverSendFrames // re-send: it was deleted on close
+		}
 		var cmds []tea.Cmd
 		if cmd := m.refreshCoverCmd(); cmd != nil {
 			cmds = append(cmds, cmd)
