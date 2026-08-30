@@ -353,3 +353,22 @@ func TestLayoutGeometryDownloadsHidden(t *testing.T) {
 		}
 	}
 }
+
+// TestDownloadsPanelStartsHiddenAndReveals: the panel is hidden until
+// there is something to show, and queueing a job brings it back — a
+// download running behind a closed panel is invisible.
+func TestDownloadsPanelStartsHiddenAndReveals(t *testing.T) {
+	m := InitialModel()
+	if !m.downloadsHidden {
+		t.Error("downloads panel should start hidden")
+	}
+	m.revealDownloads()
+	if m.downloadsHidden {
+		t.Error("queueing a download should reveal the panel")
+	}
+	// Revealing is idempotent: a second job must not toggle it shut.
+	m.revealDownloads()
+	if m.downloadsHidden {
+		t.Error("a second download must not hide the panel again")
+	}
+}

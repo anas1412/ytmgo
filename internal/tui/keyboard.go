@@ -528,6 +528,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				return m, resolveURLCmd(t.Artist, t.Title, m.pendingResolve)
 			}
 			m.downloader.Enqueue(t.ID, t.Title, r.Uploader, t.URL, m.downloadDir(), r.CoverURL)
+			m.revealDownloads()
 			m.setStatus("Download queued: " + t.Title)
 			return m, downloadCmd(m.downloader)
 
@@ -558,6 +559,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				return m, resolveURLCmd(t.Artist, t.Title, m.pendingResolve)
 			}
 			m.downloader.Enqueue(t.ID, t.Title, t.Artist, t.URL, m.downloadDir(), t.CoverURL)
+			m.revealDownloads()
 			m.setStatus("Download queued: " + t.Title)
 			return m, downloadCmd(m.downloader)
 
@@ -588,6 +590,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				return m, resolveURLCmd(t.Artist, t.Title, m.pendingResolve)
 			}
 			m.downloader.Enqueue(t.ID, t.Title, t.Artist, t.URL, m.downloadDir(), t.CoverURL)
+			m.revealDownloads()
 			m.setStatus("Download queued: " + t.Title)
 			return m, downloadCmd(m.downloader)
 
@@ -609,6 +612,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			// known without a resolve; legacy entries still resolve.
 			if t := historyEntryTrack(e); t.URL != "" {
 				m.downloader.Enqueue(t.ID, t.Title, t.Artist, t.URL, m.downloadDir(), t.CoverURL)
+				m.revealDownloads()
 				m.setStatus("Download queued: " + t.Title)
 				return m, downloadCmd(m.downloader)
 			}
