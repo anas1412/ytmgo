@@ -2,23 +2,105 @@ package tui
 
 import "github.com/charmbracelet/lipgloss"
 
-// Theme decides which palette the UI draws with.
+// Theme names the palette the UI draws with.
 //
-// auto and the two forced modes share one adaptive palette: every colour
-// in it carries a light and a dark value, and lipgloss picks between
-// them from the terminal's background. terminal is a different palette
-// altogether — the terminal's own ANSI slots, so ytmgo takes on whatever
-// colour scheme the terminal is already set to.
+// auto and terminal are derived from the terminal itself and paint no
+// background of their own, so they inherit whatever the terminal has —
+// transparency and background images included. The named schemes below
+// are complete colour schemes and do paint their background, which is
+// what lets a dark scheme stay readable on a light terminal and the
+// other way round.
 type Theme string
 
 const (
 	ThemeAuto     Theme = "auto"
-	ThemeDark     Theme = "dark"
-	ThemeLight    Theme = "light"
 	ThemeTerminal Theme = "terminal"
 )
 
-var themeOrder = []Theme{ThemeAuto, ThemeDark, ThemeLight, ThemeTerminal}
+// scheme is one colour scheme, written in the roles the UI needs rather
+// than in the sixteen ANSI slots, so each entry says what it means.
+type scheme struct {
+	name    Theme
+	bg      string // window background
+	panel   string // panel and surface fill
+	hover   string // selection and input fill
+	border  string
+	text    string
+	dim     string // scroll hints, inactive
+	mid     string // secondary text
+	title   string
+	primary string // accent, focus, header, progress
+	active  string // playing, complete
+	danger  string // error, destructive
+	warn    string // warning, downloading
+}
+
+// schemes are offered in the settings cycle in this order.
+var schemes = []scheme{
+	{
+		name: "gruvbox", bg: "#282828", panel: "#32302f", hover: "#504945",
+		border: "#504945", text: "#ebdbb2", dim: "#928374", mid: "#a89984",
+		title: "#fbf1c7", primary: "#d3869b", active: "#b8bb26",
+		danger: "#fb4934", warn: "#fabd2f",
+	},
+	{
+		name: "nord", bg: "#2e3440", panel: "#3b4252", hover: "#434c5e",
+		border: "#4c566a", text: "#d8dee9", dim: "#616e88", mid: "#aebacf",
+		title: "#eceff4", primary: "#88c0d0", active: "#a3be8c",
+		danger: "#bf616a", warn: "#ebcb8b",
+	},
+	{
+		name: "dracula", bg: "#282a36", panel: "#343746", hover: "#44475a",
+		border: "#44475a", text: "#f8f8f2", dim: "#6272a4", mid: "#bdbdd7",
+		title: "#ffffff", primary: "#bd93f9", active: "#50fa7b",
+		danger: "#ff5555", warn: "#f1fa8c",
+	},
+	{
+		name: "catppuccin", bg: "#1e1e2e", panel: "#181825", hover: "#313244",
+		border: "#45475a", text: "#cdd6f4", dim: "#6c7086", mid: "#a6adc8",
+		title: "#f5e0dc", primary: "#cba6f7", active: "#a6e3a1",
+		danger: "#f38ba8", warn: "#f9e2af",
+	},
+	{
+		name: "tokyo-night", bg: "#1a1b26", panel: "#16161e", hover: "#292e42",
+		border: "#3b4261", text: "#c0caf5", dim: "#565f89", mid: "#9aa5ce",
+		title: "#ffffff", primary: "#bb9af7", active: "#9ece6a",
+		danger: "#f7768e", warn: "#e0af68",
+	},
+	{
+		name: "rose-pine", bg: "#191724", panel: "#1f1d2e", hover: "#26233a",
+		border: "#403d52", text: "#e0def4", dim: "#6e6a86", mid: "#908caa",
+		title: "#ffffff", primary: "#c4a7e7", active: "#9ccfd8",
+		danger: "#eb6f92", warn: "#f6c177",
+	},
+	{
+		name: "everforest", bg: "#2d353b", panel: "#343f44", hover: "#3d484d",
+		border: "#4f585e", text: "#d3c6aa", dim: "#859289", mid: "#a7b0a4",
+		title: "#e8e0ce", primary: "#d699b6", active: "#a7c080",
+		danger: "#e67e80", warn: "#dbbc7f",
+	},
+	{
+		name: "solarized-light", bg: "#fdf6e3", panel: "#eee8d5", hover: "#ddd6c1",
+		border: "#c8c2ad", text: "#586e75", dim: "#93a1a1", mid: "#657b83",
+		title: "#073642", primary: "#6c71c4", active: "#2aa198",
+		danger: "#dc322f", warn: "#b58900",
+	},
+	{
+		name: "latte", bg: "#eff1f5", panel: "#e6e9ef", hover: "#dce0e8",
+		border: "#bcc0cc", text: "#4c4f69", dim: "#9ca0b0", mid: "#6c6f85",
+		title: "#1e1e2e", primary: "#8839ef", active: "#179299",
+		danger: "#d20f39", warn: "#df8e1d",
+	},
+}
+
+// themeOrder is every option the settings row cycles through.
+var themeOrder = func() []Theme {
+	out := []Theme{ThemeAuto, ThemeTerminal}
+	for _, s := range schemes {
+		out = append(out, s.name)
+	}
+	return out
+}()
 
 // ParseTheme maps a stored setting back to a Theme, falling back to auto
 // for anything unrecognised (an older config, or a hand-edited one).
@@ -31,9 +113,26 @@ func ParseTheme(s string) Theme {
 	return ThemeAuto
 }
 
+// ThemeDesc is the one-line explanation shown under the settings row.
+func ThemeDesc(t Theme) string {
+	switch t {
+	case ThemeAuto:
+		return "ytmgo's own colours, following your terminal's light or dark background"
+	case ThemeTerminal:
+		return "your terminal's ANSI colours — matches whatever scheme it already runs"
+	default:
+		return string(t) + " — a full scheme, painted over your terminal's background"
+	}
+}
+
+// paintBackground reports whether the active theme owns the backdrop. The
+// terminal-derived themes leave it alone so transparency survives; a
+// named scheme paints it, since its foregrounds assume its own
+// background and would otherwise be read against the wrong one.
+var paintBackground bool
+
 // detectedDark is the terminal's own background, sampled once before any
-// forced mode overwrites it, so switching back to auto can restore it
-// rather than keeping whatever was last forced.
+// theme can overwrite it, so auto has something to return to.
 var detectedDark = true
 
 // palette is one complete set of UI colours.
@@ -47,10 +146,24 @@ type palette struct {
 	barFill, barEmpty               lipgloss.TerminalColor
 }
 
+// palette expands a scheme's roles into every colour the UI draws with.
+func (s scheme) palette() palette {
+	c := func(v string) lipgloss.TerminalColor { return lipgloss.Color(v) }
+	return palette{
+		bg: c(s.bg), bgPanel: c(s.panel), bgSurface: c(s.panel), bgHover: c(s.hover),
+		border: c(s.border), borderFoc: c(s.primary),
+		accent: c(s.primary), accent2: c(s.active), accent3: c(s.danger),
+		text: c(s.text), textDim: c(s.dim), textMid: c(s.mid), title: c(s.title),
+		playing: c(s.active), download: c(s.warn), done: c(s.active),
+		errColor: c(s.danger), warning: c(s.warn), header: c(s.primary),
+		barFill: c(s.primary), barEmpty: c(s.border),
+	}
+}
+
 // adaptive keeps ytmgo's own violet-and-mint identity, with a second set
 // of values for light terminals. The light values are not the dark ones
-// lightened: on white, the neons wash out, so each one is darkened until
-// it carries enough contrast against a pale background.
+// lightened: on white the neons wash out, so each is darkened until it
+// carries enough contrast against a pale background.
 func adaptive() palette {
 	c := func(light, dark string) lipgloss.TerminalColor {
 		return lipgloss.AdaptiveColor{Light: light, Dark: dark}
@@ -82,34 +195,17 @@ func adaptive() palette {
 
 // terminalScheme draws from the ANSI slots the terminal fills in from
 // whatever scheme it is running, so ytmgo matches gruvbox, nord,
-// solarized and the rest without knowing anything about them. Slots 0
-// and 7/15 are the scheme's own background and foreground, which is why
-// this reads correctly on light and dark schemes alike without a second
-// set of values.
+// solarized and the rest without knowing anything about them.
 func terminalScheme() palette {
 	a := func(n string) lipgloss.TerminalColor { return lipgloss.Color(n) }
 	return palette{
-		bg:        a("0"),
-		bgPanel:   a("0"),
-		bgSurface: a("0"),
-		bgHover:   a("8"),
-		border:    a("8"),
-		borderFoc: a("5"), // magenta = focused
-		accent:    a("5"),
-		accent2:   a("6"), // cyan = active
-		accent3:   a("1"), // red = destructive
-		text:      a("7"),
-		textDim:   a("8"),
-		textMid:   a("7"),
-		title:     a("15"),
-		playing:   a("6"),
-		download:  a("3"), // yellow = in progress
-		done:      a("2"), // green = complete
-		errColor:  a("1"),
-		warning:   a("3"),
-		header:    a("5"),
-		barFill:   a("5"),
-		barEmpty:  a("8"),
+		bg: a("0"), bgPanel: a("0"), bgSurface: a("0"), bgHover: a("8"),
+		border: a("8"), borderFoc: a("5"),
+		accent: a("5"), accent2: a("6"), accent3: a("1"),
+		text: a("7"), textDim: a("8"), textMid: a("7"), title: a("15"),
+		playing: a("6"), download: a("3"), done: a("2"),
+		errColor: a("1"), warning: a("3"), header: a("5"),
+		barFill: a("5"), barEmpty: a("8"),
 	}
 }
 
@@ -129,16 +225,24 @@ func setPalette(p palette) {
 func ApplyTheme(t Theme) {
 	switch t {
 	case ThemeTerminal:
+		paintBackground = false
 		setPalette(terminalScheme())
-	case ThemeDark:
-		lipgloss.SetHasDarkBackground(true)
-		setPalette(adaptive())
-	case ThemeLight:
-		lipgloss.SetHasDarkBackground(false)
-		setPalette(adaptive())
-	default: // auto
+	case ThemeAuto:
+		paintBackground = false
 		lipgloss.SetHasDarkBackground(detectedDark)
 		setPalette(adaptive())
+	default:
+		for _, s := range schemes {
+			if s.name == t {
+				paintBackground = true
+				setPalette(s.palette())
+				buildStyles()
+				return
+			}
+		}
+		// Unknown name: fall back rather than leave the UI half-built.
+		ApplyTheme(ThemeAuto)
+		return
 	}
 	buildStyles()
 }

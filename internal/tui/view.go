@@ -90,7 +90,30 @@ func (m Model) View() string {
 	default:
 		view = m.renderPage()
 	}
-	return m.fillHeight(view)
+	return m.paintBg(m.fillHeight(view))
+}
+
+// paintBg lays the theme's background under every line. Only the named
+// schemes do this: their foregrounds are chosen against their own
+// backdrop, so without it a dark scheme on a light terminal would put
+// pale text on white. auto and terminal leave the backdrop alone, which
+// is what keeps terminal transparency working by default.
+//
+// Each line is padded to the full width first, or the fill would stop
+// wherever the content happened to end and leave a ragged edge.
+func (m Model) paintBg(view string) string {
+	if !paintBackground || m.width <= 0 {
+		return view
+	}
+	bg := lipgloss.NewStyle().Background(colorBg).Foreground(colorText)
+	lines := strings.Split(view, "\n")
+	for i, line := range lines {
+		if pad := m.width - lipgloss.Width(line); pad > 0 {
+			line += strings.Repeat(" ", pad)
+		}
+		lines[i] = bg.Render(line)
+	}
+	return strings.Join(lines, "\n")
 }
 
 // fillHeight pads the output to exactly m.height lines so a previous taller

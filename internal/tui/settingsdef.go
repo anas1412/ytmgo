@@ -54,8 +54,7 @@ var settingDefs = []settingDef{
 		label: "Theme",
 		kind:  settingCycle,
 		value: func(m *Model) string { return string(ParseTheme(m.settings.Theme)) },
-		desc: staticDesc(
-			"auto (follow the terminal) · dark · light · terminal (use your ANSI colours)"),
+		desc:  func(m *Model) string { return ThemeDesc(ParseTheme(m.settings.Theme)) },
 		activate: func(m *Model) tea.Cmd {
 			cur := ParseTheme(m.settings.Theme)
 			next := themeOrder[0]

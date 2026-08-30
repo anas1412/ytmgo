@@ -23,6 +23,10 @@ func worstCaseModel(t *testing.T, w, h int) Model {
 	t.Helper()
 	t.Setenv("HOME", t.TempDir())
 	m := InitialModel()
+	// The panel is on by default, and the resize below would make it
+	// visible — which spawns a real cava process per model built. Tests
+	// that want the panel set npOn themselves, after the resize.
+	m.npOn = false
 
 	nm, _ := m.Update(tea.WindowSizeMsg{Width: w, Height: h})
 	m = nm.(Model)
