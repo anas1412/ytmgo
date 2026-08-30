@@ -72,9 +72,18 @@ func (m Model) handlePlayerTick(msg playerTickMsg) (tea.Model, tea.Cmd) {
 	// lastPositionAt and renders a gliding bar. We just keep the
 	// ticker alive as long as we're in the playing state, and let
 	// it die off naturally when paused/stopped.
-	if m.playerState == player.StatePlaying {
+	// While the spectrum is running its frames already drive a redraw
+	// far faster than this ticker would, so a second timer just doubles
+	// the render rate — and rendering is what costs CPU here.
+	if m.playerState == player.StatePlaying && !m.vizDrivesRedraw() {
 		return m, playerTickCmd()
 	}
 	m.playerTicking = false
 	return m, nil
+}
+
+// vizDrivesRedraw reports whether spectrum frames are already causing
+// redraws often enough to animate the progress bar.
+func (m Model) vizDrivesRedraw() bool {
+	return m.npOn && m.viz != nil
 }

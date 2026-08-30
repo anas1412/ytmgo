@@ -34,9 +34,10 @@ import (
 const progressTickInterval = time.Second / 2
 
 // playerTickInterval drives the smooth progress interpolation in the
-// player bar. 50ms = 20fps, which is the lowest rate at which motion
-// reads as continuous on a terminal.
-const playerTickInterval = 50 * time.Millisecond
+// player bar. Each tick re-renders the whole frame, so the rate is a
+// direct CPU cost: 100ms is plenty for a bar that advances about one
+// cell per second, and halves the work the old 50ms did.
+const playerTickInterval = 100 * time.Millisecond
 
 // ─── Search ─────────────────────────────────────────────────────────────
 

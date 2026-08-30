@@ -159,6 +159,17 @@ func (m *Model) togglePlayPause() tea.Cmd {
 	return nil
 }
 
+// resumePlayerTick restarts the progress-bar ticker when nothing else
+// is driving redraws. Returns nil when it is already running or there
+// is nothing to animate.
+func (m *Model) resumePlayerTick() tea.Cmd {
+	if m.playerState != player.StatePlaying || m.playerTicking || m.vizDrivesRedraw() {
+		return nil
+	}
+	m.playerTicking = true
+	return playerTickCmd()
+}
+
 // toggleShuffleAction toggles shuffle with the SHFL label flash.
 func (m *Model) toggleShuffleAction() tea.Cmd {
 	m.queue.ToggleShuffle()

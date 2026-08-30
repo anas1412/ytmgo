@@ -202,8 +202,10 @@ func writeConfig(bars int) (string, error) {
 		dir = os.TempDir()
 	}
 	path := filepath.Join(dir, fmt.Sprintf("ytmgo-cava-%d.conf", os.Getpid()))
+	// Every frame re-renders the whole TUI, so the frame rate is a
+	// direct CPU cost; 20 still reads as smooth for a spectrum.
 	body := fmt.Sprintf(`[general]
-framerate = 30
+framerate = 20
 bars = %d
 autosens = 1
 

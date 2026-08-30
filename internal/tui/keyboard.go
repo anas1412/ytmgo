@@ -353,7 +353,8 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.viz = nil
 			m.vizFrame = nil
 			m.setStatus("Now playing panel off")
-			return m, nil
+			// The spectrum was clocking redraws; restart the ticker.
+			return m, m.resumePlayerTick()
 		}
 		if !m.npFits() {
 			m.setStatus("Terminal too short for the now-playing panel — make the window taller")

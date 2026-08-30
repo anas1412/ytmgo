@@ -235,3 +235,49 @@ func TestNowPlayingRefusesShortTerminals(t *testing.T) {
 		}
 	}
 }
+
+// TestCoverImageIsCleared guards the bug where the kitty image stayed
+// on screen after closing the panel: images persist until deleted, so
+// the frame must carry the delete once the panel stops showing one.
+// This cannot be exercised through tmux, which falls back to
+// half-blocks, so it is asserted on the rendered frame directly.
+func TestCoverImageIsCleared(t *testing.T) {
+	t.Setenv("TMUX", "")
+	t.Setenv("KITTY_WINDOW_ID", "1")
+
+	img := image.NewRGBA(image.Rect(0, 0, 544, 544))
+	for y := 0; y < 544; y++ {
+		for x := 0; x < 544; x++ {
+			img.Set(x, y, color.RGBA{uint8(x % 256), 40, 90, 255})
+		}
+	}
+
+	m := worstCaseModel(t, 150, 40)
+	m.npOn = true
+	m.coverImg = img
+	m.coverURL = "https://example/a.jpg"
+
+	frame := m.View()
+	if !strings.Contains(frame, "\x1b_Ga=t") {
+		t.Fatal("open panel: image was never transmitted")
+	}
+	// A second render must not re-send the pixels — doing that on every
+	// frame is what made the UI lag.
+	if second := m.View(); strings.Contains(second, "\x1b_Ga=t") {
+		t.Error("image re-transmitted on a later frame; it should only be placed")
+	} else if !strings.Contains(second, "\x1b_Ga=p") {
+		t.Error("later frame does not place the resident image")
+	}
+
+	// Closing the panel must delete it.
+	m.npOn = false
+	if closed := m.View(); !strings.Contains(closed, "\x1b_Ga=d") {
+		t.Error("closing the panel did not delete the image — it would stay on screen")
+	}
+
+	// Reopening must transmit again, since the image was deleted.
+	m.npOn = true
+	if reopened := m.View(); !strings.Contains(reopened, "\x1b_Ga=t") {
+		t.Error("reopening did not re-transmit the deleted image")
+	}
+}

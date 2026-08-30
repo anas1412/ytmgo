@@ -351,6 +351,11 @@ func (m Model) renderPanels() string {
 		Height(leftHeight).
 		Render(leftPanel)
 
+	if npH == 0 {
+		// The panel is closed (or the page changed): drop any resident
+		// image, or it stays on screen over whatever is drawn next.
+		leftPanel = clearCoverImage() + leftPanel
+	}
 	if npH > 0 {
 		npTitle := stylePanelTitle.Render(truncate(m.npPanelTitle(), titleW))
 		npPanel := lipgloss.JoinVertical(lipgloss.Top,
@@ -647,6 +652,20 @@ func (m Model) renderNowPlayingPanel(width, height int) string {
 	return padPanel(strings.Join(lines, "\n"), width, height)
 }
 
+// coverRender memoises the drawn cover. Rebuilding it costs 11-17ms —
+// fine when the artwork changes, ruinous at the spectrum's frame rate,
+// which is what made the whole UI lag. Keyed by artwork and size, and
+// only ever touched from the render goroutine.
+var coverRender struct {
+	key   string
+	lines []string
+}
+
+// kittySent records which artwork is currently resident in the
+// terminal, so the expensive transmit happens once rather than per
+// frame. Cleared whenever the image is deleted.
+var kittySent string
+
 // renderCoverBlock returns the art's rows, vertically centred. Uses
 // kitty's graphics protocol where available and half-blocks otherwise.
 func (m Model) renderCoverBlock(cols, rows, height int) []string {
@@ -671,25 +690,53 @@ func (m Model) renderCoverBlock(cols, rows, height int) []string {
 	}
 
 	if coverart.KittySupported() {
-		if esc, err := coverart.KittyPlace(m.coverImg, cols, rows); err == nil {
+		key := fmt.Sprintf("kitty|%s|%d|%d", m.coverURL, cols, rows)
+		esc := ""
+		if kittySent != key {
+			// New artwork or new size: send the pixels once.
+			if t, err := coverart.KittyTransmit(m.coverImg, cols, rows); err == nil {
+				esc = t
+				kittySent = key
+			}
+		}
+		if kittySent == key {
+			// Cheap per-frame placement of the resident image.
+			esc += coverart.KittyDisplay(cols, rows)
 			out = append(out, esc+coverart.Blank(cols))
 			for i := 1; i < rows; i++ {
 				out = append(out, coverart.Blank(cols))
 			}
 			return out
 		}
+		// Transmission failed — fall through to half-blocks.
 	}
-	for _, row := range coverart.Grid(m.coverImg, cols, rows) {
-		var b strings.Builder
-		for _, c := range row {
-			b.WriteString(lipgloss.NewStyle().
-				Foreground(lipgloss.Color(c.Top.Hex())).
-				Background(lipgloss.Color(c.Bottom.Hex())).
-				Render(coverart.HalfBlock))
+
+	key := fmt.Sprintf("blocks|%s|%d|%d", m.coverURL, cols, rows)
+	if coverRender.key != key {
+		lines := make([]string, 0, rows)
+		for _, row := range coverart.Grid(m.coverImg, cols, rows) {
+			var b strings.Builder
+			for _, c := range row {
+				b.WriteString(lipgloss.NewStyle().
+					Foreground(lipgloss.Color(c.Top.Hex())).
+					Background(lipgloss.Color(c.Bottom.Hex())).
+					Render(coverart.HalfBlock))
+			}
+			lines = append(lines, b.String())
 		}
-		out = append(out, b.String())
+		coverRender.key, coverRender.lines = key, lines
 	}
-	return out
+	return append(out, coverRender.lines...)
+}
+
+// clearCoverImage deletes a resident kitty image. Returns the escape to
+// emit, or "" when there is nothing to clear.
+func clearCoverImage() string {
+	if kittySent == "" || !coverart.KittySupported() {
+		return ""
+	}
+	kittySent = ""
+	return coverart.KittyClear()
 }
 
 // renderSpectrum returns the bar rows for the given area.

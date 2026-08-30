@@ -47,17 +47,17 @@ func KittySupported() bool {
 	return strings.Contains(strings.ToLower(os.Getenv("TERM")), "kitty")
 }
 
-// KittyPlace returns the escape sequence that transmits img and draws
-// it across cols x rows cells at the cursor, without moving the cursor.
-// The image is downscaled to roughly the cells' pixel area first, so
-// the payload stays small; kitty does the final fit.
-func KittyPlace(img image.Image, cols, rows int) (string, error) {
+// KittyTransmit sends the image to the terminal under a fixed id,
+// without displaying it. This is the expensive half — PNG encoding and
+// base64 of the whole image — so it must run only when the artwork
+// changes, never once per rendered frame.
+func KittyTransmit(img image.Image, cols, rows int) (string, error) {
 	if img == nil || cols < 1 || rows < 1 {
-		return "", fmt.Errorf("nothing to place")
+		return "", fmt.Errorf("nothing to transmit")
 	}
 
-	// Cells are about 8x19 device pixels in a typical kitty setup.
-	// Encoding much beyond the covered area only inflates the payload.
+	// Cells are about 8x19 device pixels in a typical kitty setup;
+	// encoding much beyond the covered area only inflates the payload.
 	scaled := fit(img, cols*10, rows*22)
 
 	var buf bytes.Buffer
@@ -77,10 +77,9 @@ func KittyPlace(img image.Image, cols, rows int) (string, error) {
 			more = 1
 		}
 		if first {
-			// f=100: PNG. a=T: transmit and place. C=1: keep the cursor
-			// where it is. q=2: no acknowledgements to parse.
-			fmt.Fprintf(&out, "\x1b_Ga=T,f=100,i=%d,c=%d,r=%d,C=1,q=2,m=%d;%s\x1b\\",
-				coverImageID, cols, rows, more, chunk)
+			// a=t: transmit only. f=100: PNG. q=2: no acknowledgements.
+			fmt.Fprintf(&out, "\x1b_Ga=t,f=100,i=%d,q=2,m=%d;%s\x1b\\",
+				coverImageID, more, chunk)
 			first = false
 			continue
 		}
@@ -89,10 +88,21 @@ func KittyPlace(img image.Image, cols, rows int) (string, error) {
 	return out.String(), nil
 }
 
-// KittyClear removes the cover image. Images persist until deleted, so
-// this must be emitted whenever the panel shows something else.
+// KittyDisplay draws the already-transmitted image across cols x rows
+// cells at the cursor, without moving it. This is the cheap half, safe
+// to emit on every frame: a fixed placement id means repeated calls
+// update one placement instead of stacking new ones.
+func KittyDisplay(cols, rows int) string {
+	return fmt.Sprintf("\x1b_Ga=p,i=%d,p=1,c=%d,r=%d,C=1,q=2\x1b\\",
+		coverImageID, cols, rows)
+}
+
+// KittyClear removes the cover image and its placement. Images persist
+// until deleted, so this must be emitted whenever the panel stops
+// showing one — otherwise the artwork stays on screen over whatever is
+// drawn next.
 func KittyClear() string {
-	return fmt.Sprintf("\x1b_Ga=d,d=i,i=%d,q=2\x1b\\", coverImageID)
+	return fmt.Sprintf("\x1b_Ga=d,d=I,i=%d,q=2\x1b\\", coverImageID)
 }
 
 // fit downscales img to sit inside maxW x maxH, preserving its aspect

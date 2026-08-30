@@ -183,13 +183,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.viz = nil
 		m.vizFrame = nil
 		if msg.Err != nil {
-			m.setStatus("Visualizer stopped: " + msg.Err.Error())
-		} else {
-			m.setStatus("Visualizer stopped")
+			m.setStatus("Spectrum stopped: " + msg.Err.Error())
 		}
-		return m, nil
+		// The spectrum had been clocking the redraws; hand that back to
+		// the progress ticker so the bar keeps gliding.
+		return m, m.resumePlayerTick()
 
-	// ── Cover art loaded ────────────────────────────────────────
 	case CoverLoadedMsg:
 		m.coverLoading = false
 		if msg.Err != nil {
