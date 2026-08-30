@@ -87,7 +87,7 @@ System dependencies (mpv, yt-dlp, ffmpeg) are **not** touched — they may be us
 - **Download in one key** — Press `x` on any track and it downloads. Queue-friendly, one at a time, with progress feedback.
 - **Favorites, history, library** — `f` to bookmark, a listening-history page, and a filterable page for everything on disk.
 - **Full mouse support** — Click tabs, click panels, click the progress bar to seek. Most terminal apps can't do this.
-- **Media keys / MPRIS** — Play, pause, and skip from your keyboard's media keys, playerctl, or desktop widgets (Linux).
+- **Media keys** — Play, pause, and skip with your keyboard's media keys, or from your desktop's media widget (Linux).
 - **Discord Rich Presence** — Show what you're listening to — track, artist, play status — live on your Discord profile.
 - **Static binary, no bloat** — Pure Go, no Electron, no browser engine. Starts instantly, sips RAM, gets out of your way.
 
@@ -101,10 +101,10 @@ System dependencies (mpv, yt-dlp, ffmpeg) are **not** touched — they may be us
 
 ## Prerequisites
 
-- **Go** 1.22+
-- **mpv** — audio playback backend
-- **yt-dlp** — YouTube / YouTube Music streaming URL resolution and downloads
-- **ffmpeg** — audio extraction for downloads (yt-dlp dependency)
+- **Go** 1.22+ (only to build from source)
+- **mpv** — audio playback
+- **yt-dlp** — downloads, and the stream resolution mpv performs when playing
+- **ffmpeg** — audio extraction and cover-art embedding (includes `ffprobe`, used to read durations of local files)
 
 ### Install system dependencies
 
@@ -153,15 +153,45 @@ ytmgo download homage    # download the first match
 ```
 
 Quotes are optional — `ytmgo play mild high club homage` works as typed.
-Downloads use the same folder and format configured on the Settings page.
+`play` also shows the track on Discord, same as the player does.
 
-While the player is running, it also answers to media keys and `playerctl`:
+Downloads default to the folder and format set on the Settings page, and
+both can be overridden per run:
 
 ```bash
-playerctl -p ytmgo play-pause
-playerctl -p ytmgo next
-playerctl -p ytmgo metadata --format '{{artist}} — {{title}}'
+ytmgo download -f mp3 homage          # force MP3
+ytmgo download -l . homage            # save to the current directory
+ytmgo download -f mp3 -l ~/Music homage
 ```
+
+| Flag | Meaning |
+|------|---------|
+| `-a`, `--album` | Work on albums instead of single tracks |
+| `-f`, `--format` | `m4a` or `mp3` |
+| `-l`, `--location` | Destination directory (`.` for the current one, created if missing) |
+
+### Albums
+
+`-a` switches both `search` and `download` to albums:
+
+```bash
+ytmgo search -a timeline mild high club     # list matching albums
+ytmgo download -a timeline mild high club   # download the whole album
+```
+
+An album download creates its own folder and numbers the tracks so they
+sort in album order:
+
+```
+Mild High Club - Timeline/
+  01 - Club Intro.m4a
+  02 - Windowpane.m4a
+  03 - Note to Self.m4a
+  …
+```
+
+Tracks already on disk are skipped, and one failed track doesn't abort
+the rest of the album.
 
 ---
 
@@ -180,7 +210,7 @@ Tab cycles focus through: search input → result list → queue panel → searc
 
 **Mouse support** — Click header tabs to switch pages, click list items to select, double-click to activate, click the progress bar to seek, and click the controls row to play/pause, adjust volume, or toggle shuffle/repeat.
 
-**Media keys** — On Linux, ytmgo registers as an MPRIS player, so keyboard media keys, `playerctl`, and desktop media widgets control it directly.
+**Media keys** — On Linux your keyboard's media keys control ytmgo directly, and it shows up in your desktop's media widget.
 
 ### Keybindings
 
@@ -207,6 +237,7 @@ Tab cycles focus through: search input → result list → queue panel → searc
 | `R` | Refresh recommendations |
 | `U` | Check for updates / confirm install |
 | `1` … `5` | Switch page: Stream / Favorites / Library / History / Settings |
+| `L` | Jump straight to the Library page |
 | `Ctrl+↑` / `Ctrl+↓` | Move item up/down in queue |
 | `o` | Open download directory |
 | `?` | Open the Settings page (includes all shortcuts) |
