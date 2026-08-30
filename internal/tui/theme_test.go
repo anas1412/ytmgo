@@ -9,7 +9,7 @@ import (
 // different accent, which catches a copy-paste that leaves two schemes
 // sharing a palette.
 func TestSchemesAreDistinct(t *testing.T) {
-	defer ApplyTheme(ThemeAuto)
+	defer ApplyTheme(ThemeYtmgo)
 	seen := map[string]Theme{}
 	for _, sc := range schemes {
 		ApplyTheme(sc.name)
@@ -23,7 +23,7 @@ func TestSchemesAreDistinct(t *testing.T) {
 			t.Errorf("%s is a named scheme but does not paint its background", sc.name)
 		}
 	}
-	for _, tt := range []Theme{ThemeAuto, ThemeTerminal} {
+	for _, tt := range []Theme{ThemeYtmgo, ThemeTerminal} {
 		ApplyTheme(tt)
 		if paintBackground {
 			t.Errorf("%s must leave the terminal background alone", tt)
@@ -32,7 +32,7 @@ func TestSchemesAreDistinct(t *testing.T) {
 }
 
 func TestThemesAllRender(t *testing.T) {
-	defer ApplyTheme(ThemeAuto)
+	defer ApplyTheme(ThemeYtmgo)
 	for _, th := range themeOrder {
 		ApplyTheme(th)
 		m := worstCaseModel(t, 150, 40)
@@ -41,7 +41,7 @@ func TestThemesAllRender(t *testing.T) {
 			t.Errorf("ParseTheme(%q) = %q", th, got)
 		}
 	}
-	if got := ParseTheme("nonsense"); got != ThemeAuto {
+	if got := ParseTheme("nonsense"); got != ThemeYtmgo {
 		t.Errorf("unknown theme should fall back to auto, got %q", got)
 	}
 }
@@ -49,7 +49,7 @@ func TestThemesAllRender(t *testing.T) {
 // TestThemeSwapsColours: a palette change must actually reach the built
 // styles — the whole point of rebuilding them.
 func TestThemeSwapsColours(t *testing.T) {
-	defer ApplyTheme(ThemeAuto)
+	defer ApplyTheme(ThemeYtmgo)
 	// Compare the colour the style carries, not its rendered output:
 	// under `go test` the output is not a TTY, so lipgloss falls back to
 	// the Ascii profile and every colour renders to the same empty
@@ -64,5 +64,21 @@ func TestThemeSwapsColours(t *testing.T) {
 	ApplyTheme(Theme("gruvbox"))
 	if back := stylePanelTitle.GetForeground(); back != dark {
 		t.Errorf("switching back gave %v, want %v", back, dark)
+	}
+}
+
+// TestLegacyAutoStillResolves: the ytmgo palette shipped as "auto"
+// before it was named after the app, and configs written then still say
+// that. Reading one must land on the same palette, not reset the user to
+// a default they never chose.
+func TestLegacyAutoStillResolves(t *testing.T) {
+	if got := ParseTheme("auto"); got != ThemeYtmgo {
+		t.Errorf(`ParseTheme("auto") = %q, want %q`, got, ThemeYtmgo)
+	}
+	// And "auto" is no longer offered in the cycle.
+	for _, tr := range themeOrder {
+		if tr == "auto" {
+			t.Error(`"auto" is still in themeOrder`)
+		}
 	}
 }

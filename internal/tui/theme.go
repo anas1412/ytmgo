@@ -4,16 +4,18 @@ import "github.com/charmbracelet/lipgloss"
 
 // Theme names the palette the UI draws with.
 //
-// auto and terminal are derived from the terminal itself and paint no
-// background of their own, so they inherit whatever the terminal has —
-// transparency and background images included. The named schemes below
-// are complete colour schemes and do paint their background, which is
-// what lets a dark scheme stay readable on a light terminal and the
+// ytmgo and terminal both take their cue from the terminal and paint no
+// background of their own, so they inherit whatever it has —
+// transparency and background images included. ytmgo is the app's own
+// colours, picking light or dark values from the terminal's background;
+// terminal borrows the terminal's ANSI slots outright. The named schemes
+// below are complete colour schemes and do paint their background, which
+// is what lets a dark scheme stay readable on a light terminal and the
 // other way round.
 type Theme string
 
 const (
-	ThemeAuto     Theme = "auto"
+	ThemeYtmgo    Theme = "ytmgo"
 	ThemeTerminal Theme = "terminal"
 )
 
@@ -95,28 +97,34 @@ var schemes = []scheme{
 
 // themeOrder is every option the settings row cycles through.
 var themeOrder = func() []Theme {
-	out := []Theme{ThemeAuto, ThemeTerminal}
+	out := []Theme{ThemeYtmgo, ThemeTerminal}
 	for _, s := range schemes {
 		out = append(out, s.name)
 	}
 	return out
 }()
 
-// ParseTheme maps a stored setting back to a Theme, falling back to auto
-// for anything unrecognised (an older config, or a hand-edited one).
+// ParseTheme maps a stored setting back to a Theme, falling back to the
+// default for anything unrecognised (a hand-edited config, or a scheme
+// dropped in a later version).
 func ParseTheme(s string) Theme {
+	// This palette shipped as "auto" before it was named after the app.
+	// Existing configs still say that, and should not silently reset.
+	if s == "auto" {
+		return ThemeYtmgo
+	}
 	for _, t := range themeOrder {
 		if string(t) == s {
 			return t
 		}
 	}
-	return ThemeAuto
+	return ThemeYtmgo
 }
 
 // ThemeDesc is the one-line explanation shown under the settings row.
 func ThemeDesc(t Theme) string {
 	switch t {
-	case ThemeAuto:
+	case ThemeYtmgo:
 		return "ytmgo's own colours, following your terminal's light or dark background"
 	case ThemeTerminal:
 		return "your terminal's ANSI colours — matches whatever scheme it already runs"
@@ -132,7 +140,8 @@ func ThemeDesc(t Theme) string {
 var paintBackground bool
 
 // detectedDark is the terminal's own background, sampled once before any
-// theme can overwrite it, so auto has something to return to.
+// theme can overwrite it, so the ytmgo palette has something to return
+// to after a named scheme has forced a value.
 var detectedDark = true
 
 // palette is one complete set of UI colours.
@@ -227,7 +236,7 @@ func ApplyTheme(t Theme) {
 	case ThemeTerminal:
 		paintBackground = false
 		setPalette(terminalScheme())
-	case ThemeAuto:
+	case ThemeYtmgo:
 		paintBackground = false
 		lipgloss.SetHasDarkBackground(detectedDark)
 		setPalette(adaptive())
@@ -241,7 +250,7 @@ func ApplyTheme(t Theme) {
 			}
 		}
 		// Unknown name: fall back rather than leave the UI half-built.
-		ApplyTheme(ThemeAuto)
+		ApplyTheme(ThemeYtmgo)
 		return
 	}
 	buildStyles()
@@ -251,5 +260,5 @@ func init() {
 	// Sample the terminal before anything can force a mode, then build
 	// once so the package is usable even if no theme is applied later.
 	detectedDark = lipgloss.HasDarkBackground()
-	ApplyTheme(ThemeAuto)
+	ApplyTheme(ThemeYtmgo)
 }

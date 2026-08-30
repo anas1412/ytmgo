@@ -88,9 +88,9 @@ System dependencies (mpv, yt-dlp, ffmpeg) are **not** touched — they may be us
 - **Favorites, history, library** — `f` to bookmark, a listening-history page, and a filterable page for everything on disk.
 - **Full mouse support** — Click tabs, click panels, click the progress bar to seek. Most terminal apps can't do this.
 - **Media keys** — Play, pause, and skip with your keyboard's media keys, or from your desktop's media widget (Linux).
-- **Eleven themes** — `auto` follows your terminal's light or dark background, `terminal` borrows its ANSI
+- **Eleven themes** — `ytmgo` follows your terminal's light or dark background, `terminal` borrows its ANSI
   colours, and nine full schemes ship in: gruvbox, nord, dracula, catppuccin, tokyo-night, rose-pine,
-  everforest, solarized-light and latte. Set it in Settings; auto and terminal leave your background
+  everforest, solarized-light and latte. Set it in Settings; ytmgo and terminal leave your background
   (and any transparency) alone.
 - **Now playing panel** — Press `v` for album art beside a live spectrum, in a panel under your results so the list stays visible. Art renders at full resolution on kitty, as coloured half-blocks elsewhere.
 - **Discord Rich Presence** — Show what you're listening to — track, artist, play status — live on your Discord profile.
