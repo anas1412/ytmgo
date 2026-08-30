@@ -77,7 +77,7 @@ func Search(query string, limit int) ([]Track, error) {
 
 	shelf := findKey(root, "musicShelfRenderer")
 	if shelf == nil {
-		return nil, fmt.Errorf("ytmusic search: no results shelf in response")
+		return nil, nil // no matches — YouTube omits the shelf entirely
 	}
 	contents, _ := dig(shelf, "contents").([]interface{})
 
@@ -353,4 +353,148 @@ func findKey(v interface{}, key string) interface{} {
 		}
 	}
 	return nil
+}
+
+// ─── albums ─────────────────────────────────────────────────────────
+
+// albumsFilterParams restricts /search to the Albums shelf.
+const albumsFilterParams = "EgWKAQIYAWoKEAkQChAFEAMQBA%3D%3D"
+
+// Album is one album from a search, or a fetched album with its tracks.
+type Album struct {
+	BrowseID string // MPREb_… — the id AlbumTracks takes
+	Title    string
+	Artist   string
+	Year     string
+	CoverURL string
+	Tracks   []Track // populated by AlbumTracks
+}
+
+// SearchAlbums runs an albums-filtered YouTube Music search.
+func SearchAlbums(query string, limit int) ([]Album, error) {
+	body := map[string]interface{}{
+		"context": clientContext(),
+		"query":   query,
+		"params":  albumsFilterParams,
+	}
+	root, err := post("search", body)
+	if err != nil {
+		return nil, err
+	}
+
+	shelf := findKey(root, "musicShelfRenderer")
+	if shelf == nil {
+		return nil, nil // no matches — YouTube omits the shelf entirely
+	}
+	contents, _ := dig(shelf, "contents").([]interface{})
+
+	var albums []Album
+	for _, c := range contents {
+		item := dig(c, "musicResponsiveListItemRenderer")
+		if item == nil {
+			continue
+		}
+		a, ok := parseAlbumItem(item)
+		if !ok {
+			continue
+		}
+		albums = append(albums, a)
+		if limit > 0 && len(albums) >= limit {
+			break
+		}
+	}
+	return albums, nil
+}
+
+// AlbumTracks fetches an album page and returns its metadata plus the
+// full tracklist, in album order.
+func AlbumTracks(browseID string) (Album, error) {
+	body := map[string]interface{}{
+		"context":  clientContext(),
+		"browseId": browseID,
+	}
+	root, err := post("browse", body)
+	if err != nil {
+		return Album{}, err
+	}
+
+	album := Album{BrowseID: browseID}
+	if h := findKey(root, "musicResponsiveHeaderRenderer"); h != nil {
+		album.Title = digString(h, "title", "runs", 0, "text")
+		album.Artist = digString(h, "straplineTextOne", "runs", 0, "text")
+		// subtitle runs read ["Album", " • ", "2015"] — the year is last.
+		if runs, _ := dig(h, "subtitle", "runs").([]interface{}); len(runs) > 0 {
+			album.Year = digString(runs[len(runs)-1], "text")
+		}
+		album.CoverURL = largestThumbnail(dig(h, "thumbnail", "musicThumbnailRenderer", "thumbnail", "thumbnails"))
+	}
+
+	shelf := findKey(root, "musicShelfRenderer")
+	if shelf == nil {
+		return album, fmt.Errorf("ytmusic album: no tracklist in response")
+	}
+	contents, _ := dig(shelf, "contents").([]interface{})
+	for _, c := range contents {
+		item := dig(c, "musicResponsiveListItemRenderer")
+		if item == nil {
+			continue
+		}
+		t := Track{
+			VideoID: digString(item, "playlistItemData", "videoId"),
+			Title: digString(item, "flexColumns", 0, "musicResponsiveListItemFlexColumnRenderer",
+				"text", "runs", 0, "text"),
+			Artist:   album.Artist,
+			Album:    album.Title,
+			CoverURL: album.CoverURL,
+		}
+		if t.VideoID == "" {
+			t.VideoID = digString(item, "overlay", "musicItemThumbnailOverlayRenderer", "content",
+				"musicPlayButtonRenderer", "playNavigationEndpoint", "watchEndpoint", "videoId")
+		}
+		// Duration sits in the fixed (right-hand) column.
+		t.Duration = parseClock(digString(item, "fixedColumns", 0,
+			"musicResponsiveListItemFixedColumnRenderer", "text", "runs", 0, "text"))
+		if t.VideoID == "" || t.Title == "" {
+			continue
+		}
+		album.Tracks = append(album.Tracks, t)
+	}
+	if len(album.Tracks) == 0 {
+		return album, fmt.Errorf("ytmusic album: no playable tracks found")
+	}
+	return album, nil
+}
+
+func parseAlbumItem(item interface{}) (Album, bool) {
+	a := Album{
+		Title: digString(item, "flexColumns", 0, "musicResponsiveListItemFlexColumnRenderer",
+			"text", "runs", 0, "text"),
+		BrowseID: digString(item, "navigationEndpoint", "browseEndpoint", "browseId"),
+	}
+	if !strings.HasPrefix(a.BrowseID, "MPRE") {
+		// Fall back to the thumbnail overlay, which also carries it.
+		a.BrowseID = digString(item, "overlay", "musicItemThumbnailOverlayRenderer", "content",
+			"musicPlayButtonRenderer", "playNavigationEndpoint", "watchPlaylistEndpoint", "playlistId")
+	}
+	if a.Title == "" || !strings.HasPrefix(a.BrowseID, "MPRE") {
+		return a, false
+	}
+	// Second column reads ["Album", " • ", "Artist", " • ", "2015"].
+	runs, _ := dig(item, "flexColumns", 1, "musicResponsiveListItemFlexColumnRenderer", "text", "runs").([]interface{})
+	var fields []string
+	for _, r := range runs {
+		s := digString(r, "text")
+		if strings.TrimSpace(s) == "•" || s == "" || s == "Album" || s == "EP" || s == "Single" {
+			continue
+		}
+		fields = append(fields, s)
+	}
+	if len(fields) > 0 {
+		a.Artist = fields[0]
+	}
+	if len(fields) > 1 {
+		a.Year = fields[len(fields)-1]
+	}
+	a.CoverURL = largestThumbnail(dig(item, "thumbnail", "musicThumbnailRenderer", "thumbnail", "thumbnails"))
+	return a, true
 }

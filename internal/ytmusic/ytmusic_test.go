@@ -79,3 +79,50 @@ func TestLiveSearchAndRadio(t *testing.T) {
 	t.Logf("search: %q by %q (%ds), radio: %d tracks, first: %q by %q",
 		first.Title, first.Artist, first.Duration, len(radio), radio[0].Title, radio[0].Artist)
 }
+
+// TestLiveAlbums exercises album search and the album page against the
+// real endpoints. Skipped when the network or endpoint is unavailable.
+func TestLiveAlbums(t *testing.T) {
+	if testing.Short() {
+		t.Skip("short mode: skipping network test")
+	}
+	albums, err := SearchAlbums("mild high club timeline", 5)
+	if err != nil {
+		t.Skipf("live album search unavailable: %v", err)
+	}
+	if len(albums) == 0 {
+		t.Fatal("album search returned nothing")
+	}
+	a := albums[0]
+	if a.BrowseID == "" || a.Title == "" {
+		t.Fatalf("incomplete album: %+v", a)
+	}
+
+	full, err := AlbumTracks(a.BrowseID)
+	if err != nil {
+		t.Skipf("live album page unavailable: %v", err)
+	}
+	if len(full.Tracks) == 0 {
+		t.Fatal("album page returned no tracks")
+	}
+	for i, tr := range full.Tracks {
+		if !IsVideoID(tr.VideoID) {
+			t.Fatalf("track %d has bad videoId %q", i+1, tr.VideoID)
+		}
+		if tr.Title == "" {
+			t.Fatalf("track %d has no title", i+1)
+		}
+	}
+	withDur := 0
+	for _, tr := range full.Tracks {
+		if tr.Duration > 0 {
+			withDur++
+		}
+	}
+	if withDur == 0 {
+		t.Error("no track had a duration")
+	}
+	t.Logf("album %q by %q (%s): %d tracks, %d with durations; first: %q (%ds)",
+		full.Title, full.Artist, full.Year, len(full.Tracks), withDur,
+		full.Tracks[0].Title, full.Tracks[0].Duration)
+}

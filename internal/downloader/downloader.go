@@ -41,7 +41,11 @@ type Job struct {
 	Uploader string // artist name, used for yt-dlp search + output filename
 	URL      string // optional YouTube URL (if known); empty = resolve via ytresolve
 	OutDir   string
-	CoverURL string // TIDAL album art URL; empty = skip cover embedding
+	CoverURL string // album art URL; empty = skip cover embedding
+	// NameStem overrides the output filename (without extension).
+	// Album downloads use it for "01 - Title" so a folder sorts in
+	// album order; empty means the default "{artist} - {title}".
+	NameStem string
 	Status   Status
 	Progress float64 // 0-100
 	FilePath string  // set when done
@@ -119,9 +123,15 @@ func (d *Downloader) Progress() <-chan ProgressEvent {
 // If the file already exists on disk, it's marked done immediately.
 // coverURL is a TIDAL album art URL; pass empty string to skip cover embedding.
 func (d *Downloader) Enqueue(trackID, title, uploader, url, outDir, coverURL string) {
+	d.EnqueueAs(trackID, title, uploader, url, outDir, coverURL, "")
+}
+
+// EnqueueAs is Enqueue with an explicit output filename stem (no
+// extension), used by album downloads to number tracks.
+func (d *Downloader) EnqueueAs(trackID, title, uploader, url, outDir, coverURL, nameStem string) {
 	ext := "." + d.format
 	// Check if file already downloaded
-	expected := filepath.Join(outDir, sanitizeFilename(uploader+" - "+title)+ext)
+	expected := filepath.Join(outDir, stemFor(uploader, title, nameStem)+ext)
 	if _, err := os.Stat(expected); err == nil {
 		d.progress <- ProgressEvent{
 			TrackID:  trackID,
@@ -153,6 +163,7 @@ func (d *Downloader) Enqueue(trackID, title, uploader, url, outDir, coverURL str
 		URL:      url,
 		OutDir:   outDir,
 		CoverURL: coverURL,
+		NameStem: nameStem,
 		Status:   StatusPending,
 	}
 	d.mu.Lock()
@@ -164,10 +175,15 @@ func (d *Downloader) Enqueue(trackID, title, uploader, url, outDir, coverURL str
 // IsDownloaded checks whether a file for this track already exists on disk.
 // uploader+title must match the actual yt-dlp output format ({artist} - {title}).
 func (d *Downloader) IsDownloaded(trackID, title, uploader, outDir string) bool {
+	return d.IsDownloadedAs(trackID, title, uploader, outDir, "")
+}
+
+// IsDownloadedAs is IsDownloaded for a job with an explicit filename stem.
+func (d *Downloader) IsDownloadedAs(trackID, title, uploader, outDir, nameStem string) bool {
 	ext := "." + d.format
 	// Check full name: {uploader} - {title}.{ext} (matches actual yt-dlp output)
-	if uploader != "" && title != "" {
-		expected := filepath.Join(outDir, sanitizeFilename(uploader+" - "+title)+ext)
+	if nameStem != "" || (uploader != "" && title != "") {
+		expected := filepath.Join(outDir, stemFor(uploader, title, nameStem)+ext)
 		if _, err := os.Stat(expected); err == nil {
 			return true
 		}
@@ -218,6 +234,14 @@ func (d *Downloader) worker(outDir string) {
 	}
 }
 
+// stemFor returns the output filename (no extension) for a job.
+func stemFor(uploader, title, nameStem string) string {
+	if nameStem != "" {
+		return sanitizeFilename(nameStem)
+	}
+	return sanitizeFilename(uploader + " - " + title)
+}
+
 // progressRe matches yt-dlp's download progress lines.
 var progressRe = regexp.MustCompile(`\[download\]\s+(\d+\.\d+)%`)
 
@@ -255,7 +279,8 @@ func (d *Downloader) runJob(job *Job, outDir string) {
 	}
 
 	// Output filename pattern: {Artist} - {Title}.%(ext)s
-	outPattern := filepath.Join(outDir, sanitizeFilename(job.Uploader+" - "+job.Title)+".%(ext)s")
+	stem := stemFor(job.Uploader, job.Title, job.NameStem)
+	outPattern := filepath.Join(outDir, stem+".%(ext)s")
 
 	// yt-dlp command: extract audio in the selected format.
 	// NOTE: we deliberately do NOT pass --print here — in some yt-dlp
@@ -263,6 +288,7 @@ func (d *Downloader) runJob(job *Job, outDir string) {
 	// --get-filename). We know the output path from the template, so we
 	// construct it ourselves after yt-dlp completes.
 	args := []string{
+		"--newline",                // progress on its own line, not \r-overwritten
 		"-x",                       // extract audio
 		"--audio-format", d.format, // output format: m4a or mp3
 		"--audio-quality", "0", // best quality
@@ -274,11 +300,12 @@ func (d *Downloader) runJob(job *Job, outDir string) {
 
 	cmd := pgidCommand(d.ctx, "yt-dlp", args...)
 
-	// Capture stderr for progress parsing
-	stderr, err := cmd.StderrPipe()
+	// yt-dlp writes progress to stdout (stderr carries only warnings and
+	// errors), so the percentage must be parsed from stdout.
+	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		job.Status = StatusFailed
-		job.Err = fmt.Errorf("yt-dlp stderr pipe: %w", err)
+		job.Err = fmt.Errorf("yt-dlp stdout pipe: %w", err)
 		d.progress <- ProgressEvent{TrackID: job.TrackID, Title: job.Title, Uploader: job.Uploader, Status: StatusFailed, Err: job.Err}
 		return
 	}
@@ -294,7 +321,7 @@ func (d *Downloader) runJob(job *Job, outDir string) {
 	progressDone := make(chan struct{})
 	go func() {
 		defer close(progressDone)
-		scanner := bufio.NewScanner(stderr)
+		scanner := bufio.NewScanner(stdout)
 		for scanner.Scan() {
 			line := scanner.Text()
 			if m := progressRe.FindStringSubmatch(line); len(m) > 1 {
@@ -324,14 +351,14 @@ func (d *Downloader) runJob(job *Job, outDir string) {
 
 	// The output path is known from the template. Verify it exists so we
 	// surface an error if yt-dlp put the file somewhere unexpected.
-	outPath := filepath.Join(outDir, sanitizeFilename(job.Uploader+" - "+job.Title)+"."+d.format)
+	outPath := filepath.Join(outDir, stem+"."+d.format)
 	if _, err := os.Stat(outPath); err != nil {
 		// File not found — yt-dlp may have used a different extension
 		// (e.g. opus → m4a remux gives .opus on some versions). Scan
 		// the output directory for any new file matching the title.
 		outPath = ""
 		entries, _ := os.ReadDir(outDir)
-		titleBase := sanitizeFilename(job.Uploader + " - " + job.Title)
+		titleBase := stem
 		for _, e := range entries {
 			if strings.HasPrefix(e.Name(), titleBase) && !e.IsDir() {
 				outPath = filepath.Join(outDir, e.Name())
