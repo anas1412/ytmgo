@@ -79,10 +79,14 @@ func Start() (*Service, error) {
 
 	propsSpec := map[string]map[string]*prop.Prop{
 		rootIface: {
-			"CanQuit":             {Value: false, Emit: prop.EmitTrue},
-			"CanRaise":            {Value: false, Emit: prop.EmitTrue},
-			"HasTrackList":        {Value: false, Emit: prop.EmitTrue},
-			"Identity":            {Value: "ytmgo", Emit: prop.EmitTrue},
+			"CanQuit":      {Value: false, Emit: prop.EmitTrue},
+			"CanRaise":     {Value: false, Emit: prop.EmitTrue},
+			"HasTrackList": {Value: false, Emit: prop.EmitTrue},
+			"Identity":     {Value: "ytmgo", Emit: prop.EmitTrue},
+			// Basename of the installed .desktop file. KDE and GNOME use
+			// it to pair the player with its icon and name in media
+			// widgets; without it ytmgo shows up unnamed and iconless.
+			"DesktopEntry":        {Value: "ytmgo", Emit: prop.EmitTrue},
 			"SupportedUriSchemes": {Value: []string{}, Emit: prop.EmitTrue},
 			"SupportedMimeTypes":  {Value: []string{}, Emit: prop.EmitTrue},
 		},
