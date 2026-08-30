@@ -199,3 +199,52 @@ func TestSearchFieldFillOnlyWhenPainted(t *testing.T) {
 		t.Error("nord: search field should have a fill")
 	}
 }
+
+// TestNoInvisibleText: a 16-colour palette has one usable surface
+// shade, so terminal maps bgHover, border and textDim all to ANSI 8.
+// Anything that draws dim text on the hover fill therefore renders the
+// same colour on itself — which is what made the search placeholder
+// vanish on that theme. Every theme is checked, since a scheme could
+// pick a matching pair by accident too.
+func TestNoInvisibleText(t *testing.T) {
+	defer ApplyTheme(ThemeTerminal)
+	// Compared by value, not through RGBA: a lipgloss.Color does not
+	// parse its hex without a renderer, so RGBA returns zero for every
+	// colour under `go test` and would call them all identical.
+	same := func(a, b lipgloss.TerminalColor) bool {
+		if a == nil || b == nil {
+			return false
+		}
+		if _, no := a.(lipgloss.NoColor); no {
+			return false
+		}
+		if _, no := b.(lipgloss.NoColor); no {
+			return false
+		}
+		return fmt.Sprintf("%v", a) == fmt.Sprintf("%v", b)
+	}
+	// The trap itself: on terminal these two are the same ANSI slot, so
+	// any style pairing them renders nothing. Recorded here so the
+	// reason this test exists survives the palette changing.
+	ApplyTheme(ThemeTerminal)
+	if !same(colorTextDim, colorBgHover) {
+		t.Log("note: terminal no longer maps textDim and bgHover to one slot")
+	}
+
+	for _, th := range themeOrder {
+		ApplyTheme(th)
+		for _, s := range []struct {
+			name  string
+			style lipgloss.Style
+		}{
+			{"placeholder", textinputPlaceholder},
+			{"search text", textinputStyle},
+			{"search box", styleSearchBox},
+			{"search box focused", styleSearchBoxFocused},
+		} {
+			if same(s.style.GetForeground(), s.style.GetBackground()) {
+				t.Errorf("%s: %s draws its text in its own background colour", th, s.name)
+			}
+		}
+	}
+}
