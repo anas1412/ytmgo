@@ -326,6 +326,9 @@ type Model struct {
 
 	// ── Downloads ──
 	downloader *downloader.Downloader
+	// downloadsHidden collapses the downloads sub-panel so the queue
+	// takes the whole right column. Toggled with X.
+	downloadsHidden bool
 
 	// ── MPRIS (media keys / desktop integration) ──
 	mpris *mpris.Service

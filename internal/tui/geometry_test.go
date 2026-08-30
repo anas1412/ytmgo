@@ -323,3 +323,33 @@ func TestNewArtworkReplacesOld(t *testing.T) {
 		t.Error("frame should both drop the old image and send the new one")
 	}
 }
+
+// TestLayoutGeometryDownloadsHidden: collapsing the downloads panel
+// hands the whole right column to the queue, so the frame must still
+// come out the exact height and the click boundary must follow.
+func TestLayoutGeometryDownloadsHidden(t *testing.T) {
+	for _, size := range [][2]int{{200, 50}, {150, 40}, {120, 35}, {90, 26}, {80, 24}} {
+		w, h := size[0], size[1]
+		for _, hidden := range []bool{false, true} {
+			m := worstCaseModel(t, w, h)
+			m.downloadsHidden = hidden
+			label := "downloads shown"
+			if hidden {
+				label = "downloads hidden"
+			}
+			checkPanelGeometry(t, m, w, h, label)
+
+			qh, dh := m.rightPanelSplit()
+			if hidden {
+				if dh != 0 {
+					t.Errorf("%dx%d: hidden downloads still claim %d rows", w, h, dh)
+				}
+				if qh != m.panelHeight()-3 {
+					t.Errorf("%dx%d: queue got %d content rows, want the full column (%d)", w, h, qh, m.panelHeight()-3)
+				}
+			} else if qh+dh != m.panelHeight()-6 {
+				t.Errorf("%dx%d: split sums to %d, want %d", w, h, qh+dh, m.panelHeight()-6)
+			}
+		}
+	}
+}

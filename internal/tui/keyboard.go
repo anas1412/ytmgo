@@ -388,6 +388,18 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.clampSearchOffset()
 		return m, tea.Batch(cmds...)
 
+	case "X":
+		// Collapse the downloads panel so the queue gets the whole
+		// right column, and back again.
+		m.downloadsHidden = !m.downloadsHidden
+		m.clampQueueOffset()
+		if m.downloadsHidden {
+			m.setStatus("Downloads panel hidden  ([X] show)")
+		} else {
+			m.setStatus("Downloads panel shown")
+		}
+		return m, nil
+
 	case "g":
 		m.moveCursorToEdge(false)
 		return m, nil

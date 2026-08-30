@@ -381,38 +381,51 @@ func (m Model) renderPanels() string {
 	}
 	queueTitle := fmt.Sprintf("QUEUE  %s  %s remove  %s clear  %s reorder",
 		queueCount, dHint, dCapHint, reorderHint)
+	if m.downloadsHidden {
+		// Ahead of the other hints: with the panel closed this is the
+		// only place that says how to get it back, so it must not be
+		// the first thing a narrow title truncates away.
+		queueTitle = fmt.Sprintf("QUEUE  %s  %s downloads  %s remove  %s clear  %s reorder",
+			queueCount, styleKeyHint.Render("[X]"), dHint, dCapHint, reorderHint)
+	}
 	queueTitleStyled := stylePanelTitle.Render(truncate(queueTitle, titleW))
 	queueContent := m.renderQueue(panelWidth-2, queueContentH)
 	queuePanel := lipgloss.JoinVertical(lipgloss.Top,
 		queueTitleStyled,
 		queueContent,
 	)
+	queueBoxH := queueContentH
+	if downloadsContentH == 0 {
+		queueBoxH = panelHeight - 2 // one full-height box, as the left column uses
+	}
 	queuePanel = rightBorder.
 		Width(panelWidth).
-		Height(queueContentH).
+		Height(queueBoxH).
 		Render(queuePanel)
 
-	// Downloads sub-panel (bottom of right column)
-	dlCount := 0
-	if m.downloader != nil {
-		dlCount = len(m.downloader.Jobs())
+	// Downloads sub-panel (bottom of right column), unless hidden.
+	rightPanel := queuePanel
+	if downloadsContentH > 0 {
+		dlCount := 0
+		if m.downloader != nil {
+			dlCount = len(m.downloader.Jobs())
+		}
+		oHint := styleKeyHint.Render("[o]")
+		xHint2 := styleKeyHint.Render("[X]")
+		downloadsTitle := fmt.Sprintf("DOWNLOADS  [%d]  %s open folder  %s hide", dlCount, oHint, xHint2)
+		downloadsTitleStyled := stylePanelTitle.Render(truncate(downloadsTitle, titleW))
+		downloadsContent := m.renderDownloadQueue(panelWidth-2, downloadsContentH)
+		downloadsPanel := lipgloss.JoinVertical(lipgloss.Top,
+			downloadsTitleStyled,
+			downloadsContent,
+		)
+		// Bottom sub-panel uses unfocused border (queue owns the focus)
+		downloadsPanel = panelBorder.
+			Width(panelWidth).
+			Height(downloadsContentH).
+			Render(downloadsPanel)
+		rightPanel = lipgloss.JoinVertical(lipgloss.Top, queuePanel, downloadsPanel)
 	}
-	oHint := styleKeyHint.Render("[o]")
-	downloadsTitle := fmt.Sprintf("DOWNLOADS  [%d]  %s open folder", dlCount, oHint)
-	downloadsTitleStyled := stylePanelTitle.Render(truncate(downloadsTitle, titleW))
-	downloadsContent := m.renderDownloadQueue(panelWidth-2, downloadsContentH)
-	downloadsPanel := lipgloss.JoinVertical(lipgloss.Top,
-		downloadsTitleStyled,
-		downloadsContent,
-	)
-	// Bottom sub-panel uses unfocused border (queue owns the focus)
-	downloadsPanel = panelBorder.
-		Width(panelWidth).
-		Height(downloadsContentH).
-		Render(downloadsPanel)
-
-	// Stack the two sub-panels vertically inside the right column
-	rightPanel := lipgloss.JoinVertical(lipgloss.Top, queuePanel, downloadsPanel)
 
 	// Calculate precise spaces to spread across the horizontal plane
 	leftover := m.width - lipgloss.Width(leftPanel) - lipgloss.Width(rightPanel)

@@ -84,6 +84,12 @@ func (m Model) visibleItems() int {
 // content line so the queue gets the space. renderPanels and the mouse
 // hit-testing both derive from this, so they can never disagree.
 func (m Model) rightPanelSplit() (queueContentH, downloadsContentH int) {
+	if m.downloadsHidden {
+		// Hidden: the queue takes the whole column. These are content
+		// rows — the box adds a title line and two borders — matching
+		// what a single full-height panel renders elsewhere.
+		return m.panelHeight() - 3, 0
+	}
 	total := m.panelHeight() - 6
 	if total < 0 {
 		total = 0
