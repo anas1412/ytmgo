@@ -49,7 +49,14 @@ func Search(query string, limit int) ([]Result, error) {
 // FetchRecommendations returns recommended tracks seeded from listening
 // history. seedVideoIDs are the most recent unique videoIds from play
 // history (newest first); each seed contributes its YouTube Music radio
-// queue. Falls back to a trending search when no seeds are usable.
+// queue.
+//
+// Everything it returns is related to something actually played. With no
+// seeds, or with a radio that returns nothing usable, it returns
+// nothing: there is no filler. Padding the result with whatever charts
+// globally is what dropped an unrelated hit into a queue of game
+// soundtrack — a recommendation nobody asked for is worse than no
+// recommendation, and autoplay appending one is worse still.
 func FetchRecommendations(limit int, seedVideoIDs []string) ([]Result, error) {
 	seen := make(map[string]bool)
 	for _, id := range seedVideoIDs {
@@ -57,13 +64,20 @@ func FetchRecommendations(limit int, seedVideoIDs []string) ([]Result, error) {
 	}
 
 	var results []Result
+	var lastErr error
 	maxSeeds := 2
 	for i, seed := range seedVideoIDs {
 		if i >= maxSeeds || len(results) >= limit {
 			break
 		}
-		tracks, err := ytmusic.Radio(seed, limit)
+		// Ask for headroom, not just what is wanted: the radio for a
+		// track tends to open with its neighbours, which are exactly
+		// the tracks just played and about to be filtered out. Asking
+		// for `limit` alone left autoplay (limit 1) with a single
+		// candidate that was almost always already seen.
+		tracks, err := ytmusic.Radio(seed, limit+len(seen))
 		if err != nil {
+			lastErr = err
 			continue
 		}
 		for _, t := range tracks {
@@ -78,22 +92,11 @@ func FetchRecommendations(limit int, seedVideoIDs []string) ([]Result, error) {
 		}
 	}
 
-	// Fallback: nothing seeded (fresh install, or radio unavailable).
-	if len(results) < limit {
-		tracks, err := ytmusic.Search("trending songs", limit-len(results))
-		if err != nil && len(results) == 0 {
-			return nil, fmt.Errorf("youtube music recommendations failed: %w", err)
-		}
-		for _, t := range tracks {
-			if seen[t.VideoID] {
-				continue
-			}
-			seen[t.VideoID] = true
-			results = append(results, ytTrackToResult(t))
-			if len(results) >= limit {
-				break
-			}
-		}
+	// A radio that returned nothing usable is worth reporting: the
+	// caller can say so rather than showing an empty list as though
+	// there were genuinely nothing to play next.
+	if len(results) == 0 && len(seedVideoIDs) > 0 && lastErr != nil {
+		return nil, fmt.Errorf("youtube music recommendations failed: %w", lastErr)
 	}
 
 	return results, nil

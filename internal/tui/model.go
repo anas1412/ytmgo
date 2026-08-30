@@ -249,9 +249,14 @@ type Model struct {
 	albumTracks            []search.Result // tracks of openAlbum, as playable results
 	isLoadingAlbum         bool
 	showingRecommendations bool
-	recsSeq                int    // bumped each time R is pressed or a search starts
-	updateAvailable        string // "" = unknown, "latest" = up to date, "v0.X.Y" = update
-	updateCheckManual      bool   // true when U was pressed to trigger the check
+	// recsLoaded records that a recommendations fetch has come back, so
+	// an empty list can be told apart from one still loading. They are
+	// seeded from listening history and there is no filler, so "none"
+	// is a real answer on a fresh install rather than a failure.
+	recsLoaded        bool
+	recsSeq           int    // bumped each time R is pressed or a search starts
+	updateAvailable   string // "" = unknown, "latest" = up to date, "v0.X.Y" = update
+	updateCheckManual bool   // true when U was pressed to trigger the check
 
 	// ── Library (local downloaded files) ──
 	library       []queue.Track
@@ -635,6 +640,7 @@ func (m *Model) resetStreamCursor() {
 // fetching a fresh one. Used when the user clears the search.
 func (m *Model) showRecommendations() tea.Cmd {
 	m.showingRecommendations = true
+	m.recsLoaded = false // a fresh fetch is in flight again
 	m.searchCursor = 0
 	m.searchOffset = 0
 	m.isSearching = false

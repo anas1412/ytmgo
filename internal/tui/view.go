@@ -560,8 +560,16 @@ func (m Model) renderStreamList(width, height int) string {
 	}
 	if len(m.results) == 0 {
 		if m.showingRecommendations {
+			if !m.recsLoaded {
+				return styleEmpty.Width(width - 2).Height(height).Render(
+					m.spinner() + "  Loading recommendations…",
+				)
+			}
+			// Recommendations come from what has been played, and there
+			// is no filler, so an empty list means there is nothing to
+			// go on yet — say that instead of spinning forever.
 			return styleEmpty.Width(width - 2).Height(height).Render(
-				m.spinner() + "  Loading recommendations…",
+				"Play something and recommendations will follow  ([R] retry)",
 			)
 		}
 		return styleEmpty.Width(width - 2).Height(height).Render(

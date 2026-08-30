@@ -48,6 +48,7 @@ func (m Model) handleRecommendations(msg RecommendationsMsg) (tea.Model, tea.Cmd
 		return m, nil
 	}
 	m.showingRecommendations = msg.Error == nil
+	m.recsLoaded = true
 	if msg.Error != nil {
 		m.err = msg.Error
 		m.setStatus("Recommendations unavailable: " + msg.Error.Error())
