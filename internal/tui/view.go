@@ -5,6 +5,8 @@ import (
 	"strings"
 	"time"
 
+	"image"
+
 	"ytmgo/internal/coverart"
 	"ytmgo/internal/downloader"
 	"ytmgo/internal/player"
@@ -416,11 +418,27 @@ func (m Model) renderSearchResults(width, height int) string {
 	case PageHistory:
 		return m.renderHistory(width, height)
 	}
-	if m.vizOn {
-		return m.renderVisualizer(width, height)
-	}
 	if m.coverOn {
 		return m.renderCover(width, height)
+	}
+	// A kitty image stays on screen until it is deleted, so every other
+	// view of this panel prefixes the delete. The escape is zero-width
+	// and costs nothing to repeat.
+	return m.clearCover() + m.renderStreamList(width, height)
+}
+
+// clearCover removes a kitty cover image, or "" when there can't be one.
+func (m Model) clearCover() string {
+	if coverart.KittySupported() {
+		return coverart.KittyClear()
+	}
+	return ""
+}
+
+// renderStreamList draws whichever list the Stream page is showing.
+func (m Model) renderStreamList(width, height int) string {
+	if m.vizOn {
+		return m.renderVisualizer(width, height)
 	}
 	if m.openAlbum != nil {
 		return m.renderAlbumTracks(width, height)
@@ -569,6 +587,30 @@ func (m Model) renderCover(width, height int) string {
 		return padPanel(styleEmpty.Width(innerW).Render(truncate(msg, innerW)), width, height)
 	}
 
+	// On kitty, draw the real image instead of approximating it with
+	// block characters. The escapes measure zero cells wide, so the
+	// padding below is unaffected; the covered cells are still emitted
+	// as spaces so the text layout is identical either way.
+	if coverart.KittySupported() {
+		cols, rows := coverFitCells(m.coverImg, innerW, height)
+		if cols > 0 && rows > 0 {
+			if esc, err := coverart.KittyPlace(m.coverImg, cols, rows); err == nil {
+				leftPad := coverart.Blank(max(0, (innerW-cols)/2))
+				topPad := max(0, (height-rows)/2)
+				lines := make([]string, 0, height)
+				for i := 0; i < topPad; i++ {
+					lines = append(lines, "")
+				}
+				lines = append(lines, leftPad+esc+coverart.Blank(cols))
+				for i := 1; i < rows; i++ {
+					lines = append(lines, leftPad+coverart.Blank(cols))
+				}
+				return padPanel(strings.Join(lines, "\n"), width, height)
+			}
+		}
+		// Fall through to half-blocks if anything above failed.
+	}
+
 	rows := coverart.Grid(m.coverImg, innerW, height)
 	gridW, gridH := coverart.Describe(rows)
 	if gridH == 0 {
@@ -596,6 +638,32 @@ func (m Model) renderCover(width, height int) string {
 		lines = append(lines, b.String())
 	}
 	return padPanel(strings.Join(lines, "\n"), width, height)
+}
+
+// coverFitCells sizes the image in whole cells, preserving its aspect
+// ratio on screen (a cell is CellAspect times taller than it is wide).
+func coverFitCells(img image.Image, maxCols, maxRows int) (cols, rows int) {
+	if img == nil || maxCols < 1 || maxRows < 1 {
+		return 0, 0
+	}
+	b := img.Bounds()
+	if b.Dx() < 1 || b.Dy() < 1 {
+		return 0, 0
+	}
+	ratio := float64(b.Dy()) / float64(b.Dx()) // height / width
+	cols = maxCols
+	rows = int(float64(cols) * ratio / coverart.CellAspect)
+	if rows > maxRows {
+		rows = maxRows
+		cols = int(float64(rows) * coverart.CellAspect / ratio)
+		if cols > maxCols {
+			cols = maxCols
+		}
+	}
+	if cols < 1 || rows < 1 {
+		return 0, 0
+	}
+	return cols, rows
 }
 
 // renderAlbums draws the album search results.

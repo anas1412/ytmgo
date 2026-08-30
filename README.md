@@ -89,7 +89,7 @@ System dependencies (mpv, yt-dlp, ffmpeg) are **not** touched — they may be us
 - **Full mouse support** — Click tabs, click panels, click the progress bar to seek. Most terminal apps can't do this.
 - **Media keys** — Play, pause, and skip with your keyboard's media keys, or from your desktop's media widget (Linux).
 - **Audio visualiser** — Press `v` for a live spectrum across the panel.
-- **Cover art** — Press `i` to show the current track's album art, drawn in the terminal itself.
+- **Cover art** — Press `i` to show the current track's album art. On kitty it renders at full resolution via the graphics protocol; everywhere else it falls back to coloured half-blocks.
 - **Discord Rich Presence** — Show what you're listening to — track, artist, play status — live on your Discord profile.
 - **Static binary, no bloat** — Pure Go, no Electron, no browser engine. Starts instantly, sips RAM, gets out of your way.
 

@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"ytmgo/internal/coverart"
 	"ytmgo/internal/queue"
 	"ytmgo/internal/search"
 	"ytmgo/internal/visualizer"
@@ -173,6 +174,43 @@ func TestLayoutGeometryCover(t *testing.T) {
 		m.coverImg = nil
 		m.coverErr = "fetch cover: HTTP 404 and a very long trailing message that must be truncated"
 		checkPanelGeometry(t, m, w, h, "cover (error)")
+	}
+}
+
+// TestLayoutGeometryCoverKitty runs the cover panel through the kitty
+// path. Its escapes must measure zero cells, so the rendered frame has
+// to obey exactly the same height and width contract as every other
+// view — a miscount here would wrap lines and shift the mouse zones.
+func TestLayoutGeometryCoverKitty(t *testing.T) {
+	t.Setenv("KITTY_WINDOW_ID", "1")
+	if !coverart.KittySupported() {
+		t.Fatal("kitty detection did not take effect")
+	}
+	img := image.NewRGBA(image.Rect(0, 0, 544, 544))
+	for y := 0; y < 544; y++ {
+		for x := 0; x < 544; x++ {
+			img.Set(x, y, color.RGBA{uint8(x % 256), uint8(y % 256), 90, 255})
+		}
+	}
+	for _, size := range [][2]int{{200, 50}, {120, 35}, {90, 26}, {80, 24}} {
+		w, h := size[0], size[1]
+		m := worstCaseModel(t, w, h)
+		m.coverOn = true
+		m.coverImg = img
+		m.coverURL = "https://example/cover.jpg"
+		checkPanelGeometry(t, m, w, h, "cover via kitty")
+
+		// The frame must actually carry the graphics escape.
+		if !strings.Contains(m.View(), "\x1b_Ga=T") {
+			t.Errorf("%dx%d: kitty placement escape missing from the frame", w, h)
+		}
+
+		// Switching away must emit the delete, or the image would linger
+		// over whatever the panel shows next.
+		m.coverOn = false
+		if !strings.Contains(m.View(), "\x1b_Ga=d") {
+			t.Errorf("%dx%d: cover not cleared when the panel shows something else", w, h)
+		}
 	}
 }
 
