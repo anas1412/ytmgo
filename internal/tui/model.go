@@ -443,6 +443,9 @@ func InitialModel() Model {
 	if defSettings.DefaultVolume < 1 {
 		defSettings.DefaultVolume = 80
 	}
+	// The package builds itself against the auto theme on init; once the
+	// saved setting is known, rebuild against that.
+	ApplyTheme(ParseTheme(defSettings.Theme))
 	vol := defSettings.DefaultVolume
 
 	return Model{

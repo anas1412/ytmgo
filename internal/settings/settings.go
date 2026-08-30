@@ -31,6 +31,7 @@ type Settings struct {
 	ShowQuotes        bool   `json:"show_quotes"`         // fetch internet quotes
 	DiscordRPCEnabled bool   `json:"discord_rpc_enabled"` // enable Discord Rich Presence
 	AutoplayEnabled   bool   `json:"autoplay_enabled"`    // auto-queue related tracks when queue empties
+	Theme             string `json:"theme"`               // auto, dark, light or terminal
 }
 
 // Defaults returns a Settings with sane defaults.
@@ -44,6 +45,7 @@ func Defaults() *Settings {
 		ShowQuotes:        true,
 		DiscordRPCEnabled: true,
 		AutoplayEnabled:   true,
+		Theme:             "auto",
 	}
 }
 

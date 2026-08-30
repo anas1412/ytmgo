@@ -51,6 +51,26 @@ var settingDefs = []settingDef{
 		},
 	},
 	{
+		label: "Theme",
+		kind:  settingCycle,
+		value: func(m *Model) string { return string(ParseTheme(m.settings.Theme)) },
+		desc: staticDesc(
+			"auto (follow the terminal) · dark · light · terminal (use your ANSI colours)"),
+		activate: func(m *Model) tea.Cmd {
+			cur := ParseTheme(m.settings.Theme)
+			next := themeOrder[0]
+			for i, t := range themeOrder {
+				if t == cur {
+					next = themeOrder[(i+1)%len(themeOrder)]
+					break
+				}
+			}
+			m.settings.Theme = string(next)
+			ApplyTheme(next)
+			return saveSettingsCmd(m.db, m.settings)
+		},
+	},
+	{
 		label: "Show Quotes",
 		kind:  settingToggle,
 		value: func(m *Model) string { return boolStr(m.settings.ShowQuotes) },

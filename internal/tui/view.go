@@ -21,49 +21,58 @@ import (
 // ─── Extra inline styles (beyond what styles.go provides) ──────────
 
 var (
+	styleApp, styleSearchBox, styleSearchBoxFocused lipgloss.Style
+	styleEmpty, styleSearchLabel                    lipgloss.Style
+)
+
+// buildInlineStyles is the view-local half of buildStyles.
+func buildInlineStyles() {
+	textinputStyle = lipgloss.NewStyle().
+		Foreground(colorText).
+		Background(colorBgHover)
+	textinputPlaceholder = lipgloss.NewStyle().
+		Foreground(colorTextDim).
+		Background(colorBgHover).
+		Italic(true)
+	styleTextDim = lipgloss.NewStyle().Foreground(colorTextDim)
+
 	// App background
 	styleApp = lipgloss.NewStyle().
-			Background(colorBg)
+		Background(colorBg)
 
 	// Search input wrapper - inline style (no border, stays on 1 line)
 	styleSearchBox = lipgloss.NewStyle().
-			Foreground(colorText).
-			Background(colorBgHover).
-			Padding(0, 1).
-			Width(28).
-			Height(1)
+		Foreground(colorText).
+		Background(colorBgHover).
+		Padding(0, 1).
+		Width(28).
+		Height(1)
 
 	styleSearchBoxFocused = lipgloss.NewStyle().
-				Foreground(colorAccent2).
-				Background(colorBgHover).
-				Padding(0, 1).
-				Width(28).
-				Height(1)
+		Foreground(colorAccent2).
+		Background(colorBgHover).
+		Padding(0, 1).
+		Width(28).
+		Height(1)
 
 	// Panel empty state
 	styleEmpty = lipgloss.NewStyle().
-			Foreground(colorTextDim).
-			PaddingLeft(2).
-			PaddingTop(1).
-			Italic(true)
+		Foreground(colorTextDim).
+		PaddingLeft(2).
+		PaddingTop(1).
+		Italic(true)
 
 	// Header search label
 	styleSearchLabel = lipgloss.NewStyle().
-				Foreground(colorTextMid).
-				PaddingLeft(1)
-)
+		Foreground(colorTextMid).
+		PaddingLeft(1)
+}
 
 // ─── textinput styling (referenced from model.go) ──────────────────
 
 var (
-	textinputStyle = lipgloss.NewStyle().
-			Foreground(colorText).
-			Background(colorBgHover)
-
-	textinputPlaceholder = lipgloss.NewStyle().
-				Foreground(colorTextDim).
-				Background(colorBgHover).
-				Italic(true)
+	textinputStyle       lipgloss.Style
+	textinputPlaceholder lipgloss.Style
 )
 
 // ─── View ──────────────────────────────────────────────────────────
@@ -1493,7 +1502,7 @@ func truncate(s string, maxLen int) string {
 	return ansi.Truncate(s, maxLen, "…")
 }
 
-var styleTextDim = lipgloss.NewStyle().Foreground(colorTextDim)
+var styleTextDim lipgloss.Style
 
 // ─── Player Bar ────────────────────────────────────────────────────
 
