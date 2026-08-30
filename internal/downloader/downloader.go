@@ -121,7 +121,7 @@ func (d *Downloader) Progress() <-chan ProgressEvent {
 // Enqueue adds a job. The URL is optional — if empty, the downloader resolves
 // the YouTube URL from the Uploader (artist) and Title via yt-dlp search.
 // If the file already exists on disk, it's marked done immediately.
-// coverURL is a TIDAL album art URL; pass empty string to skip cover embedding.
+// coverURL is an album art URL; pass empty string to skip cover embedding.
 func (d *Downloader) Enqueue(trackID, title, uploader, url, outDir, coverURL string) {
 	d.EnqueueAs(trackID, title, uploader, url, outDir, coverURL, "")
 }
@@ -376,8 +376,8 @@ func (d *Downloader) runJob(job *Job, outDir string) {
 		}
 	}
 
-	// ── Embed TIDAL cover art ──────────────────────────────────────
-	// Download the album art from TIDAL and embed it into the audio
+	// ── Embed cover art ────────────────────────────────────────────
+	// Download the album art and embed it into the audio
 	// file using ffmpeg. Non-fatal — if it fails we still report the
 	// download as completed (the audio file is already on disk).
 	if job.CoverURL != "" {

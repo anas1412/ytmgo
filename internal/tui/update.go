@@ -25,7 +25,7 @@ func historyEntryTrack(e db.PlayHistoryEntry) queue.Track {
 }
 
 // Init satisfies tea.Model. It starts the tick for progress animation,
-// opens the database, and fetches TIDAL recommendations.
+// opens the database, and fetches recommendations.
 func (m Model) Init() tea.Cmd {
 	return tea.Batch(tickCmd(), initQueueFavoritesCmd(m.db), fetchQuoteCmd(m.quoteSeq), fetchRecommendationsCmd(m.recsSeq, m.settings.SearchLimit, m.db), scanLibraryCmd(m.downloadDir(), m.db), checkUpdateCmd(ver.Version), discordRPCInitCmd(m.settings.DiscordRPCEnabled), mprisInitCmd())
 }
@@ -59,6 +59,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// ── Recommendations ─────────────────────────────────────────
 	case RecommendationsMsg:
 		return m.handleRecommendations(msg)
+
+	// ── Album search / album opened ──────────────────────────────
+	case AlbumResultsMsg:
+		return m.handleAlbumResults(msg)
+
+	case AlbumTracksMsg:
+		return m.handleAlbumTracks(msg)
+
+	case AlbumDownloadMsg:
+		return m.handleAlbumDownload(msg)
 
 	// ── Library scan complete ────────────────────────────────────
 	case LibraryScanMsg:

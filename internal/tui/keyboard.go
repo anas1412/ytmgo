@@ -37,10 +37,17 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			if query != "" {
 				m.recsSeq++ // invalidate any pending recommendations
 				m.showingRecommendations = false
-				m.results = nil
 				m.isSearching = true
-				m.searchCursor = 0
 				m.err = nil
+				m.resetStreamCursor()
+				if m.albumMode {
+					m.albums = nil
+					m.albumQuery = query
+					m.openAlbum = nil
+					m.albumTracks = nil
+					return m, searchAlbumsCmd(query, m.settings.SearchLimit)
+				}
+				m.results = nil
 				return m, searchCmd(query, m.settings.SearchLimit)
 			}
 			// Empty query submitted — bring the recommendations back.
@@ -160,6 +167,14 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case "esc":
+		// Inside an album: step back to the album list.
+		if m.activePage == PageStream && m.openAlbum != nil {
+			m.openAlbum = nil
+			m.albumTracks = nil
+			m.resetStreamCursor()
+			m.setStatus("Albums")
+			return m, nil
+		}
 		if m.activePage == PageSettings && m.settingsEditField {
 			// Cancel inline editing on Settings page
 			m.settingsEditField = false
@@ -244,7 +259,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 					m.clampLibraryOffset()
 				}
 			default:
-				if m.searchCursor < len(m.results)-1 {
+				if m.searchCursor < m.streamListLen()-1 {
 					m.searchCursor++
 					m.clampSearchOffset()
 				}
@@ -274,6 +289,56 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	case "p", "left":
 		return m, m.prevTrack()
+
+	case "A":
+		// Toggle the Stream search between songs and albums.
+		if m.activePage != PageStream {
+			return m, nil
+		}
+		m.albumMode = !m.albumMode
+		m.openAlbum = nil
+		m.albumTracks = nil
+		m.resetStreamCursor()
+		if !m.albumMode {
+			// Back to songs: restore whatever the results panel had.
+			m.setStatus("Searching songs")
+			if len(m.results) == 0 {
+				return m, m.showRecommendations()
+			}
+			return m, nil
+		}
+		// Album results are kept across toggles: only refetch when the
+		// query actually changed, so flipping A back and forth is free.
+		q := m.searchInput.Value()
+		switch {
+		case q != "" && (len(m.albums) == 0 || m.albumQuery != q):
+			m.albumQuery = q
+			m.isSearching = true
+			m.setStatus("Searching albums…")
+			return m, searchAlbumsCmd(q, m.settings.SearchLimit)
+		case len(m.albums) > 0:
+			m.setStatus(fmt.Sprintf("Albums — %d results", len(m.albums)))
+		default:
+			m.setStatus("Albums — type a query and press Enter")
+		}
+		return m, nil
+
+	case "a":
+		// Queue every track of the open album.
+		if m.activePage == PageStream && m.openAlbum != nil && len(m.albumTracks) > 0 {
+			var cmd tea.Cmd
+			for i, r := range m.albumTracks {
+				t := m.resolveTrack(r)
+				if i == 0 {
+					cmd = m.enqueueAndMaybePlay(t)
+					continue
+				}
+				m.queue.Add(t)
+			}
+			m.setStatus(fmt.Sprintf("Queued %d tracks from %s", len(m.albumTracks), m.openAlbum.Title))
+			return m, tea.Batch(cmd, saveQueueCmd(m.db, m.queue))
+		}
+		return m, nil
 
 	case "g":
 		m.moveCursorToEdge(false)
@@ -357,10 +422,24 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		// or the queue panel (download the highlighted queue track).
 		switch {
 		case m.activePage == PageStream && m.activePanel == PanelSearch:
-			if len(m.results) == 0 || m.searchCursor < 0 || m.searchCursor >= len(m.results) {
+			// Album list: x grabs the whole album into its own folder.
+			if m.openAlbum == nil && m.albumMode {
+				if len(m.albums) == 0 || m.searchCursor < 0 || m.searchCursor >= len(m.albums) {
+					return m, nil
+				}
+				a := m.albums[m.searchCursor]
+				m.setStatus("Fetching " + a.Title + "…")
+				return m, downloadAlbumCmd(a, m.downloadDir())
+			}
+			// Inside an album, x downloads the highlighted track only.
+			list := m.results
+			if m.openAlbum != nil {
+				list = m.albumTracks
+			}
+			if len(list) == 0 || m.searchCursor < 0 || m.searchCursor >= len(list) {
 				return m, nil
 			}
-			r := m.results[m.searchCursor]
+			r := list[m.searchCursor]
 			t := m.resolveTrack(r)
 			m.ensureDownloader()
 			if m.downloader.HasPendingJob(t.ID) {

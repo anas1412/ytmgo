@@ -4,8 +4,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
 	"os/exec"
 	"path"
+	"path/filepath"
+	"strings"
 	"time"
 
 	"ytmgo/internal/db"
@@ -108,6 +111,84 @@ func fetchAutoplayCmd(db *db.DB) tea.Cmd {
 		}
 		return AutoplayResultsMsg{Tracks: tracks}
 	}
+}
+
+// ─── Albums ─────────────────────────────────────────────────────────
+
+// searchAlbumsCmd runs an albums-filtered YouTube Music search.
+func searchAlbumsCmd(query string, limit int) tea.Cmd {
+	return func() tea.Msg {
+		albums, err := ytmusic.SearchAlbums(query, limit)
+		return AlbumResultsMsg{Albums: albums, Error: err}
+	}
+}
+
+// openAlbumCmd fetches one album's tracklist and converts it to
+// playable results, so the left panel can render it like any other list.
+func openAlbumCmd(a ytmusic.Album) tea.Cmd {
+	return func() tea.Msg {
+		full, err := ytmusic.AlbumTracks(a.BrowseID)
+		if err != nil {
+			return AlbumTracksMsg{Album: a, Error: err}
+		}
+		tracks := make([]search.Result, 0, len(full.Tracks))
+		for _, t := range full.Tracks {
+			cover := t.CoverURL
+			if cover == "" {
+				cover = full.CoverURL
+			}
+			tracks = append(tracks, search.Result{
+				ID:       t.VideoID,
+				Title:    t.Title,
+				Uploader: t.Artist,
+				Duration: t.Duration,
+				URL:      ytmusic.WatchURL(t.VideoID),
+				CoverURL: cover,
+			})
+		}
+		return AlbumTracksMsg{Album: full, Tracks: tracks}
+	}
+}
+
+// AlbumDownloadMsg asks the model to enqueue a fetched album's tracks.
+type AlbumDownloadMsg struct {
+	Album ytmusic.Album
+	Dir   string
+	Error error
+}
+
+// downloadAlbumCmd fetches an album's tracklist so the model can enqueue
+// every track into "<parent>/<Artist> - <Album>/".
+func downloadAlbumCmd(a ytmusic.Album, parentDir string) tea.Cmd {
+	return func() tea.Msg {
+		full, err := ytmusic.AlbumTracks(a.BrowseID)
+		if err != nil {
+			return AlbumDownloadMsg{Album: a, Error: err}
+		}
+		folder := full.Title
+		if full.Artist != "" {
+			folder = full.Artist + " - " + full.Title
+		}
+		dir := filepath.Join(parentDir, sanitizeDirName(folder))
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			return AlbumDownloadMsg{Album: full, Error: err}
+		}
+		return AlbumDownloadMsg{Album: full, Dir: dir}
+	}
+}
+
+// sanitizeDirName strips characters that are awkward in a folder name.
+func sanitizeDirName(s string) string {
+	var b strings.Builder
+	for _, r := range s {
+		switch r {
+		case '/', '\\', ':', '*', '?', '"', '<', '>', '|':
+			b.WriteRune('_')
+		default:
+			b.WriteRune(r)
+		}
+	}
+	return strings.TrimSpace(b.String())
 }
 
 // ─── URL prefetch (background cache) ─────────────────────────────────

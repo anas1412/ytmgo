@@ -12,6 +12,7 @@ import (
 	"ytmgo/internal/queue"
 	"ytmgo/internal/search"
 	"ytmgo/internal/settings"
+	"ytmgo/internal/ytmusic"
 
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
@@ -84,7 +85,7 @@ type (
 		URL     string
 	}
 
-	// SearchResultsMsg carries results back from a TIDAL search.
+	// SearchResultsMsg carries results back from a song search.
 	SearchResultsMsg struct {
 		Results []search.Result
 		Error   error
@@ -95,6 +96,19 @@ type (
 		Results []search.Result
 		Error   error
 		Seq     int // generation counter; stale responses are skipped
+	}
+
+	// AlbumResultsMsg carries results back from an album search.
+	AlbumResultsMsg struct {
+		Albums []ytmusic.Album
+		Error  error
+	}
+
+	// AlbumTracksMsg carries a fetched album's tracklist.
+	AlbumTracksMsg struct {
+		Album  ytmusic.Album
+		Tracks []search.Result
+		Error  error
 	}
 
 	// LibraryScanMsg carries the list of downloaded tracks found on disk.
@@ -197,13 +211,23 @@ type Model struct {
 	confirmData   string // context for the confirm message (e.g. track title)
 
 	// ── Search ──
-	searchInput            textinput.Model
-	searchFocused          bool
-	searchCursor           int
-	searchOffset           int
-	results                []search.Result
-	recommendations        []search.Result // last fetched batch; restored when the search is cleared
-	isSearching            bool
+	searchInput     textinput.Model
+	searchFocused   bool
+	searchCursor    int
+	searchOffset    int
+	results         []search.Result
+	recommendations []search.Result // last fetched batch; restored when the search is cleared
+	isSearching     bool
+
+	// ── Albums (Stream page, toggled with A) ──
+	// The left panel shows exactly one list at a time, so albums reuse
+	// searchCursor/searchOffset rather than carrying their own.
+	albumMode              bool            // search returns albums instead of songs
+	albums                 []ytmusic.Album // album search results (cached across A toggles)
+	albumQuery             string          // query behind m.albums, so toggling back doesn't refetch
+	openAlbum              *ytmusic.Album  // non-nil: showing this album's tracks
+	albumTracks            []search.Result // tracks of openAlbum, as playable results
+	isLoadingAlbum         bool
 	showingRecommendations bool
 	recsSeq                int    // bumped each time R is pressed or a search starts
 	updateAvailable        string // "" = unknown, "latest" = up to date, "v0.X.Y" = update
@@ -527,6 +551,28 @@ func (m *Model) prefetchCmd(t queue.Track) tea.Cmd {
 		}
 	}
 	return prefetchURLCmd(t.ID, t.Artist, t.Title)
+}
+
+// streamList reports what the Stream page's left panel is showing and
+// how many rows it has. Albums reuse searchCursor, so every cursor
+// bound and click needs the active list's length rather than
+// len(m.results).
+func (m Model) streamListLen() int {
+	switch {
+	case m.openAlbum != nil:
+		return len(m.albumTracks)
+	case m.albumMode:
+		return len(m.albums)
+	default:
+		return len(m.results)
+	}
+}
+
+// resetStreamCursor puts the left panel back at the top, used whenever
+// the list it shows is swapped out.
+func (m *Model) resetStreamCursor() {
+	m.searchCursor = 0
+	m.searchOffset = 0
 }
 
 // showRecommendations restores the recommendations list in the results

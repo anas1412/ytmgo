@@ -290,6 +290,23 @@ func (m Model) renderPanels() string {
 		if q != "" {
 			panelLabel = "LIBRARY  🔍 \"" + q + "\"  " + dHint + " delete  " + fHint + " add to fav"
 		}
+	case PageStream:
+		switch {
+		case m.openAlbum != nil:
+			aHint := styleKeyHint.Render("[a]")
+			escHint := styleKeyHint.Render("[esc]")
+			panelLabel = "ALBUM  " + aHint + " queue all  " + xHint + " download  " + escHint + " back"
+		case m.albumMode:
+			albHint := styleKeyHint.Render("[A]")
+			panelLabel = "ALBUMS  " + albHint + " songs  " + xHint + " download album"
+		case m.showingRecommendations:
+			rHint := styleKeyHint.Render("[R]")
+			albHint := styleKeyHint.Render("[A]")
+			panelLabel = "RECOMMENDATIONS  " + rHint + " refresh  " + albHint + " albums  " + xHint + " download  " + fHint + " fav"
+		default:
+			albHint := styleKeyHint.Render("[A]")
+			panelLabel = "SEARCH RESULTS  " + albHint + " albums  " + xHint + " download  " + fHint + " add to fav"
+		}
 	default:
 		if m.showingRecommendations {
 			rHint := styleKeyHint.Render("[R]")
@@ -390,6 +407,12 @@ func (m Model) renderSearchResults(width, height int) string {
 	case PageHistory:
 		return m.renderHistory(width, height)
 	}
+	if m.openAlbum != nil {
+		return m.renderAlbumTracks(width, height)
+	}
+	if m.albumMode {
+		return m.renderAlbums(width, height)
+	}
 	if m.isSearching {
 		return styleEmpty.Width(width - 2).Height(height).Render(
 			m.spinner() + "  Searching…",
@@ -439,6 +462,108 @@ func (m Model) renderSearchResults(width, height int) string {
 		)
 	}
 	return result
+}
+
+// renderAlbums draws the album search results.
+func (m Model) renderAlbums(width, height int) string {
+	if m.isSearching {
+		return styleEmpty.Width(width - 2).Height(height).Render(m.spinner() + "  Searching albums…")
+	}
+	if len(m.albums) == 0 {
+		return styleEmpty.Width(width - 2).Height(height).Render(
+			"Type an album name and press Enter  ([A] back to songs)")
+	}
+
+	var lines []string
+	maxItems := (height - 1) / 2
+	if maxItems < 1 {
+		maxItems = 1
+	}
+	start := m.searchOffset
+	end := min(start+maxItems, len(m.albums))
+
+	for i := start; i < end; i++ {
+		a := m.albums[i]
+		isSelected := !m.searchFocused && m.activePanel == PanelSearch && i == m.searchCursor
+		prefix := fmt.Sprintf("%d. ", i+1)
+		title := truncate(a.Title, max(4, width-lipgloss.Width(prefix)-2))
+
+		artist := a.Artist
+		if artist == "" {
+			artist = "Unknown artist"
+		}
+		leftInfo := "   " + artist
+		rightInfo := a.Year
+		maxLeft := width - lipgloss.Width(rightInfo) - 2
+		if maxLeft > 3 {
+			leftInfo = truncate(leftInfo, maxLeft)
+		}
+		spacing := max(1, width-lipgloss.Width(leftInfo)-lipgloss.Width(rightInfo))
+		info := leftInfo + strings.Repeat(" ", spacing) + rightInfo
+		lines = append(lines, renderListItemBlock(prefix+title, info, isSelected, false, width))
+	}
+
+	if ind := scrollIndicator(start, len(m.albums)-end, m.searchCursor+1, len(m.albums)); ind != "" {
+		lines = append(lines, ind)
+	}
+	return padPanel(strings.Join(lines, "\n"), width, height)
+}
+
+// renderAlbumTracks draws the tracklist of the open album.
+func (m Model) renderAlbumTracks(width, height int) string {
+	if m.isLoadingAlbum {
+		return styleEmpty.Width(width - 2).Height(height).Render(m.spinner() + "  Loading album…")
+	}
+	if len(m.albumTracks) == 0 {
+		return styleEmpty.Width(width - 2).Height(height).Render("This album has no playable tracks")
+	}
+
+	var lines []string
+	maxItems := (height - 1) / 2
+	if maxItems < 1 {
+		maxItems = 1
+	}
+	start := m.searchOffset
+	end := min(start+maxItems, len(m.albumTracks))
+
+	// Track numbers are absolute positions in the album.
+	numW := len(fmt.Sprintf("%d", len(m.albumTracks)))
+	for i := start; i < end; i++ {
+		r := m.albumTracks[i]
+		isSelected := !m.searchFocused && m.activePanel == PanelSearch && i == m.searchCursor
+		prefix := fmt.Sprintf("%0*d. ", numW, i+1)
+		title := truncate(r.Title, max(4, width-lipgloss.Width(prefix)-2))
+
+		leftInfo := "   " + m.openAlbum.Artist
+		heart := ""
+		if m.favoriteSet[r.ID] {
+			heart = "♥  "
+		}
+		rightInfo := heart + formatDuration(r.Duration)
+		maxLeft := width - lipgloss.Width(rightInfo) - 2
+		if maxLeft > 3 {
+			leftInfo = truncate(leftInfo, maxLeft)
+		}
+		spacing := max(1, width-lipgloss.Width(leftInfo)-lipgloss.Width(rightInfo))
+		info := leftInfo + strings.Repeat(" ", spacing) + rightInfo
+		lines = append(lines, renderListItemBlock(prefix+title, info, isSelected, false, width))
+	}
+
+	if ind := scrollIndicator(start, len(m.albumTracks)-end, m.searchCursor+1, len(m.albumTracks)); ind != "" {
+		lines = append(lines, ind)
+	}
+	return padPanel(strings.Join(lines, "\n"), width, height)
+}
+
+// padPanel pads rendered rows to the panel's full width and height so
+// no stale content from a previous frame shows through.
+func padPanel(s string, width, height int) string {
+	paddedW := max(1, width-2)
+	out := padToWidth(s, paddedW)
+	if cnt := strings.Count(out, "\n") + 1; cnt < height {
+		out += "\n" + strings.Join(make([]string, height-cnt), "\n"+strings.Repeat(" ", paddedW))
+	}
+	return out
 }
 
 func (m Model) renderLibrary(width, height int) string {

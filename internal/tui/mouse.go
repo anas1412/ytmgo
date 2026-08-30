@@ -105,7 +105,7 @@ func (m Model) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 						m.clampLibraryOffset()
 					}
 				default:
-					if m.searchCursor < len(m.results)-1 {
+					if m.searchCursor < m.streamListLen()-1 {
 						m.searchCursor++
 						m.clampSearchOffset()
 					}

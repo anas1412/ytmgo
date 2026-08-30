@@ -62,11 +62,23 @@ func (m *Model) activateSelection() tea.Cmd {
 			return m.enqueueAndMaybePlay(historyEntryTrack(m.history[m.historyCursor]))
 		}
 	case PageStream:
-		if len(m.results) > 0 && m.searchCursor >= 0 && m.searchCursor < len(m.results) {
-			r := m.results[m.searchCursor]
-			// resolveTrack consults the local library so a track that
-			// already exists on disk plays the local file instead of
-			// re-streaming.
+		// Album list: Enter opens the album rather than queueing it.
+		if m.openAlbum == nil && m.albumMode {
+			if len(m.albums) > 0 && m.searchCursor >= 0 && m.searchCursor < len(m.albums) {
+				a := m.albums[m.searchCursor]
+				m.isLoadingAlbum = true
+				m.setStatus("Opening " + a.Title + "…")
+				return openAlbumCmd(a)
+			}
+			return nil
+		}
+		// Inside an album: its tracks behave like ordinary results.
+		list := m.results
+		if m.openAlbum != nil {
+			list = m.albumTracks
+		}
+		if len(list) > 0 && m.searchCursor >= 0 && m.searchCursor < len(list) {
+			r := list[m.searchCursor]
 			t := m.resolveTrack(r)
 			cmds := []tea.Cmd{m.enqueueAndMaybePlay(t)}
 			if m.settings.PlaybackMode == settings.PlaybackOffline ||
@@ -77,6 +89,8 @@ func (m *Model) activateSelection() tea.Cmd {
 			}
 			return tea.Batch(cmds...)
 		}
+		return nil
+
 	}
 	return nil
 }

@@ -6,6 +6,7 @@ import (
 
 	"ytmgo/internal/queue"
 	"ytmgo/internal/search"
+	"ytmgo/internal/ytmusic"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -74,6 +75,62 @@ func TestLayoutGeometry(t *testing.T) {
 		if want := panelsEnd + 4; controlsRow != want {
 			t.Errorf("%dx%d: controls rendered on row %d, mouse handler expects %d", w, h, controlsRow, want)
 		}
+	}
+}
+
+// TestLayoutGeometryAlbums holds the album list and album tracklist to
+// the same contract as every other view: exact height, nothing wider
+// than the terminal, controls row where the mouse handler expects it.
+func TestLayoutGeometryAlbums(t *testing.T) {
+	long := "Take Care (Deluxe Edition, Remastered, Anniversary Reissue)"
+	for _, size := range [][2]int{{200, 50}, {120, 35}, {90, 26}, {80, 24}} {
+		w, h := size[0], size[1]
+
+		// Album list.
+		m := worstCaseModel(t, w, h)
+		m.albumMode = true
+		for i := 0; i < 25; i++ {
+			m.albums = append(m.albums, ytmusic.Album{
+				BrowseID: "MPREb_x", Title: long,
+				Artist: "小田和正 Kazumasa Oda and Friends", Year: "2015",
+			})
+		}
+		checkPanelGeometry(t, m, w, h, "album list")
+
+		// Album tracklist.
+		alb := ytmusic.Album{Title: long, Artist: "Mild High Club"}
+		m.openAlbum = &alb
+		for i := 0; i < 25; i++ {
+			m.albumTracks = append(m.albumTracks, search.Result{
+				ID: "sZxzPcT1Meg", Title: "ラブ・ストーリーは突然に - " + long,
+				Uploader: "Mild High Club", Duration: 214,
+			})
+		}
+		checkPanelGeometry(t, m, w, h, "album tracks")
+	}
+}
+
+// checkPanelGeometry asserts the shared layout invariants for a model.
+func checkPanelGeometry(t *testing.T, m Model, w, h int, what string) {
+	t.Helper()
+	lines := strings.Split(m.View(), "\n")
+	if len(lines) != h {
+		t.Errorf("%s %dx%d: %d lines, want %d", what, w, h, len(lines), h)
+	}
+	for i, line := range lines {
+		if lw := lipgloss.Width(line); lw > w {
+			t.Errorf("%s %dx%d: line %d is %d cells (max %d)", what, w, h, i, lw, w)
+		}
+	}
+	controls := -1
+	for i, line := range lines {
+		if strings.Contains(line, "⏮ Prev") {
+			controls = i
+			break
+		}
+	}
+	if want := clickPanelStartY + m.panelHeight() + 4; controls != want {
+		t.Errorf("%s %dx%d: controls on row %d, mouse expects %d", what, w, h, controls, want)
 	}
 }
 

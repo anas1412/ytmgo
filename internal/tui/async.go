@@ -10,6 +10,7 @@ import (
 	"ytmgo/internal/player"
 	"ytmgo/internal/queue"
 	ver "ytmgo/internal/version"
+	"ytmgo/internal/ytmusic"
 
 	tea "github.com/charmbracelet/bubbletea"
 )
@@ -62,6 +63,69 @@ func (m Model) handleRecommendations(msg RecommendationsMsg) (tea.Model, tea.Cmd
 		}
 	}
 	return m, nil
+}
+
+// ── Album search results ─────────────────────────────────────────────
+
+func (m Model) handleAlbumResults(msg AlbumResultsMsg) (tea.Model, tea.Cmd) {
+	m.isSearching = false
+	if !m.albumMode {
+		return m, nil // user toggled back to songs while this was in flight
+	}
+	if msg.Error != nil {
+		m.err = msg.Error
+		m.setStatus("Album search failed: " + msg.Error.Error())
+		return m, nil
+	}
+	m.albums = msg.Albums
+	m.openAlbum = nil
+	m.albumTracks = nil
+	m.resetStreamCursor()
+	if len(msg.Albums) == 0 {
+		m.setStatus("No albums found")
+	} else {
+		m.setStatus(fmt.Sprintf("Found %d albums", len(msg.Albums)))
+	}
+	return m, nil
+}
+
+// ── Album opened (tracklist fetched) ─────────────────────────────────
+
+func (m Model) handleAlbumTracks(msg AlbumTracksMsg) (tea.Model, tea.Cmd) {
+	m.isLoadingAlbum = false
+	if msg.Error != nil {
+		m.err = msg.Error
+		m.setStatus("Cannot open album: " + msg.Error.Error())
+		return m, nil
+	}
+	alb := msg.Album
+	m.openAlbum = &alb
+	m.albumTracks = msg.Tracks
+	m.resetStreamCursor()
+	m.setStatus(fmt.Sprintf("%s — %d tracks  ([a] queue all · [esc] back)", alb.Title, len(msg.Tracks)))
+	return m, nil
+}
+
+// ── Album download requested ─────────────────────────────────────────
+
+func (m Model) handleAlbumDownload(msg AlbumDownloadMsg) (tea.Model, tea.Cmd) {
+	if msg.Error != nil {
+		m.err = msg.Error
+		m.setStatus("Album download failed: " + msg.Error.Error())
+		return m, nil
+	}
+	alb := msg.Album
+	m.ensureDownloader()
+	// Number the stems so the folder sorts in album order, exactly as
+	// the CLI does.
+	width := len(fmt.Sprintf("%d", len(alb.Tracks)))
+	for i, t := range alb.Tracks {
+		stem := fmt.Sprintf("%0*d - %s", width, i+1, t.Title)
+		m.downloader.EnqueueAs(t.VideoID, t.Title, alb.Artist,
+			ytmusic.WatchURL(t.VideoID), msg.Dir, t.CoverURL, stem)
+	}
+	m.setStatus(fmt.Sprintf("Downloading %s — %d tracks", alb.Title, len(alb.Tracks)))
+	return m, downloadCmd(m.downloader)
 }
 
 // ── Update check complete ─────────────────────────────────────────────
