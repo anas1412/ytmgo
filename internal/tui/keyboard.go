@@ -366,8 +366,30 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		m.viz = v
 		m.vizOn = true
+		m.coverOn = false
 		m.setStatus("Visualizer on  ([v] off)")
 		return m, vizFrameCmd(m.viz)
+
+	case "i":
+		// Toggle album art over the left panel. Shares the panel with
+		// the visualizer, so turning one on turns the other off.
+		if m.activePage != PageStream {
+			return m, nil
+		}
+		if m.coverOn {
+			m.coverOn = false
+			m.setStatus("Cover art off")
+			return m, nil
+		}
+		if m.vizOn {
+			m.vizOn = false
+			m.viz.Close()
+			m.viz = nil
+			m.vizFrame = nil
+		}
+		m.coverOn = true
+		m.setStatus("Cover art on  ([i] off)")
+		return m, m.refreshCoverCmd()
 
 	case "g":
 		m.moveCursorToEdge(false)

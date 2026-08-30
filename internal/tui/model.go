@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"image"
 	"os"
 	"time"
 
@@ -180,6 +181,13 @@ type (
 	VizStoppedMsg struct {
 		Err error
 	}
+
+	// CoverLoadedMsg carries a decoded cover image (or why it failed).
+	CoverLoadedMsg struct {
+		URL string
+		Img image.Image
+		Err error
+	}
 )
 
 // tickMsg triggers periodic UI updates (progress bar animation).
@@ -328,6 +336,14 @@ type Model struct {
 	viz      *visualizer.Visualizer
 	vizOn    bool
 	vizFrame visualizer.Frame
+
+	// ── Cover art (i) ──
+	// Shares the left panel with the visualizer: only one can be on.
+	coverOn      bool
+	coverImg     image.Image
+	coverURL     string // URL currently decoded into coverImg
+	coverLoading bool
+	coverErr     string
 
 	// ── Async URL resolution ──
 	// pendingResolve stores the context of an in-flight YouTube URL
@@ -485,6 +501,10 @@ func (m *Model) startTrackPlayback(playURL string, t queue.Track) tea.Cmd {
 	}
 	if m.db != nil {
 		cmds = append(cmds, recordPlayCmd(m.db, t))
+	}
+	// Keep the cover panel in step with what is playing.
+	if cmd := m.refreshCoverCmd(); cmd != nil {
+		cmds = append(cmds, cmd)
 	}
 	// Prefetch the URL for the next track in the queue so playback
 	// of that track starts instantly (no "Fetching URL…" delay).
@@ -679,6 +699,27 @@ func (m *Model) updateDiscordRPC() {
 		return
 	}
 	discordrpc.Update(t, m.playerState, m.position)
+}
+
+// refreshCoverCmd loads the current track's art when the cover panel is
+// showing and the art on screen belongs to a different track. Returns
+// nil when there is nothing to do.
+func (m *Model) refreshCoverCmd() tea.Cmd {
+	if !m.coverOn {
+		return nil
+	}
+	t, ok := m.queue.Current()
+	if !ok || t.CoverURL == "" {
+		m.coverImg = nil
+		m.coverURL = ""
+		return nil
+	}
+	if t.CoverURL == m.coverURL || (m.coverLoading && t.CoverURL == m.coverURL) {
+		return nil
+	}
+	m.coverLoading = true
+	m.coverErr = ""
+	return loadCoverCmd(t.CoverURL)
 }
 
 // reinitDiscordRPC tears down and re-initialises the Discord RPC

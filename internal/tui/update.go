@@ -190,6 +190,18 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
+	// ── Cover art loaded ────────────────────────────────────────
+	case CoverLoadedMsg:
+		m.coverLoading = false
+		if msg.Err != nil {
+			m.coverErr = msg.Err.Error()
+			return m, nil
+		}
+		m.coverImg = msg.Img
+		m.coverURL = msg.URL
+		m.coverErr = ""
+		return m, nil
+
 	// ── URL prefetched (background cache populate) ──────────────
 	case URLPrefetchedMsg:
 		return m.handleURLPrefetched(msg)

@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"ytmgo/internal/coverart"
 	"ytmgo/internal/downloader"
 	"ytmgo/internal/player"
 	"ytmgo/internal/queue"
@@ -224,7 +225,8 @@ func (m Model) renderHeader() string {
 	// glancing down at the help bar.
 	tabHint := styleKeyHint.Render("[tab]") + styleTextDim.Render(" cycle")
 	vizHint := styleKeyHint.Render("[v]") + styleTextDim.Render(" visualiser")
-	left := lipgloss.JoinHorizontal(lipgloss.Center, logo, "   ", searchView, "  ", tabHint, "  ", vizHint)
+	coverHint := styleKeyHint.Render("[i]") + styleTextDim.Render(" cover")
+	left := lipgloss.JoinHorizontal(lipgloss.Center, logo, "   ", searchView, "  ", tabHint, "  ", vizHint, "  ", coverHint)
 
 	gap := m.width - lipgloss.Width(left) - lipgloss.Width(tabsStr) - 2
 	if gap < 1 {
@@ -296,6 +298,9 @@ func (m Model) renderPanels() string {
 		case m.vizOn:
 			vHint := styleKeyHint.Render("[v]")
 			panelLabel = "VISUALIZER  " + vHint + " off"
+		case m.coverOn:
+			iHint := styleKeyHint.Render("[i]")
+			panelLabel = "COVER ART  " + iHint + " off"
 		case m.openAlbum != nil:
 			aHint := styleKeyHint.Render("[a]")
 			escHint := styleKeyHint.Render("[esc]")
@@ -413,6 +418,9 @@ func (m Model) renderSearchResults(width, height int) string {
 	}
 	if m.vizOn {
 		return m.renderVisualizer(width, height)
+	}
+	if m.coverOn {
+		return m.renderCover(width, height)
 	}
 	if m.openAlbum != nil {
 		return m.renderAlbumTracks(width, height)
@@ -538,6 +546,56 @@ func (m Model) renderVisualizer(width, height int) string {
 		rows = append(rows, line)
 	}
 	return padPanel(strings.Join(rows, "\n"), width, height)
+}
+
+// renderCover draws the current track's album art as half-block cells,
+// centred in the panel. Each glyph carries two pixels: its foreground
+// is the upper one, its background the lower.
+func (m Model) renderCover(width, height int) string {
+	innerW := max(1, width-2)
+	if height < 1 {
+		height = 1
+	}
+	msg := ""
+	switch {
+	case m.coverErr != "":
+		msg = "No cover art — " + m.coverErr
+	case m.coverLoading:
+		msg = m.spinner() + "  Loading cover…"
+	case m.coverImg == nil:
+		msg = "No cover art for this track"
+	}
+	if msg != "" {
+		return padPanel(styleEmpty.Width(innerW).Render(truncate(msg, innerW)), width, height)
+	}
+
+	rows := coverart.Grid(m.coverImg, innerW, height)
+	gridW, gridH := coverart.Describe(rows)
+	if gridH == 0 {
+		return padPanel(styleEmpty.Width(innerW).Render("Cover too small to draw"), width, height)
+	}
+
+	// Centre horizontally; vertical centring comes from the top pad plus
+	// padPanel filling the remainder.
+	leftPad := coverart.Blank(max(0, (innerW-gridW)/2))
+	topPad := max(0, (height-gridH)/2)
+
+	lines := make([]string, 0, height)
+	for i := 0; i < topPad; i++ {
+		lines = append(lines, "")
+	}
+	for _, row := range rows {
+		var b strings.Builder
+		b.WriteString(leftPad)
+		for _, c := range row {
+			b.WriteString(lipgloss.NewStyle().
+				Foreground(lipgloss.Color(c.Top.Hex())).
+				Background(lipgloss.Color(c.Bottom.Hex())).
+				Render(coverart.HalfBlock))
+		}
+		lines = append(lines, b.String())
+	}
+	return padPanel(strings.Join(lines, "\n"), width, height)
 }
 
 // renderAlbums draws the album search results.

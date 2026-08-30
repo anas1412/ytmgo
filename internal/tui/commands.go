@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"ytmgo/internal/coverart"
 	"ytmgo/internal/db"
 	"ytmgo/internal/downloader"
 	"ytmgo/internal/library"
@@ -372,6 +373,17 @@ func vizFrameCmd(v *visualizer.Visualizer) tea.Cmd {
 			return VizStoppedMsg{Err: v.Err()}
 		}
 		return VizFrameMsg{Frame: f}
+	}
+}
+
+// ─── Cover art ──────────────────────────────────────────────────────
+
+// loadCoverCmd fetches and decodes one track's album art. Results are
+// cached in the coverart package, so re-showing a cover is instant.
+func loadCoverCmd(url string) tea.Cmd {
+	return func() tea.Msg {
+		img, err := coverart.Load(url)
+		return CoverLoadedMsg{URL: url, Img: img, Err: err}
 	}
 }
 

@@ -1,6 +1,8 @@
 package tui
 
 import (
+	"image"
+	"image/color"
 	"strings"
 	"testing"
 
@@ -140,6 +142,37 @@ func TestLayoutGeometryVisualizer(t *testing.T) {
 		}
 		m.vizFrame = wide
 		checkPanelGeometry(t, m, w, h, "visualizer (oversized frame)")
+	}
+}
+
+// TestLayoutGeometryCover holds the cover panel to the same contract.
+// Half-block cells carry ANSI colour on every character, so an
+// off-by-one here would overflow the panel invisibly.
+func TestLayoutGeometryCover(t *testing.T) {
+	img := image.NewRGBA(image.Rect(0, 0, 544, 544))
+	for y := 0; y < 544; y++ {
+		for x := 0; x < 544; x++ {
+			img.Set(x, y, color.RGBA{uint8(x % 256), uint8(y % 256), 128, 255})
+		}
+	}
+	for _, size := range [][2]int{{200, 50}, {120, 35}, {90, 26}, {80, 24}} {
+		w, h := size[0], size[1]
+
+		m := worstCaseModel(t, w, h)
+		m.coverOn = true
+		checkPanelGeometry(t, m, w, h, "cover (no image)")
+
+		m.coverLoading = true
+		checkPanelGeometry(t, m, w, h, "cover (loading)")
+
+		m.coverLoading = false
+		m.coverImg = img
+		m.coverURL = "https://example/cover.jpg"
+		checkPanelGeometry(t, m, w, h, "cover (image)")
+
+		m.coverImg = nil
+		m.coverErr = "fetch cover: HTTP 404 and a very long trailing message that must be truncated"
+		checkPanelGeometry(t, m, w, h, "cover (error)")
 	}
 }
 
