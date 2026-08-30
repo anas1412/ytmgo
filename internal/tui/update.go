@@ -167,6 +167,29 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, tea.Batch(cmd, listenMprisCmd(m.mpris))
 
+	// ── Visualizer frame ────────────────────────────────────────
+	case VizFrameMsg:
+		if !m.vizOn {
+			return m, nil // toggled off while this frame was in flight
+		}
+		m.vizFrame = msg.Frame
+		return m, vizFrameCmd(m.viz)
+
+	case VizStoppedMsg:
+		if !m.vizOn {
+			return m, nil
+		}
+		m.vizOn = false
+		m.viz.Close()
+		m.viz = nil
+		m.vizFrame = nil
+		if msg.Err != nil {
+			m.setStatus("Visualizer stopped: " + msg.Err.Error())
+		} else {
+			m.setStatus("Visualizer stopped")
+		}
+		return m, nil
+
 	// ── URL prefetched (background cache populate) ──────────────
 	case URLPrefetchedMsg:
 		return m.handleURLPrefetched(msg)

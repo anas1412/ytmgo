@@ -278,3 +278,12 @@ func renderVolumeBar(vol int, width int) string {
 	}
 	return bar.String()
 }
+
+// ─── Visualizer ─────────────────────────────────────────────────────
+// Bars run cool at the base to hot at the peak.
+
+var (
+	styleVizLow  = lipgloss.NewStyle().Foreground(colorAccent)
+	styleVizMid  = lipgloss.NewStyle().Foreground(colorAccent2)
+	styleVizHigh = lipgloss.NewStyle().Foreground(colorAccent3)
+)

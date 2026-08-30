@@ -12,6 +12,7 @@ import (
 	"ytmgo/internal/queue"
 	"ytmgo/internal/search"
 	"ytmgo/internal/settings"
+	"ytmgo/internal/visualizer"
 	"ytmgo/internal/ytmusic"
 
 	"github.com/charmbracelet/bubbles/textinput"
@@ -168,6 +169,17 @@ type (
 	MprisCmdMsg struct {
 		Cmd mpris.Command
 	}
+
+	// VizFrameMsg carries one spectrum frame from cava.
+	VizFrameMsg struct {
+		Frame visualizer.Frame
+	}
+
+	// VizStoppedMsg fires when cava exits on its own, so the UI can
+	// switch back rather than freeze on the last frame.
+	VizStoppedMsg struct {
+		Err error
+	}
 )
 
 // tickMsg triggers periodic UI updates (progress bar animation).
@@ -309,6 +321,13 @@ type Model struct {
 
 	// ── MPRIS (media keys / desktop integration) ──
 	mpris *mpris.Service
+
+	// ── Visualizer (optional; needs cava) ──
+	// Takes over the left panel when on, so the panel's dimensions
+	// never change and the mouse hit zones stay put.
+	viz      *visualizer.Visualizer
+	vizOn    bool
+	vizFrame visualizer.Frame
 
 	// ── Async URL resolution ──
 	// pendingResolve stores the context of an in-flight YouTube URL
@@ -759,6 +778,7 @@ func (m Model) Shutdown() {
 	}
 	discordrpc.Close()
 	m.mpris.Close()
+	m.viz.Close()
 	if m.db != nil {
 		m.db.Close()
 	}

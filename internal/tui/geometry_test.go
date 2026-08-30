@@ -6,6 +6,7 @@ import (
 
 	"ytmgo/internal/queue"
 	"ytmgo/internal/search"
+	"ytmgo/internal/visualizer"
 	"ytmgo/internal/ytmusic"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -107,6 +108,38 @@ func TestLayoutGeometryAlbums(t *testing.T) {
 			})
 		}
 		checkPanelGeometry(t, m, w, h, "album tracks")
+	}
+}
+
+// TestLayoutGeometryVisualizer holds the visualizer to the same layout
+// contract. It takes over the left panel rather than adding rows, so
+// the geometry must be identical to every other view.
+func TestLayoutGeometryVisualizer(t *testing.T) {
+	for _, size := range [][2]int{{200, 50}, {120, 35}, {90, 26}, {80, 24}} {
+		w, h := size[0], size[1]
+		m := worstCaseModel(t, w, h)
+		m.vizOn = true
+
+		// No frame yet — the "Listening…" placeholder.
+		checkPanelGeometry(t, m, w, h, "visualizer (no frame)")
+
+		// A full-scale frame: every bar pinned at 100 is the widest and
+		// tallest the renderer can produce.
+		bars := m.vizBars()
+		frame := make(visualizer.Frame, bars)
+		for i := range frame {
+			frame[i] = 100
+		}
+		m.vizFrame = frame
+		checkPanelGeometry(t, m, w, h, "visualizer (full scale)")
+
+		// More bars than the panel was sized for must still not overflow.
+		wide := make(visualizer.Frame, bars*3)
+		for i := range wide {
+			wide[i] = 100
+		}
+		m.vizFrame = wide
+		checkPanelGeometry(t, m, w, h, "visualizer (oversized frame)")
 	}
 }
 

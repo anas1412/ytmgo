@@ -28,6 +28,8 @@ type KeyMap struct {
 	MoveDown      key.Binding
 	Download      key.Binding
 	Recs          key.Binding
+	Albums        key.Binding
+	Visualizer    key.Binding
 	Open          key.Binding
 	Update        key.Binding
 	ClearHistory  key.Binding
@@ -137,6 +139,14 @@ var Keys = KeyMap{
 		key.WithKeys("R"),
 		key.WithHelp("R", "recommendations"),
 	),
+	Albums: key.NewBinding(
+		key.WithKeys("A"),
+		key.WithHelp("A", "songs / albums"),
+	),
+	Visualizer: key.NewBinding(
+		key.WithKeys("v"),
+		key.WithHelp("v", "visualiser"),
+	),
 	Open: key.NewBinding(
 		key.WithKeys("o"),
 		key.WithHelp("o", "open download dir"),
@@ -228,6 +238,8 @@ func (k KeyMap) FullHelp() [][]key.Binding {
 			k.PageHistory,
 			k.PageSettings,
 			k.Recs,
+			k.Albums,
+			k.Visualizer,
 		},
 		{
 			k.Help,

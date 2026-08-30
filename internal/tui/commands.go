@@ -19,6 +19,7 @@ import (
 	"ytmgo/internal/queue"
 	"ytmgo/internal/search"
 	"ytmgo/internal/settings"
+	"ytmgo/internal/visualizer"
 	"ytmgo/internal/ytmusic"
 	"ytmgo/internal/ytresolve"
 
@@ -353,6 +354,24 @@ func listenMprisCmd(svc *mpris.Service) tea.Cmd {
 			return nil
 		}
 		return MprisCmdMsg{Cmd: cmd}
+	}
+}
+
+// ─── Visualizer ─────────────────────────────────────────────────────
+
+// vizFrameCmd waits for one spectrum frame. Re-armed by its handler so
+// frames keep flowing while the visualizer is on.
+func vizFrameCmd(v *visualizer.Visualizer) tea.Cmd {
+	if v == nil {
+		return nil
+	}
+	return func() (msg tea.Msg) {
+		defer func() { recover() }()
+		f, ok := <-v.Frames()
+		if !ok {
+			return VizStoppedMsg{Err: v.Err()}
+		}
+		return VizFrameMsg{Frame: f}
 	}
 }
 

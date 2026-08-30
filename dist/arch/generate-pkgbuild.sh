@@ -47,6 +47,7 @@ arch=('x86_64' 'aarch64')
 url="https://github.com/anas1412/ytmgo"
 license=('MIT')
 depends=('mpv' 'yt-dlp' 'ffmpeg')
+optdepends=('cava: audio visualiser (press v)')
 makedepends=('go>=1.22')
 source=("\$url/archive/v\$pkgver.tar.gz")
 sha256sums=('SKIP')

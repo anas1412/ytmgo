@@ -6,6 +6,7 @@ import (
 	"ytmgo/internal/player"
 	"ytmgo/internal/queue"
 	ver "ytmgo/internal/version"
+	"ytmgo/internal/visualizer"
 
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
@@ -339,6 +340,34 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, tea.Batch(cmd, saveQueueCmd(m.db, m.queue))
 		}
 		return m, nil
+
+	case "v":
+		// Toggle the spectrum visualizer over the left panel. Optional:
+		// without cava the feature simply isn't offered.
+		if m.activePage != PageStream {
+			return m, nil
+		}
+		if m.vizOn {
+			m.vizOn = false
+			m.viz.Close()
+			m.viz = nil
+			m.vizFrame = nil
+			m.setStatus("Visualizer off")
+			return m, nil
+		}
+		if !visualizer.Available() {
+			m.setStatus("Visualizer needs cava — install it with your package manager")
+			return m, nil
+		}
+		v, err := visualizer.Start(m.vizBars())
+		if err != nil {
+			m.setStatus("Visualizer unavailable: " + err.Error())
+			return m, nil
+		}
+		m.viz = v
+		m.vizOn = true
+		m.setStatus("Visualizer on  ([v] off)")
+		return m, vizFrameCmd(m.viz)
 
 	case "g":
 		m.moveCursorToEdge(false)

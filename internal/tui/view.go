@@ -223,7 +223,8 @@ func (m Model) renderHeader() string {
 	// Tab hint — shown inline so users discover focus cycling without
 	// glancing down at the help bar.
 	tabHint := styleKeyHint.Render("[tab]") + styleTextDim.Render(" cycle")
-	left := lipgloss.JoinHorizontal(lipgloss.Center, logo, "   ", searchView, "  ", tabHint)
+	vizHint := styleKeyHint.Render("[v]") + styleTextDim.Render(" visualiser")
+	left := lipgloss.JoinHorizontal(lipgloss.Center, logo, "   ", searchView, "  ", tabHint, "  ", vizHint)
 
 	gap := m.width - lipgloss.Width(left) - lipgloss.Width(tabsStr) - 2
 	if gap < 1 {
@@ -292,6 +293,9 @@ func (m Model) renderPanels() string {
 		}
 	case PageStream:
 		switch {
+		case m.vizOn:
+			vHint := styleKeyHint.Render("[v]")
+			panelLabel = "VISUALIZER  " + vHint + " off"
 		case m.openAlbum != nil:
 			aHint := styleKeyHint.Render("[a]")
 			escHint := styleKeyHint.Render("[esc]")
@@ -407,6 +411,9 @@ func (m Model) renderSearchResults(width, height int) string {
 	case PageHistory:
 		return m.renderHistory(width, height)
 	}
+	if m.vizOn {
+		return m.renderVisualizer(width, height)
+	}
 	if m.openAlbum != nil {
 		return m.renderAlbumTracks(width, height)
 	}
@@ -462,6 +469,75 @@ func (m Model) renderSearchResults(width, height int) string {
 		)
 	}
 	return result
+}
+
+// vizBars is how many spectrum columns fit the left panel. Each bar is
+// drawn two cells wide with a gap, so the panel width divides by three.
+func (m Model) vizBars() int {
+	outer := (m.width - 2) / 2
+	n := (outer - 4) / 3
+	if n < 4 {
+		n = 4
+	}
+	if n > 128 {
+		n = 128
+	}
+	return n
+}
+
+// renderVisualizer draws the spectrum as vertical bars filling the
+// panel, brightest at the peaks.
+func (m Model) renderVisualizer(width, height int) string {
+	innerW := max(1, width-2)
+	if height < 1 {
+		height = 1
+	}
+	frame := m.vizFrame
+	if len(frame) == 0 {
+		return padPanel(styleEmpty.Width(innerW).Render(m.spinner()+"  Loading…"), width, height)
+	}
+
+	// Map each bar's 0..100 value to a column height.
+	heights := make([]int, len(frame))
+	for i, val := range frame {
+		h := val * height / 100
+		if h > height {
+			h = height
+		}
+		if h < 0 {
+			h = 0
+		}
+		heights[i] = h
+	}
+
+	// Draw top row down: a cell is lit when its column reaches that row.
+	rows := make([]string, 0, height)
+	for row := 0; row < height; row++ {
+		remaining := height - row // a column of this height reaches this row
+		var b strings.Builder
+		for _, h := range heights {
+			if h >= remaining {
+				// Brighter towards the peak of each column.
+				style := styleVizLow
+				switch {
+				case remaining > height*2/3:
+					style = styleVizHigh
+				case remaining > height/3:
+					style = styleVizMid
+				}
+				b.WriteString(style.Render("██"))
+			} else {
+				b.WriteString("  ")
+			}
+			b.WriteString(" ")
+		}
+		line := b.String()
+		if lipgloss.Width(line) > innerW {
+			line = truncate(line, innerW)
+		}
+		rows = append(rows, line)
+	}
+	return padPanel(strings.Join(rows, "\n"), width, height)
 }
 
 // renderAlbums draws the album search results.
