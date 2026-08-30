@@ -25,15 +25,41 @@ var (
 	styleEmpty, styleSearchLabel                    lipgloss.Style
 )
 
+// The search field's wrapper is a fixed width, and the textinput inside
+// it has a width of its own. They have to agree: lipgloss drops whatever
+// overflows a fixed-width box, so an input allowed to render wider than
+// its wrapper loses the text it renders past the edge — the field went
+// blank once the query passed the wrapper's width.
+const (
+	searchBoxWidth   = 28
+	searchBoxPadding = 1 // each side
+	// A textinput renders its Width plus three cells: the "> " prompt
+	// and one for the cursor. Measured, not assumed — guessing here is
+	// what produced a field that wrapped and then swallowed itself.
+	searchInputChrome = 3
+	// searchInputWidth leaves the rendered input exactly filling the box.
+	searchInputWidth = searchBoxWidth - 2*searchBoxPadding - searchInputChrome
+)
+
 // buildInlineStyles is the view-local half of buildStyles.
 func buildInlineStyles() {
-	textinputStyle = lipgloss.NewStyle().
-		Foreground(colorText).
-		Background(colorBgHover)
-	textinputPlaceholder = lipgloss.NewStyle().
+	// The search field's well is a filled block. That reads as an input
+	// only when the rest of the UI is filled too — on the two themes
+	// that leave the terminal's own backdrop alone it is an opaque
+	// island in an otherwise transparent header. There it goes without
+	// a fill, and the prompt, placeholder and cursor carry the affordance.
+	well := func(st lipgloss.Style) lipgloss.Style {
+		if !paintBackground {
+			return st
+		}
+		return st.Background(colorBgHover)
+	}
+
+	textinputStyle = well(lipgloss.NewStyle().
+		Foreground(colorText))
+	textinputPlaceholder = well(lipgloss.NewStyle().
 		Foreground(colorTextDim).
-		Background(colorBgHover).
-		Italic(true)
+		Italic(true))
 	styleTextDim = lipgloss.NewStyle().Foreground(colorTextDim)
 
 	// App background
@@ -41,19 +67,17 @@ func buildInlineStyles() {
 		Background(colorBg)
 
 	// Search input wrapper - inline style (no border, stays on 1 line)
-	styleSearchBox = lipgloss.NewStyle().
+	styleSearchBox = well(lipgloss.NewStyle().
 		Foreground(colorText).
-		Background(colorBgHover).
-		Padding(0, 1).
-		Width(28).
-		Height(1)
+		Padding(0, searchBoxPadding).
+		Width(searchBoxWidth).
+		Height(1))
 
-	styleSearchBoxFocused = lipgloss.NewStyle().
+	styleSearchBoxFocused = well(lipgloss.NewStyle().
 		Foreground(colorAccent2).
-		Background(colorBgHover).
-		Padding(0, 1).
-		Width(28).
-		Height(1)
+		Padding(0, searchBoxPadding).
+		Width(searchBoxWidth).
+		Height(1))
 
 	// Panel empty state
 	styleEmpty = lipgloss.NewStyle().
@@ -250,12 +274,19 @@ func (m Model) renderHeader() string {
 	// Logo
 	logo := styleLogo.Render("♫ ytmgo")
 
-	// Search input
+	// Search input.
+	//
+	// The rendered input is truncated to the box before the box styles
+	// it. A fixed lipgloss Width wraps rather than truncates, and it
+	// wraps on word boundaries — a long query is one unbroken token with
+	// nowhere to break, so the whole thing moved to a second line that
+	// Height(1) then discarded, leaving a field showing only its prompt.
+	inner := truncate(m.searchInput.View(), searchBoxWidth-2*searchBoxPadding)
 	var searchView string
 	if m.searchFocused {
-		searchView = styleSearchBoxFocused.Render(m.searchInput.View())
+		searchView = styleSearchBoxFocused.Render(inner)
 	} else {
-		searchView = styleSearchBox.Render(m.searchInput.View())
+		searchView = styleSearchBox.Render(inner)
 	}
 
 	// Build page tabs (right side) with inline key hints matching [h] / [l] style

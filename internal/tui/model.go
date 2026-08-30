@@ -420,7 +420,7 @@ func InitialModel() Model {
 	ti.TextStyle = textinputStyle
 	ti.PlaceholderStyle = textinputPlaceholder
 	ti.CharLimit = 80
-	ti.Width = 40
+	ti.Width = searchInputWidth
 
 	sti := textinput.New()
 	sti.Placeholder = ""

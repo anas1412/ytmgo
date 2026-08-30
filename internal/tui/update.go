@@ -77,9 +77,15 @@ func (m Model) dispatch(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.ready = true
 		}
 
-		// Search input fills available header space dynamically
-		// Reserve ~16 chars for "♫ ytmgo" logo and padding
-		m.searchInput.Width = max(20, msg.Width-18)
+		// The search field's width is fixed by its wrapper, not by the
+		// terminal: the header also carries the logo, the focus hint and
+		// five page tabs, so the field cannot have the row. It used to be
+		// resized to the full header here while the wrapper stayed at
+		// searchBoxWidth, and the input then rendered several times wider
+		// than the box it sat in. A fixed lipgloss width wraps rather
+		// than truncates, and wraps on word boundaries, so a query with
+		// no spaces in it moved wholesale to a second line that Height(1)
+		// discarded — the field showed its prompt and nothing else.
 		return m, nil
 
 	// ── Mouse events ─────────────────────────────────────────────

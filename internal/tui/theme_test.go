@@ -144,3 +144,58 @@ func TestNamedSchemePaintsEveryLine(t *testing.T) {
 		}
 	}
 }
+
+// TestSearchFieldFitsItsBox: the textinput renders its Width plus three
+// cells (the prompt and the cursor) and must fit the wrapper exactly. A
+// lipgloss fixed width wraps rather than truncates, and wraps on word
+// boundaries — so an input allowed to render wider than its box moved a
+// space-less query wholesale to a second line that Height(1) then threw
+// away, and the field showed its prompt and nothing else.
+func TestSearchFieldFitsItsBox(t *testing.T) {
+	m := worstCaseModel(t, 200, 50)
+	boxContent := searchBoxWidth - 2*searchBoxPadding
+
+	if m.searchInput.Width != searchInputWidth {
+		t.Errorf("input width is %d, want %d — something resized it past its box",
+			m.searchInput.Width, searchInputWidth)
+	}
+	for _, n := range []int{0, 5, 23, 40, 200} {
+		m.searchInput.SetValue(strings.Repeat("a", n))
+		if w := lipgloss.Width(m.searchInput.View()); w > boxContent {
+			t.Errorf("value of %d chars renders %d cells, box holds %d", n, w, boxContent)
+		}
+	}
+
+	// A long query must still leave a visible header: the field keeps its
+	// size and the row keeps the logo and the tabs.
+	m.searchInput.SetValue(strings.Repeat("z", 120))
+	header := m.renderHeader()
+	if strings.Contains(header, "\n") {
+		t.Error("header wrapped to a second line")
+	}
+	if !strings.Contains(header, "ytmgo") {
+		t.Error("header lost its logo to the search field")
+	}
+}
+
+// TestSearchFieldFillOnlyWhenPainted: the field's well is a filled
+// block, which reads as an input only when the rest of the UI is filled
+// too. On the themes that leave the terminal's backdrop alone it would
+// be an opaque island in a transparent header.
+func TestSearchFieldFillOnlyWhenPainted(t *testing.T) {
+	defer ApplyTheme(ThemeTerminal)
+	for _, th := range []Theme{ThemeTerminal, ThemeYtmgo} {
+		ApplyTheme(th)
+		if styleSearchBox.GetBackground() != nil {
+			if _, isNo := styleSearchBox.GetBackground().(lipgloss.NoColor); !isNo {
+				t.Errorf("%s: search field paints a fill on a transparent theme", th)
+			}
+		}
+	}
+	ApplyTheme(Theme("nord"))
+	if bg := styleSearchBox.GetBackground(); bg == nil {
+		t.Error("nord: search field should have a fill")
+	} else if _, isNo := bg.(lipgloss.NoColor); isNo {
+		t.Error("nord: search field should have a fill")
+	}
+}
