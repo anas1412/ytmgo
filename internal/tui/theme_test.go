@@ -2,7 +2,10 @@ package tui
 
 import (
 	"fmt"
+	"strings"
 	"testing"
+
+	"github.com/charmbracelet/lipgloss"
 
 	"ytmgo/internal/settings"
 )
@@ -96,5 +99,48 @@ func TestDefaultIsTerminal(t *testing.T) {
 	}
 	if len(themeOrder) != len(schemes)+2 {
 		t.Errorf("cycle has %d entries, want %d", len(themeOrder), len(schemes)+2)
+	}
+}
+
+// TestNamedSchemePaintsEveryLine: lipgloss closes each styled run with
+// 39/49 — "back to the terminal's default" — which punched a hole
+// through the outer background and let the terminal show through for the
+// rest of the line, leaving named schemes half-painted. paintBg has to
+// rewrite those to the scheme's own colours.
+//
+// The logic is exercised directly rather than through View, because
+// under `go test` the output is not a TTY and lipgloss drops to the
+// Ascii profile, emitting no colour at all.
+func TestNamedSchemePaintsEveryLine(t *testing.T) {
+	defer ApplyTheme(ThemeTerminal)
+	ApplyTheme(Theme("dracula"))
+
+	m := Model{width: 40}
+	bg := sgrColor(colorBg, 48)
+	if bg == "" {
+		t.Fatal("scheme has no background colour")
+	}
+
+	// A line shaped like the ones lipgloss produces: a styled run that
+	// closes by handing the terminal's default back.
+	line := "\x1b[38;2;1;2;3mfoo\x1b[39m\x1b[49m bar"
+	out := m.paintBg(line)
+
+	if !strings.HasPrefix(out, bg) {
+		t.Errorf("line does not open with the scheme background: %.40q", out)
+	}
+	if strings.Contains(out, "\x1b[49m") {
+		t.Error("line still hands the backdrop back mid-line")
+	}
+	if w := lipgloss.Width(out); w != 40 {
+		t.Errorf("painted line is %d cells, want the full 40", w)
+	}
+
+	// terminal and ytmgo own no backdrop, so paintBg must pass through.
+	for _, th := range []Theme{ThemeTerminal, ThemeYtmgo} {
+		ApplyTheme(th)
+		if got := m.paintBg(line); got != line {
+			t.Errorf("%s must leave the line untouched", th)
+		}
 	}
 }

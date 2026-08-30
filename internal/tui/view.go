@@ -93,29 +93,6 @@ func (m Model) View() string {
 	return m.paintBg(m.fillHeight(view))
 }
 
-// paintBg lays the theme's background under every line. Only the named
-// schemes do this: their foregrounds are chosen against their own
-// backdrop, so without it a dark scheme on a light terminal would put
-// pale text on white. auto and terminal leave the backdrop alone, which
-// is what keeps terminal transparency working by default.
-//
-// Each line is padded to the full width first, or the fill would stop
-// wherever the content happened to end and leave a ragged edge.
-func (m Model) paintBg(view string) string {
-	if !paintBackground || m.width <= 0 {
-		return view
-	}
-	bg := lipgloss.NewStyle().Background(colorBg).Foreground(colorText)
-	lines := strings.Split(view, "\n")
-	for i, line := range lines {
-		if pad := m.width - lipgloss.Width(line); pad > 0 {
-			line += strings.Repeat(" ", pad)
-		}
-		lines[i] = bg.Render(line)
-	}
-	return strings.Join(lines, "\n")
-}
-
 // fillHeight pads the output to exactly m.height lines so a previous taller
 // render (e.g. before a terminal shrink) is fully overwritten. Without this,
 // Bubble Tea's incremental renderer leaves stale content visible at the bottom.
@@ -129,6 +106,53 @@ func (m Model) fillHeight(view string) string {
 	}
 	blank := strings.Repeat(" ", m.width)
 	return view + strings.Repeat("\n"+blank, m.height-lines)
+}
+
+// paintBg lays the theme's background under every line. Only the named
+// schemes do this: their foregrounds are chosen against their own
+// backdrop, so without it a dark scheme on a light terminal would put
+// pale text on white. terminal and ytmgo leave the backdrop alone, which
+// is what keeps terminal transparency working on those two.
+//
+// Each line is padded to the full width first, or the fill would stop
+// wherever the content happened to end and leave a ragged edge.
+func (m Model) paintBg(view string) string {
+	if !paintBackground || m.width <= 0 {
+		return view
+	}
+	bgSeq, fgSeq := sgrColor(colorBg, 48), sgrColor(colorText, 38)
+	if bgSeq == "" {
+		return view
+	}
+	lines := strings.Split(view, "\n")
+	for i, line := range lines {
+		if pad := m.width - lipgloss.Width(line); pad > 0 {
+			line += strings.Repeat(" ", pad)
+		}
+		// Lipgloss closes every styled run with 39/49 — "back to the
+		// terminal's default" — which would punch a hole through an
+		// outer background and let the terminal show through for the
+		// rest of the line. When a scheme owns the backdrop its own
+		// colours are the default, so those resets are rewritten to
+		// them rather than to the terminal's.
+		line = strings.NewReplacer(
+			"\x1b[49m", bgSeq,
+			"\x1b[39m", fgSeq,
+			"\x1b[0m", "\x1b[0m"+bgSeq+fgSeq,
+		).Replace(line)
+		lines[i] = bgSeq + fgSeq + line + "\x1b[0m"
+	}
+	return strings.Join(lines, "\n")
+}
+
+// sgrColor renders a colour as a truecolour SGR sequence for the given
+// layer (38 foreground, 48 background).
+func sgrColor(c lipgloss.TerminalColor, layer int) string {
+	if c == nil {
+		return ""
+	}
+	r, g, b, _ := c.RGBA()
+	return fmt.Sprintf("\x1b[%d;2;%d;%d;%dm", layer, r>>8, g>>8, b>>8)
 }
 
 // renderPage renders the base page layout (shared by Stream and Library).
