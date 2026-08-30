@@ -97,7 +97,7 @@ var schemes = []scheme{
 
 // themeOrder is every option the settings row cycles through.
 var themeOrder = func() []Theme {
-	out := []Theme{ThemeYtmgo, ThemeTerminal}
+	out := []Theme{ThemeTerminal, ThemeYtmgo}
 	for _, s := range schemes {
 		out = append(out, s.name)
 	}
@@ -108,8 +108,10 @@ var themeOrder = func() []Theme {
 // default for anything unrecognised (a hand-edited config, or a scheme
 // dropped in a later version).
 func ParseTheme(s string) Theme {
-	// This palette shipped as "auto" before it was named after the app.
-	// Existing configs still say that, and should not silently reset.
+	// The ytmgo palette shipped as "auto" before it was named after the
+	// app. Configs written then still say that, and must keep resolving
+	// to the palette those users have been looking at — not fall through
+	// to the default, which is a different theme now.
 	if s == "auto" {
 		return ThemeYtmgo
 	}
@@ -118,7 +120,7 @@ func ParseTheme(s string) Theme {
 			return t
 		}
 	}
-	return ThemeYtmgo
+	return ThemeTerminal
 }
 
 // ThemeDesc is the one-line explanation shown under the settings row.
@@ -250,7 +252,7 @@ func ApplyTheme(t Theme) {
 			}
 		}
 		// Unknown name: fall back rather than leave the UI half-built.
-		ApplyTheme(ThemeYtmgo)
+		ApplyTheme(ThemeTerminal)
 		return
 	}
 	buildStyles()
@@ -260,5 +262,5 @@ func init() {
 	// Sample the terminal before anything can force a mode, then build
 	// once so the package is usable even if no theme is applied later.
 	detectedDark = lipgloss.HasDarkBackground()
-	ApplyTheme(ThemeYtmgo)
+	ApplyTheme(ThemeTerminal)
 }

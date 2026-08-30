@@ -3,13 +3,15 @@ package tui
 import (
 	"fmt"
 	"testing"
+
+	"ytmgo/internal/settings"
 )
 
 // TestSchemesAreDistinct: every named scheme must actually land a
 // different accent, which catches a copy-paste that leaves two schemes
 // sharing a palette.
 func TestSchemesAreDistinct(t *testing.T) {
-	defer ApplyTheme(ThemeYtmgo)
+	defer ApplyTheme(ThemeTerminal)
 	seen := map[string]Theme{}
 	for _, sc := range schemes {
 		ApplyTheme(sc.name)
@@ -23,7 +25,7 @@ func TestSchemesAreDistinct(t *testing.T) {
 			t.Errorf("%s is a named scheme but does not paint its background", sc.name)
 		}
 	}
-	for _, tt := range []Theme{ThemeYtmgo, ThemeTerminal} {
+	for _, tt := range []Theme{ThemeTerminal, ThemeYtmgo} {
 		ApplyTheme(tt)
 		if paintBackground {
 			t.Errorf("%s must leave the terminal background alone", tt)
@@ -32,7 +34,7 @@ func TestSchemesAreDistinct(t *testing.T) {
 }
 
 func TestThemesAllRender(t *testing.T) {
-	defer ApplyTheme(ThemeYtmgo)
+	defer ApplyTheme(ThemeTerminal)
 	for _, th := range themeOrder {
 		ApplyTheme(th)
 		m := worstCaseModel(t, 150, 40)
@@ -41,15 +43,15 @@ func TestThemesAllRender(t *testing.T) {
 			t.Errorf("ParseTheme(%q) = %q", th, got)
 		}
 	}
-	if got := ParseTheme("nonsense"); got != ThemeYtmgo {
-		t.Errorf("unknown theme should fall back to auto, got %q", got)
+	if got := ParseTheme("nonsense"); got != ThemeTerminal {
+		t.Errorf("unknown theme should fall back to the default, got %q", got)
 	}
 }
 
 // TestThemeSwapsColours: a palette change must actually reach the built
 // styles — the whole point of rebuilding them.
 func TestThemeSwapsColours(t *testing.T) {
-	defer ApplyTheme(ThemeYtmgo)
+	defer ApplyTheme(ThemeTerminal)
 	// Compare the colour the style carries, not its rendered output:
 	// under `go test` the output is not a TTY, so lipgloss falls back to
 	// the Ascii profile and every colour renders to the same empty
@@ -80,5 +82,19 @@ func TestLegacyAutoStillResolves(t *testing.T) {
 		if tr == "auto" {
 			t.Error(`"auto" is still in themeOrder`)
 		}
+	}
+}
+
+// TestDefaultIsTerminal pins the shipped default and the order the
+// settings row cycles in.
+func TestDefaultIsTerminal(t *testing.T) {
+	if got := ParseTheme(settings.Defaults().Theme); got != ThemeTerminal {
+		t.Errorf("shipped default resolves to %q, want %q", got, ThemeTerminal)
+	}
+	if themeOrder[0] != ThemeTerminal || themeOrder[1] != ThemeYtmgo {
+		t.Errorf("cycle starts %v, want [terminal ytmgo ...]", themeOrder[:2])
+	}
+	if len(themeOrder) != len(schemes)+2 {
+		t.Errorf("cycle has %d entries, want %d", len(themeOrder), len(schemes)+2)
 	}
 }

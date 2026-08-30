@@ -45,7 +45,7 @@ func Defaults() *Settings {
 		ShowQuotes:        true,
 		DiscordRPCEnabled: true,
 		AutoplayEnabled:   true,
-		Theme:             "ytmgo",
+		Theme:             "terminal",
 	}
 }
 
