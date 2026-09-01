@@ -7,6 +7,8 @@ import (
 	"testing"
 
 	"ytmgo/internal/coverart"
+	"ytmgo/internal/lyrics"
+	"ytmgo/internal/player"
 	"ytmgo/internal/queue"
 	"ytmgo/internal/search"
 	"ytmgo/internal/visualizer"
@@ -74,13 +76,13 @@ func TestLayoutGeometry(t *testing.T) {
 
 		controlsRow := -1
 		for i, line := range lines {
-			if strings.Contains(line, "⏮ Prev") {
+			if strings.Contains(line, "[space]") {
 				controlsRow = i
 				break
 			}
 		}
 		panelsEnd := clickPanelStartY + m.panelHeight()
-		if want := panelsEnd + 4; controlsRow != want {
+		if want := panelsEnd + 3; controlsRow != want {
 			t.Errorf("%dx%d: controls rendered on row %d, mouse handler expects %d", w, h, controlsRow, want)
 		}
 	}
@@ -131,12 +133,12 @@ func checkPanelGeometry(t *testing.T, m Model, w, h int, what string) {
 	}
 	controls := -1
 	for i, line := range lines {
-		if strings.Contains(line, "⏮ Prev") {
+		if strings.Contains(line, "[space]") {
 			controls = i
 			break
 		}
 	}
-	if want := clickPanelStartY + m.panelHeight() + 4; controls != want {
+	if want := clickPanelStartY + m.panelHeight() + 3; controls != want {
 		t.Errorf("%s %dx%d: controls on row %d, mouse expects %d", what, w, h, controls, want)
 	}
 }
@@ -158,12 +160,12 @@ func TestLayoutGeometrySettingsPage(t *testing.T) {
 	}
 	controlsRow := -1
 	for i, line := range lines {
-		if strings.Contains(line, "⏮ Prev") {
+		if strings.Contains(line, "[space]") {
 			controlsRow = i
 			break
 		}
 	}
-	if want := clickPanelStartY + m.panelHeight() + 4; controlsRow != want {
+	if want := clickPanelStartY + m.panelHeight() + 3; controlsRow != want {
 		t.Fatalf("settings page controls on row %d, mouse handler expects %d", controlsRow, want)
 	}
 }
@@ -329,52 +331,52 @@ func TestNewArtworkReplacesOld(t *testing.T) {
 	}
 }
 
-// TestLayoutGeometryDownloadsHidden: collapsing the downloads panel
-// hands the whole right column to the queue, so the frame must still
-// come out the exact height and the click boundary must follow.
-func TestLayoutGeometryDownloadsHidden(t *testing.T) {
-	for _, size := range [][2]int{{200, 50}, {150, 40}, {120, 35}, {90, 26}, {80, 24}} {
+// TestLayoutGeometryDownloadsPage: downloads render as a full page now,
+// held to the same contract as every other page.
+func TestLayoutGeometryDownloadsPage(t *testing.T) {
+	for _, size := range [][2]int{{200, 50}, {120, 35}, {80, 24}} {
 		w, h := size[0], size[1]
-		for _, hidden := range []bool{false, true} {
-			m := worstCaseModel(t, w, h)
-			m.downloadsHidden = hidden
-			label := "downloads shown"
-			if hidden {
-				label = "downloads hidden"
-			}
-			checkPanelGeometry(t, m, w, h, label)
-
-			qh, dh := m.rightPanelSplit()
-			if hidden {
-				if dh != 0 {
-					t.Errorf("%dx%d: hidden downloads still claim %d rows", w, h, dh)
-				}
-				if qh != m.panelHeight()-3 {
-					t.Errorf("%dx%d: queue got %d content rows, want the full column (%d)", w, h, qh, m.panelHeight()-3)
-				}
-			} else if qh+dh != m.panelHeight()-6 {
-				t.Errorf("%dx%d: split sums to %d, want %d", w, h, qh+dh, m.panelHeight()-6)
-			}
-		}
+		m := worstCaseModel(t, w, h)
+		m.switchPage(PageDownloads)
+		checkPanelGeometry(t, m, w, h, "downloads page")
 	}
 }
 
-// TestDownloadsPanelStartsHiddenAndReveals: the panel is hidden until
-// there is something to show, and queueing a job brings it back — a
-// download running behind a closed panel is invisible.
-func TestDownloadsPanelStartsHiddenAndReveals(t *testing.T) {
-	m := InitialModel()
-	if !m.downloadsHidden {
-		t.Error("downloads panel should start hidden")
-	}
-	m.revealDownloads()
-	if m.downloadsHidden {
-		t.Error("queueing a download should reveal the panel")
-	}
-	// Revealing is idempotent: a second job must not toggle it shut.
-	m.revealDownloads()
-	if m.downloadsHidden {
-		t.Error("a second download must not hide the panel again")
+// TestLayoutGeometryLyrics: the lyrics pane splits the right column the
+// way the now-playing panel splits the left, and must obey the same
+// contract — exact height, no over-wide line, controls row unmoved.
+func TestLayoutGeometryLyrics(t *testing.T) {
+	for _, size := range [][2]int{{200, 50}, {150, 40}, {120, 35}, {90, 26}, {80, 24}} {
+		w, h := size[0], size[1]
+		for _, on := range []bool{false, true} {
+			m := worstCaseModel(t, w, h)
+			m.lyricsOn = on
+			m.lyricsTrackID = "sZxzPcT1Meg"
+			m.lyricsSynced = true
+			for i := 0; i < 40; i++ {
+				m.lyricLines = append(m.lyricLines, lyrics.Line{
+					Time: float64(i * 10),
+					Text: "ラブ・ストーリーは突然に long lyric line to stress the width",
+				})
+			}
+			label := "lyrics off"
+			if on {
+				label = "lyrics on"
+			}
+			checkPanelGeometry(t, m, w, h, label)
+
+			qh, lh := m.rightPanelSplit()
+			if !on || !m.lyricsFits() {
+				if lh != 0 {
+					t.Errorf("%dx%d %s: hidden lyrics still claim %d rows", w, h, label, lh)
+				}
+				if qh != m.panelHeight()-3 {
+					t.Errorf("%dx%d %s: queue got %d rows, want the full column (%d)", w, h, label, qh, m.panelHeight()-3)
+				}
+			} else if qh+lh != m.panelHeight()-6 {
+				t.Errorf("%dx%d %s: split sums to %d, want %d", w, h, label, qh+lh, m.panelHeight()-6)
+			}
+		}
 	}
 }
 
@@ -441,5 +443,42 @@ func TestSettingsPageClearsCoverImage(t *testing.T) {
 	}
 	if got := m.View(); !strings.Contains(got, coverart.KittyClear()) {
 		t.Error("settings page does not carry the delete escape")
+	}
+}
+
+// TestPlayerRowZonesInsideRow: every click zone the mouse reads must
+// fall inside the row the view renders, in both density tiers.
+func TestPlayerRowZonesInsideRow(t *testing.T) {
+	for _, size := range [][2]int{{200, 50}, {150, 40}, {120, 35}, {100, 28}, {80, 24}} {
+		w, h := size[0], size[1]
+		m := worstCaseModel(t, w, h)
+		m.playerState = player.StatePlaying
+		m.duration = 200
+		m.position = 60
+		l := m.playerRowLayout()
+
+		if got := lipgloss.Width(l.row); got > w-6 {
+			t.Errorf("%dx%d: player row is %d cells, inner width is %d", w, h, got, w-6)
+		}
+		end := 3 + (w - 6)
+		for _, z := range []struct {
+			name string
+			x    int
+		}{
+			{"prevEnd", l.prevEnd}, {"playEnd", l.playEnd}, {"transportEnd", l.transportEnd},
+			{"barStart", l.barStart}, {"barEnd", l.barStart + l.barWidth},
+			{"rightStart", l.rightStart}, {"volEnd", l.volEnd},
+		} {
+			if z.x < 3 || z.x > end {
+				t.Errorf("%dx%d: zone %s at x=%d outside content [3,%d]", w, h, z.name, z.x, end)
+			}
+		}
+		// Zones must be ordered and non-overlapping.
+		if !(l.prevEnd <= l.playEnd && l.playEnd <= l.transportEnd &&
+			l.transportEnd <= l.barStart && l.barStart+l.barWidth <= l.rightStart &&
+			l.rightStart <= l.shuffleEnd && l.shuffleEnd <= l.repeatStart &&
+			l.repeatEnd <= l.volStart && l.volStart < l.volEnd) {
+			t.Errorf("%dx%d: zones out of order: %+v", w, h, l)
+		}
 	}
 }

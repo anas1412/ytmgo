@@ -137,7 +137,6 @@ func (m Model) handleAlbumDownload(msg AlbumDownloadMsg) (tea.Model, tea.Cmd) {
 		m.downloader.EnqueueAs(t.VideoID, t.Title, alb.Artist,
 			ytmusic.WatchURL(t.VideoID), msg.Dir, t.CoverURL, stem)
 	}
-	m.revealDownloads()
 	m.setStatus(fmt.Sprintf("Downloading %s — %d tracks", alb.Title, len(alb.Tracks)))
 	return m, downloadCmd(m.downloader)
 }
@@ -362,7 +361,6 @@ func (m Model) handleURLResolved(msg URLResolvedMsg) (tea.Model, tea.Cmd) {
 		// Proceed with the enqueue now that we have the URL.
 		m.ensureDownloader()
 		m.downloader.Enqueue(msg.TrackID, msg.Title, msg.Uploader, msg.URL, m.downloadDir(), msg.CoverURL)
-		m.revealDownloads()
 		m.setStatus("Download queued: " + msg.Title)
 		return m, downloadCmd(m.downloader)
 

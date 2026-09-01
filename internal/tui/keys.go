@@ -38,6 +38,7 @@ type KeyMap struct {
 	Update        key.Binding
 	ClearHistory  key.Binding
 	PageStream    key.Binding // 1
+	PageDownloads key.Binding // 6
 	PageFavorites key.Binding // 2
 	PageLibrary   key.Binding // 3
 	PageHistory   key.Binding // 4
@@ -199,6 +200,10 @@ var Keys = KeyMap{
 		key.WithKeys("5"),
 		key.WithHelp("5", "settings page"),
 	),
+	PageDownloads: key.NewBinding(
+		key.WithKeys("6"),
+		key.WithHelp("6", "downloads page"),
+	),
 	Escape: key.NewBinding(
 		key.WithKeys("esc"),
 		key.WithHelp("esc", "back / close"),
@@ -287,6 +292,7 @@ func (k KeyMap) Globals() []key.Binding {
 		k.PageLibrary,
 		k.PageHistory,
 		k.PageSettings,
+		k.PageDownloads,
 		k.Recs,
 		k.Open,
 	}

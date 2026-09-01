@@ -369,46 +369,36 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, m.resumePlayerTick()
 
 	case "y":
-		// The lyrics view replaces the spectrum inside the now-playing
-		// panel, so turning it on implies opening that panel.
+		// Lyrics live under the queue in the right column, independent
+		// of the now-playing panel on the left.
 		if m.activePage == PageSettings {
-			m.setStatus("The lyrics view is not shown on the settings page")
+			m.setStatus("The lyrics pane is not shown on the settings page")
 			return m, nil
 		}
-		if !m.lyricsOn && !m.npFits() {
-			m.setStatus("Terminal too short for the lyrics view — make the window taller")
+		if !m.lyricsOn && !m.lyricsFits() {
+			m.setStatus("Terminal too short for the lyrics pane — make the window taller")
 			return m, nil
-		}
-		var cmds []tea.Cmd
-		if !m.npOn {
-			m.npOn = true
-			m.clampSearchOffset()
-			if cmd := m.refreshCoverCmd(); cmd != nil {
-				cmds = append(cmds, cmd)
-			}
 		}
 		m.lyricsOn = !m.lyricsOn
+		m.clampQueueOffset()
 		if !m.lyricsOn {
 			m.setStatus("Lyrics off")
-			return m, tea.Batch(cmds...)
+			return m, nil
 		}
 		m.setStatus("Lyrics on  ([y] hide)")
 		if t, ok := m.queue.Current(); ok {
 			if cmd := m.loadLyricsCmd(t); cmd != nil {
-				cmds = append(cmds, cmd)
+				return m, cmd
 			}
 		}
-		return m, tea.Batch(cmds...)
+		return m, nil
 
 	case "X":
-		// Collapse the downloads panel so the queue gets the whole
-		// right column, and back again.
-		m.downloadsHidden = !m.downloadsHidden
-		m.clampQueueOffset()
-		if m.downloadsHidden {
-			m.setStatus("Downloads panel hidden  ([X] show)")
+		// Downloads live on their own page; X jumps there and back.
+		if m.activePage == PageDownloads {
+			m.switchPage(PageStream)
 		} else {
-			m.setStatus("Downloads panel shown")
+			m.switchPage(PageDownloads)
 		}
 		return m, nil
 
@@ -548,7 +538,6 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				return m, resolveURLCmd(t.Artist, t.Title, m.pendingResolve)
 			}
 			m.downloader.Enqueue(t.ID, t.Title, r.Uploader, t.URL, m.downloadDir(), r.CoverURL)
-			m.revealDownloads()
 			m.setStatus("Download queued: " + t.Title)
 			return m, downloadCmd(m.downloader)
 
@@ -579,7 +568,6 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				return m, resolveURLCmd(t.Artist, t.Title, m.pendingResolve)
 			}
 			m.downloader.Enqueue(t.ID, t.Title, t.Artist, t.URL, m.downloadDir(), t.CoverURL)
-			m.revealDownloads()
 			m.setStatus("Download queued: " + t.Title)
 			return m, downloadCmd(m.downloader)
 
@@ -610,7 +598,6 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				return m, resolveURLCmd(t.Artist, t.Title, m.pendingResolve)
 			}
 			m.downloader.Enqueue(t.ID, t.Title, t.Artist, t.URL, m.downloadDir(), t.CoverURL)
-			m.revealDownloads()
 			m.setStatus("Download queued: " + t.Title)
 			return m, downloadCmd(m.downloader)
 
@@ -632,7 +619,6 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			// known without a resolve; legacy entries still resolve.
 			if t := historyEntryTrack(e); t.URL != "" {
 				m.downloader.Enqueue(t.ID, t.Title, t.Artist, t.URL, m.downloadDir(), t.CoverURL)
-				m.revealDownloads()
 				m.setStatus("Download queued: " + t.Title)
 				return m, downloadCmd(m.downloader)
 			}
@@ -816,6 +802,20 @@ func (m *Model) handleGlobalKey(msg tea.KeyMsg) (handled bool, cmd tea.Cmd) {
 				m.setStatus("")
 			}
 			m.loadPlayHistory()
+			return true, nil
+		case "6": // Keys.PageDownloads
+			if m.activePage != PageDownloads {
+				m.switchPage(PageDownloads)
+				n := 0
+				if m.downloader != nil {
+					n = len(m.downloader.Jobs())
+				}
+				if n == 0 {
+					m.setStatus("No downloads yet — press x on any track")
+				} else {
+					m.setStatus(fmt.Sprintf("Downloads: %d", n))
+				}
+			}
 			return true, nil
 		case "5": // Keys.PageSettings
 			if m.activePage != PageSettings {

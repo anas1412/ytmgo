@@ -300,6 +300,7 @@ func (m Model) renderHeader() string {
 		{"3", "Library"},
 		{"4", "History"},
 		{"5", "Settings"},
+		{"6", "Downloads"},
 	}
 	var renderedTabs []string
 	for i, t := range tabs {
@@ -377,6 +378,13 @@ func (m Model) renderPanels() string {
 		panelLabel = "HISTORY  " + xHint + " download  " + cHint + " clear"
 	case PageFavorites:
 		panelLabel = "FAVORITES  " + fHint + " unfav  " + xHint + " download"
+	case PageDownloads:
+		oHint := styleKeyHint.Render("[o]")
+		n := 0
+		if m.downloader != nil {
+			n = len(m.downloader.Jobs())
+		}
+		panelLabel = fmt.Sprintf("DOWNLOADS  [%d]  %s open folder", n, oHint)
 	case PageLibrary:
 		dHint := styleKeyHint.Render("[d]")
 		panelLabel = "LIBRARY  " + dHint + " delete  " + fHint + " add to fav"
@@ -389,9 +397,7 @@ func (m Model) renderPanels() string {
 		case m.openAlbum != nil:
 			aHint := styleKeyHint.Render("[a]")
 			escHint := styleKeyHint.Render("[esc]")
-			// Album name before the hints, so a narrow panel truncates
-			// the hints first and the information survives.
-			panelLabel = "ALBUM — " + m.openAlbum.Title + "  " +
+			panelLabel = "ALBUM  " +
 				aHint + " queue all  " + xHint + " download  " + escHint + " back"
 		case m.albumMode:
 			albHint := styleKeyHint.Render("[A]")
@@ -457,12 +463,12 @@ func (m Model) renderPanels() string {
 			panelBorder.Width(panelWidth).Height(npH).Render(npPanel))
 	}
 
-	// Split right panel into queue (top) and downloads (bottom).
-	// Each sub-panel renders as: border-top (1) + title (1) + content (N) + border-bottom (1)
-	// = N + 3 total lines. The split lives in rightPanelSplit so the
-	// mouse hit-testing stays in sync; the downloads panel collapses
-	// when it has no jobs.
-	queueContentH, downloadsContentH := m.rightPanelSplit()
+	// Split the right column into queue (top) and lyrics (bottom).
+	// Each sub-panel renders as: border-top (1) + title (1) + content (N)
+	// + border-bottom (1) = N + 3 total lines. The split lives in
+	// rightPanelSplit so the mouse hit-testing stays in sync; the queue
+	// takes the whole column while the lyrics pane is off.
+	queueContentH, lyricsContentH := m.rightPanelSplit()
 
 	// Queue sub-panel (top of right column)
 	dHint := styleKeyHint.Render("[d]")
@@ -474,6 +480,12 @@ func (m Model) renderPanels() string {
 	}
 	queueTitle := fmt.Sprintf("QUEUE  %s  %s remove  %s clear  %s reorder",
 		queueCount, dHint, dCapHint, reorderHint)
+	if lyricsContentH == 0 {
+		// The way to open the lyrics pane, placed ahead of the other
+		// hints so a narrow title cannot truncate it away.
+		queueTitle = fmt.Sprintf("QUEUE  %s  %s lyrics  %s remove  %s clear  %s reorder",
+			queueCount, styleKeyHint.Render("[y]"), dHint, dCapHint, reorderHint)
+	}
 	queueTitleStyled := stylePanelTitle.Render(truncate(queueTitle, titleW))
 	queueContent := m.renderQueue(panelWidth, queueContentH)
 	queuePanel := lipgloss.JoinVertical(lipgloss.Top,
@@ -481,7 +493,7 @@ func (m Model) renderPanels() string {
 		indentBlock(queueContent),
 	)
 	queueBoxH := queueContentH
-	if downloadsContentH == 0 {
+	if lyricsContentH == 0 {
 		queueBoxH = panelHeight - 2 // one full-height box, as the left column uses
 	}
 	queuePanel = rightBorder.
@@ -489,31 +501,27 @@ func (m Model) renderPanels() string {
 		Height(queueBoxH).
 		Render(queuePanel)
 
-	// Downloads sub-panel (bottom of right column), unless hidden.
+	// Lyrics sub-panel (bottom of right column), when open.
 	rightPanel := queuePanel
-	if downloadsContentH > 0 {
-		dlCount := 0
-		if m.downloader != nil {
-			dlCount = len(m.downloader.Jobs())
+	if lyricsContentH > 0 {
+		yHint := styleKeyHint.Render("[y]")
+		lyricsTitle := "LYRICS  " + yHint + " hide"
+		if t, ok := m.queue.Current(); ok && t.Title != "" {
+			lyricsTitle += "  " + t.Title
 		}
-		oHint := styleKeyHint.Render("[o]")
-		xHint2 := styleKeyHint.Render("[X]")
-		// Toggle straight after the count, as the now-playing title
-		// does: the panel's own show/hide hint sits in the same place
-		// everywhere, and a narrow title never truncates it away.
-		downloadsTitle := fmt.Sprintf("DOWNLOADS  [%d]  %s hide  %s open folder", dlCount, xHint2, oHint)
-		downloadsTitleStyled := stylePanelTitle.Render(truncate(downloadsTitle, titleW))
-		downloadsContent := m.renderDownloadQueue(panelWidth, downloadsContentH)
-		downloadsPanel := lipgloss.JoinVertical(lipgloss.Top,
-			downloadsTitleStyled,
-			indentBlock(downloadsContent),
+		lyricsTitleStyled := stylePanelTitle.Render(truncate(lyricsTitle, titleW))
+		rows := m.renderLyricsPane(max(1, panelWidth-2), lyricsContentH)
+		lyricsContent := padPanel(strings.Join(rows, "\n"), panelWidth, lyricsContentH)
+		lyricsPanel := lipgloss.JoinVertical(lipgloss.Top,
+			lyricsTitleStyled,
+			indentBlock(lyricsContent),
 		)
 		// Bottom sub-panel uses unfocused border (queue owns the focus)
-		downloadsPanel = panelBorder.
+		lyricsPanel = panelBorder.
 			Width(panelWidth).
-			Height(downloadsContentH).
-			Render(downloadsPanel)
-		rightPanel = lipgloss.JoinVertical(lipgloss.Top, queuePanel, downloadsPanel)
+			Height(lyricsContentH).
+			Render(lyricsPanel)
+		rightPanel = lipgloss.JoinVertical(lipgloss.Top, queuePanel, lyricsPanel)
 	}
 
 	// Calculate precise spaces to spread across the horizontal plane
@@ -536,6 +544,8 @@ func (m Model) renderSearchResults(width, height int) string {
 		return m.renderLibrary(width, height)
 	case PageHistory:
 		return m.renderHistory(width, height)
+	case PageDownloads:
+		return m.renderDownloadQueue(width, height)
 	}
 	return m.renderStreamList(width, height)
 }
@@ -684,15 +694,10 @@ func (m Model) displayPosition() float64 {
 // npPanelTitle labels the now-playing panel with whatever is playing.
 func (m Model) npPanelTitle() string {
 	vHint := styleKeyHint.Render("[v]")
-	yHint := styleKeyHint.Render("[y]")
-	lyr := yHint + " lyrics"
-	if m.lyricsOn {
-		lyr = yHint + " spectrum"
-	}
 	if t, ok := m.queue.Current(); ok && t.Title != "" {
-		return "NOW PLAYING  " + vHint + " hide  " + lyr + "  " + t.Title
+		return "NOW PLAYING  " + vHint + " hide  " + t.Title
 	}
-	return "NOW PLAYING  " + vHint + " hide  " + lyr
+	return "NOW PLAYING  " + vHint + " hide"
 }
 
 // renderNowPlayingPanel draws album art on the left and the spectrum on
@@ -714,14 +719,9 @@ func (m Model) renderNowPlayingPanel(width, height int) string {
 	if coverCols > 0 {
 		vizW-- // a column of breathing space between the two
 	}
-	// The lyrics view swaps in for the spectrum on the same footprint,
-	// so nothing about the panel's geometry (or its tests) changes.
-	var vizBlock []string
-	if m.lyricsOn {
-		vizBlock = m.renderLyricsPane(max(0, vizW), height)
-	} else {
-		vizBlock = m.renderSpectrum(max(0, vizW), height)
-	}
+	// Lyrics live in their own pane under the queue, so this panel is
+	// always art beside spectrum.
+	vizBlock := m.renderSpectrum(max(0, vizW), height)
 
 	lines := make([]string, height)
 	for i := 0; i < height; i++ {
@@ -1009,7 +1009,28 @@ func (m Model) renderAlbumTracks(width, height int) string {
 	// right-hand column.
 	rowW := max(1, width-2)
 	var lines []string
-	maxItems := (height - 1) / 2
+
+	// A compact header strip above the tracklist: the album's own line,
+	// then its stats, so the panel title stays short and untruncated.
+	// albumStripRows tells the scroll clamp these rows are spoken for.
+	if m.openAlbum != nil {
+		total := 0
+		for _, r := range m.albumTracks {
+			total += r.Duration
+		}
+		stats := m.openAlbum.Artist
+		if m.openAlbum.Year != "" {
+			stats += " · " + m.openAlbum.Year
+		}
+		stats += fmt.Sprintf(" · %d tracks · %s", len(m.albumTracks), formatTotalDuration(total))
+		lines = append(lines,
+			styleNowTitle.Render(truncate(m.openAlbum.Title, rowW)),
+			styleTextDim.Render(truncate(stats, rowW)),
+			"",
+		)
+	}
+
+	maxItems := (height - albumStripRows - 1) / 2
 	if maxItems < 1 {
 		maxItems = 1
 	}
@@ -1691,14 +1712,13 @@ var styleTextDim lipgloss.Style
 // ─── Player Bar ────────────────────────────────────────────────────
 
 func (m Model) renderPlayerBar() string {
-	var nowPlaying, progress, controls string
 	innerW := m.width - 6 // box width(m.width) - doubleBorder(2) - padding(4) = content width
 
 	nowPlayingIdx := m.queue.CurrentIndex()
 	tracks := m.queue.Tracks()
 
+	var nowPlaying string
 	if m.queue.Len() == 0 || nowPlayingIdx < 0 || nowPlayingIdx >= len(tracks) || m.playerState == player.StateStopped {
-		// ── Stopped / idle ──────────────────────────────────────
 		msg := "Ready — search and add tracks"
 		if m.queue.Len() > 0 {
 			msg = "Playback finished"
@@ -1708,42 +1728,17 @@ func (m Model) renderPlayerBar() string {
 			"  ",
 			styleTime.Render(msg),
 		)
-
-		progress = renderProgressBar(0, innerW)
-
-		controls = m.renderControls()
 	} else {
-		// ── Playing track ───────────────────────────────────────
 		t := tracks[nowPlayingIdx]
-
 		trackLabel := t.Title + " — " + t.Artist
-		// Title line gets the full inner width now (time appears on the progress row).
 		if innerW > 5 {
 			trackLabel = truncate(trackLabel, innerW)
 		}
-
-		// Smooth progress: glide the bar from the last reported position
-		// using elapsed wall-clock time, so it moves continuously between
-		// coarse IPC updates instead of jumping every 500ms.
-		displayPos := m.displayPosition()
-		currentStr := formatTime(displayPos)
-		totalStr := t.Duration
-		if totalStr == "" {
-			totalStr = formatDuration(t.DurationSec)
-		}
-		// Pad the total to match the current's tabular width so the
-		// time display stays column-aligned as the song progresses.
-		if currentStr != "" && totalStr != "" && len(currentStr) < len(totalStr) {
-			currentStr = strings.Repeat(" ", len(totalStr)-len(currentStr)) + currentStr
-		}
-		timeInfo := currentStr + " / " + totalStr
-
 		nowPlaying = lipgloss.JoinHorizontal(lipgloss.Left,
 			styleNowIndicator.Render("▶"),
 			"  ",
 			styleNowTitle.Render(trackLabel),
 		)
-
 		// Right-align a dim "up next" hint on the same row when it fits,
 		// so the layout height (and mouse hit-testing) never changes.
 		if next, ok := m.queue.PeekNext(); ok {
@@ -1761,37 +1756,19 @@ func (m Model) renderPlayerBar() string {
 				}
 			}
 		}
-
-		rightPart := styleTime.Render(timeInfo)
-		hHint := styleKeyHint.Render("[h]")
-		lHint := styleKeyHint.Render("[l]")
-		barWidth := innerW - lipgloss.Width(rightPart) - lipgloss.Width(hHint) - lipgloss.Width(lHint) - 5
-		if barWidth < 10 {
-			barWidth = 10
-		}
-		displayPct := 0.0
-		if m.duration > 0 {
-			displayPct = (displayPos / m.duration) * 100.0
-		}
-		bar := renderProgressBar(displayPct, barWidth)
-		progress = lipgloss.JoinHorizontal(lipgloss.Left,
-			hHint, " ",
-			bar,
-			"  ",
-			rightPart, " ",
-			lHint,
-		)
-
-		controls = m.renderControls()
 	}
+
+	// Transport, seek bar and modes share one row — the bar takes
+	// whatever width the clusters leave. Geometry lives in
+	// playerRowLayout, which the mouse reads too.
+	combined := m.playerRowLayout().row
 
 	// Clamp each row to the box's inner width: an overflowing row makes
 	// the whole join wider than the terminal, which wraps and shifts
 	// every mouse hit zone.
 	content := lipgloss.JoinVertical(lipgloss.Left,
 		truncate(nowPlaying, max(1, innerW)),
-		truncate(progress, max(1, innerW)),
-		truncate(controls, max(1, innerW)),
+		truncate(combined, max(1, innerW)),
 	)
 
 	boxStyle := stylePlayerBox
@@ -1800,116 +1777,6 @@ func (m Model) renderPlayerBar() string {
 	}
 
 	return boxStyle.Render(content)
-}
-
-// renderControls renders the bottom row of the player bar.
-//
-// Layout (asymmetric, single separator):
-//
-//	[p] ⏮ Prev  [space] ▶ Play  [n] ⏭ Next  │  [s] SHFL  [r] REPT  [-] ▰▰▰▰▰ 80% [+]
-//	           ↑ transport (left)            hairline  ↑ modes + volume (right, flush-right)
-//
-// The transport cluster is a unit of *action* (what to do next).
-// The right cluster is a unit of *state* (shuffle / repeat / volume).
-// One hairline rule divides them; the right cluster is flush against
-// the right edge of the bar. Negative space is *intentional padding*
-// between two groups, not evenly-distributed filler, so wide terminals
-// don't turn the bar into three stranded clusters.
-//
-// Mode labels briefly flash bright for ~250ms after `s` or `r` is
-// pressed, so the keypress feels acknowledged in the bar itself,
-// not only in the status row.
-func (m Model) renderControls() string {
-	// ── Transport cluster (left, no leading separator) ─────────
-	pHint := styleKeyHint.Render("[p]")
-	prevLabel := styleCtrlBtn.Render("⏮ Prev")
-	spaceHint := styleKeyHint.Render("[space]")
-	var playLabel string
-	if m.playerState == player.StatePlaying {
-		playLabel = styleCtrlBtnActive.Render("⏸ Pause")
-	} else {
-		playLabel = styleCtrlBtn.Render("▶ Play")
-	}
-	nHint := styleKeyHint.Render("[n]")
-	nextLabel := styleCtrlBtn.Render("⏭ Next")
-	transport := lipgloss.JoinHorizontal(lipgloss.Left,
-		pHint, " ", prevLabel, "  ",
-		spaceHint, " ", playLabel, "  ",
-		nHint, " ", nextLabel,
-	)
-
-	// ── Right cluster: modes + volume (tight unit) ─────────────
-	flashActive := time.Now().Before(m.modeFlashUntil)
-
-	var shuffleStyle lipgloss.Style
-	if flashActive && m.modeFlashTarget == "shuffle" {
-		shuffleStyle = styleModeFlash
-	} else if m.queue.IsShuffle() {
-		shuffleStyle = styleModeActive
-	} else {
-		shuffleStyle = styleModeInactive
-	}
-	sHint := styleKeyHint.Render("[s]")
-	shuffleLabel := sHint + " " + shuffleStyle.Render("🔀 SHFL")
-
-	// Repeat text follows the same state→label mapping as before, but
-	// style selection routes through the flash override.
-	var repeatText string
-	var repeatOn bool
-	switch {
-	case m.queue.IsRepeat():
-		repeatText, repeatOn = "🔁 ONE", true
-	case m.queue.IsRepeatAll():
-		repeatText, repeatOn = "🔁 ALL", true
-	default:
-		repeatText, repeatOn = "🔁 OFF", false
-	}
-	var repeatStyle lipgloss.Style
-	if flashActive && m.modeFlashTarget == "repeat" {
-		repeatStyle = styleModeFlash
-	} else if repeatOn {
-		repeatStyle = styleModeActive
-	} else {
-		repeatStyle = styleModeInactive
-	}
-	rHint := styleKeyHint.Render("[r]")
-	repeatLabel := rHint + " " + repeatStyle.Render(repeatText)
-
-	volBar := renderVolumeBar(m.volume, 8)
-	volDownHint := styleKeyHint.Render("[-]")
-	volUpHint := styleKeyHint.Render("[+]")
-	volLabel := volDownHint + " " + volBar + styleVolumeLabel.Render(fmt.Sprintf(" %d%%", m.volume)) + " " + volUpHint
-
-	right := lipgloss.JoinHorizontal(lipgloss.Left,
-		shuffleLabel, "  ", repeatLabel, "  ", volLabel,
-	)
-
-	// ── Asymmetric composition: left flush-left, right flush-right,
-	// one hairline separator centered in the gap ────────────────
-	contentW := m.width - 6 // box width(m.width) - doubleBorder(2) - padding(4)
-	if contentW < 20 {
-		contentW = 20
-	}
-
-	sep := styleCtrlSep.Render("│")
-	transportW := lipgloss.Width(transport)
-	rightW := lipgloss.Width(right)
-	sepW := lipgloss.Width(sep)
-
-	gap := contentW - transportW - rightW - sepW
-	if gap < 2 {
-		gap = 2
-	}
-	leftPad := gap / 2
-	rightPad := gap - leftPad
-
-	return lipgloss.JoinHorizontal(lipgloss.Left,
-		transport,
-		strings.Repeat(" ", leftPad),
-		sep,
-		strings.Repeat(" ", rightPad),
-		right,
-	)
 }
 
 // ─── Help Bar ──────────────────────────────────────────────────────

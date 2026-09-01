@@ -1,0 +1,176 @@
+package tui
+
+import (
+	"fmt"
+	"strings"
+	"time"
+
+	"ytmgo/internal/player"
+
+	"github.com/charmbracelet/lipgloss"
+)
+
+// playerRowLayout is the combined progress-and-controls row of the
+// player bar, together with its click geometry. The view renders .row
+// and the mouse reads the zone offsets; both come from the same builder
+// so they cannot disagree — the old separate rows kept two copies of
+// this arithmetic in sync by hand.
+type playerRowLayout struct {
+	row string
+
+	// Transport zones: absolute terminal x, exclusive ends.
+	transportStart, prevEnd, playEnd, transportEnd int
+
+	// Seek bar.
+	barStart, barWidth int
+
+	// Right cluster: modes and volume.
+	rightStart, shuffleEnd, repeatStart, repeatEnd int
+	volStart, volDownEnd, volUpStart, volEnd       int
+
+	// compact drops the button words, the [h]/[l] hints and the volume
+	// bar so the row still fits a narrow terminal.
+	compact bool
+}
+
+// playerRowLayout builds the combined row for the current model state.
+func (m Model) playerRowLayout() playerRowLayout {
+	const contentStartX = 3 // double border (1) + left padding (2)
+	innerW := m.width - 6
+	l := playerRowLayout{compact: innerW < 110, transportStart: contentStartX}
+
+	// ── Transport cluster ──
+	pHint := styleKeyHint.Render("[p]")
+	spaceHint := styleKeyHint.Render("[space]")
+	nHint := styleKeyHint.Render("[n]")
+	playing := m.playerState == player.StatePlaying
+	prevTxt, nextTxt, playTxt := "⏮ Prev", "⏭ Next", "▶ Play"
+	if playing {
+		playTxt = "⏸ Pause"
+	}
+	if l.compact {
+		prevTxt, nextTxt, playTxt = "⏮", "⏭", "▶"
+		if playing {
+			playTxt = "⏸"
+		}
+	}
+	playStyle := styleCtrlBtn
+	if playing {
+		playStyle = styleCtrlBtnActive
+	}
+	prevGroup := pHint + " " + styleCtrlBtn.Render(prevTxt)
+	playGroup := spaceHint + " " + playStyle.Render(playTxt)
+	nextGroup := nHint + " " + styleCtrlBtn.Render(nextTxt)
+	l.prevEnd = contentStartX + lipgloss.Width(prevGroup)
+	l.playEnd = l.prevEnd + 2 + lipgloss.Width(playGroup)
+	l.transportEnd = l.playEnd + 2 + lipgloss.Width(nextGroup)
+	transport := prevGroup + "  " + playGroup + "  " + nextGroup
+
+	// ── Right cluster ──
+	flashActive := time.Now().Before(m.modeFlashUntil)
+	shuffleStyle := styleModeInactive
+	if flashActive && m.modeFlashTarget == "shuffle" {
+		shuffleStyle = styleModeFlash
+	} else if m.queue.IsShuffle() {
+		shuffleStyle = styleModeActive
+	}
+	shuffleTxt := "🔀 SHFL"
+	if l.compact {
+		shuffleTxt = "🔀"
+	}
+	shuffleLabel := styleKeyHint.Render("[s]") + " " + shuffleStyle.Render(shuffleTxt)
+
+	var repeatTxt string
+	var repeatOn bool
+	switch {
+	case m.queue.IsRepeat():
+		repeatTxt, repeatOn = "🔁 ONE", true
+	case m.queue.IsRepeatAll():
+		repeatTxt, repeatOn = "🔁 ALL", true
+	default:
+		repeatTxt, repeatOn = "🔁 OFF", false
+	}
+	repeatStyle := styleModeInactive
+	if flashActive && m.modeFlashTarget == "repeat" {
+		repeatStyle = styleModeFlash
+	} else if repeatOn {
+		repeatStyle = styleModeActive
+	}
+	repeatLabel := styleKeyHint.Render("[r]") + " " + repeatStyle.Render(repeatTxt)
+
+	volDown := styleKeyHint.Render("[-]")
+	volUp := styleKeyHint.Render("[+]")
+	volMid := fmt.Sprintf("%d%%", m.volume)
+	if !l.compact {
+		volMid = renderVolumeBar(m.volume, 8) + " " + volMid
+	}
+	volLabel := volDown + " " + volMid + " " + volUp
+	right := shuffleLabel + "  " + repeatLabel + "  " + volLabel
+	rightW := lipgloss.Width(right)
+
+	// ── Time and seek bar fill whatever is left ──
+	timeInfo := ""
+	if m.duration > 0 && m.playerState != player.StateStopped {
+		displayPos := m.displayPosition()
+		cur := formatTime(displayPos)
+		tot := formatTime(m.duration)
+		if len(cur) < len(tot) {
+			cur = strings.Repeat(" ", len(tot)-len(cur)) + cur
+		}
+		sep := " / "
+		if l.compact {
+			sep = "/" // every cell counts at 80 columns
+		}
+		timeInfo = cur + sep + tot
+	}
+	hPart, lPart := "", ""
+	if !l.compact {
+		hPart = styleKeyHint.Render("[h]") + " "
+		lPart = " " + styleKeyHint.Render("[l]")
+	}
+	transportW := l.transportEnd - contentStartX
+	fixed := transportW + 2 + lipgloss.Width(hPart) + lipgloss.Width(lPart) + rightW + 2
+	if timeInfo != "" {
+		fixed += lipgloss.Width(timeInfo) + 1
+	}
+	// The bar takes what the clusters leave. It also absorbs any
+	// overflow: everything else on the row is fixed-width, so a row
+	// wider than the box could only push the right cluster's click
+	// zones past the border.
+	l.barWidth = innerW - fixed
+	if l.barWidth < 3 {
+		l.barWidth = 3
+	}
+	l.barStart = l.transportEnd + 2 + lipgloss.Width(hPart)
+
+	displayPct := 0.0
+	if m.duration > 0 {
+		displayPct = (m.displayPosition() / m.duration) * 100.0
+	}
+	bar := renderProgressBar(displayPct, l.barWidth)
+
+	mid := hPart + bar
+	if timeInfo != "" {
+		mid += " " + styleTime.Render(timeInfo)
+	}
+	mid += lPart
+
+	// Right cluster flush against the right edge.
+	l.rightStart = contentStartX + innerW - rightW
+	used := transportW + 2 + lipgloss.Width(mid)
+	spacer := innerW - used - rightW
+	if spacer < 1 {
+		spacer = 1
+		l.rightStart = contentStartX + used + 1
+	}
+	l.row = transport + "  " + mid + strings.Repeat(" ", spacer) + right
+
+	l.shuffleEnd = l.rightStart + lipgloss.Width(shuffleLabel)
+	l.repeatStart = l.shuffleEnd + 2
+	l.repeatEnd = l.repeatStart + lipgloss.Width(repeatLabel)
+	l.volStart = l.repeatEnd + 2
+	l.volEnd = l.volStart + lipgloss.Width(volLabel)
+	l.volDownEnd = l.volStart + lipgloss.Width(volDown)
+	l.volUpStart = l.volEnd - lipgloss.Width(volUp)
+	return l
+}

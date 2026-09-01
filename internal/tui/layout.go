@@ -44,12 +44,14 @@ func openInOS(path string) error {
 }
 
 // panelHeight returns how many terminal lines the panel area occupies.
-// Total layout: header(1) + panels(h) + player(5) + status(1) + help(1).
+// Total layout: header(1) + panels(h) + player(4) + status(1) + help(1).
 // lipgloss Height(N) renders N+2 lines (border adds 2), so panels(h) actually
 // consumes h+2 lines. To keep the total exactly m.height, we subtract 2.
+// The player box is four lines: border, title, one combined
+// progress-and-controls row, border.
 func (m Model) panelHeight() int {
-	// Fixed overhead: header(1) + status(1) + player(5) + help(1) + border(2) = 10
-	overhead := 10
+	// Fixed overhead: header(1) + status(1) + player(4) + help(1) + border(2) = 9
+	overhead := 9
 	h := m.height - overhead
 	if h < 1 {
 		h = 1
@@ -70,6 +72,10 @@ func (m Model) visibleItems() int {
 	if npH > 0 {
 		h = resultsH
 	}
+	// An open album spends rows on its header strip before the list.
+	if m.activePage == PageStream && m.openAlbum != nil {
+		h -= albumStripRows
+	}
 	n := (h - 1) / 2
 	if n < 1 {
 		n = 1
@@ -77,36 +83,45 @@ func (m Model) visibleItems() int {
 	return n
 }
 
-// rightPanelSplit returns the content heights of the queue (top) and
-// downloads (bottom) sub-panels of the right column. Each sub-panel
-// renders as title (1) + content (N) + borders (2) = N + 3 lines. When
-// there are no download jobs the downloads panel collapses to a single
-// content line so the queue gets the space. renderPanels and the mouse
-// hit-testing both derive from this, so they can never disagree.
-func (m Model) rightPanelSplit() (queueContentH, downloadsContentH int) {
-	if m.downloadsHidden {
-		// Hidden: the queue takes the whole column. These are content
-		// rows — the box adds a title line and two borders — matching
-		// what a single full-height panel renders elsewhere.
+// rightPanelSplit divides the right column between the queue (top) and
+// the lyrics pane (bottom). Lyrics take the slot the downloads panel
+// used to hold — downloads live on their own page now — and the queue
+// keeps the whole column while the lyrics are off. renderPanels and the
+// mouse hit-testing both derive from this, so they can never disagree.
+func (m Model) rightPanelSplit() (queueContentH, lyricsContentH int) {
+	if !m.lyricsVisible() {
 		return m.panelHeight() - 3, 0
 	}
 	total := m.panelHeight() - 6
-	if total < 0 {
-		total = 0
+	lyricsContentH = total * 45 / 100
+	if lyricsContentH < lyricsMinRows {
+		lyricsContentH = lyricsMinRows
 	}
-	hasDownloads := m.downloader != nil && len(m.downloader.Jobs()) > 0
-	if !hasDownloads {
-		// The "No downloads" empty state renders 2 lines (top padding +
-		// text); anything smaller overflows the box and shifts every row
-		// below it, breaking mouse hit-testing.
-		downloadsContentH = 2
-		if downloadsContentH > total {
-			downloadsContentH = total
-		}
-		return total - downloadsContentH, downloadsContentH
+	if total-lyricsContentH < queueMinRows {
+		lyricsContentH = total - queueMinRows
 	}
-	queueContentH = total / 2
-	return queueContentH, total - queueContentH
+	return total - lyricsContentH, lyricsContentH
+}
+
+// albumStripRows is the header strip above an open album's tracklist:
+// title, stats, and a separating blank line.
+const albumStripRows = 3
+
+const (
+	lyricsMinRows = 6
+	queueMinRows  = 5
+)
+
+// lyricsFits reports whether the right column can hold both the queue
+// and a usable lyrics pane.
+func (m Model) lyricsFits() bool {
+	return m.panelHeight()-6 >= lyricsMinRows+queueMinRows
+}
+
+// lyricsVisible mirrors npVisible: the user's toggle, gated by the page
+// and by the terminal being tall enough.
+func (m Model) lyricsVisible() bool {
+	return m.lyricsOn && m.activePage != PageSettings && m.lyricsFits()
 }
 
 // Minimum content rows each half of the left column needs to stay
@@ -367,6 +382,11 @@ func (m *Model) switchPage(page Page) {
 		m.activePanel = PanelSearch
 		m.favCursor = 0
 		m.favOffset = 0
+		m.settingsEditField = false
+	case PageDownloads:
+		m.searchInput.SetValue("")
+		m.searchInput.Placeholder = ""
+		m.activePanel = PanelSearch
 		m.settingsEditField = false
 	case PageLibrary:
 		m.searchInput.SetValue("")

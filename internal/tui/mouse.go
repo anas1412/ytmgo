@@ -140,28 +140,24 @@ func (m Model) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// overLyricsPane reports whether (x, y) sits over the lyrics column of
-// the now-playing panel. Geometry mirrors renderPanels: the left
-// column starts at y=1, the results box renders resultsH content rows
-// inside 3 lines of chrome, and the now-playing box follows with npH
-// content rows inside 2 border lines.
+// overLyricsPane reports whether (x, y) sits over the lyrics pane at
+// the bottom of the right column. Geometry mirrors renderPanels: the
+// column starts at y=1, the queue box renders queueContentH content
+// rows inside 3 lines of chrome, and the lyrics box follows.
 func (m Model) overLyricsPane(x, y int) bool {
-	if !m.lyricsOn || !m.npVisible() {
+	queueContentH, lyricsContentH := m.rightPanelSplit()
+	if lyricsContentH <= 0 {
 		return false
 	}
-	resultsH, npH := m.leftPanelSplit()
-	if npH <= 0 {
-		return false
-	}
-	npTop := 1 + resultsH + 3
-	return x < m.width/2 && y >= npTop && y < npTop+npH+2
+	top := 1 + queueContentH + 3
+	return x >= m.width/2 && y >= top && y < top+lyricsContentH+2
 }
 
 // scrollLyrics scrolls the lyrics pane by delta rows, releasing the
 // auto-follow until the next track starts.
 func (m *Model) scrollLyrics(delta int) {
-	_, npH := m.leftPanelSplit()
-	maxOffset := max(0, len(m.lyricLines)-npH)
+	_, lyricsContentH := m.rightPanelSplit()
+	maxOffset := max(0, len(m.lyricLines)-lyricsContentH)
 	m.lyricsFollow = false
 	m.lyricsOffset = max(0, min(m.lyricsOffset+delta, maxOffset))
 }
@@ -182,6 +178,7 @@ func (m Model) handleClick(x, y int) (Model, tea.Cmd) {
 			{"3", "Library"},
 			{"4", "History"},
 			{"5", "Settings"},
+			{"6", "Downloads"},
 		}
 		var renderedTabs []string
 		var tabWidths []int
@@ -272,16 +269,9 @@ func (m Model) handleClick(x, y int) (Model, tea.Cmd) {
 			return m, nil
 		}
 
-		// ── Progress bar row (click to seek) ──
-		progressY := panelsEnd + 3
-		if y == progressY && m.width > 0 {
-			return m.handleProgressClick(x)
-		}
-
-		// ── Player controls row ──
-		controlsY := panelsEnd + 4
-		if y == controlsY && m.width > 0 {
-			return m.handleControlsClick(x)
+		// ── Player row (transport + seek + modes + volume) ──
+		if y == panelsEnd+3 && m.width > 0 {
+			return m.handlePlayerRowClick(x)
 		}
 
 		return m, nil
@@ -387,156 +377,85 @@ func (m Model) handleClick(x, y int) (Model, tea.Cmd) {
 		return m, nil
 	}
 
-	// ── Progress bar row (click to seek) ──
-	progressY := panelsEnd + 3
-	if y == progressY && m.width > 0 {
-		return m.handleProgressClick(x)
-	}
-
-	// ── Player controls row ──
+	// ── Player row (transport + seek bar + modes + volume) ──
 	// y layout: header(1) + panels(panelHeight) + status(1)
-	//   + playerBar: border(1) + nowPlaying(1) + progress(1) + controls(1) + border(1)
+	//   + playerBar: border(1) + nowPlaying(1) + combined row(1) + border(1)
 	//   + help(1)
 	// Status is always rendered, so player starts at panelsEnd+1.
-	controlsY := panelsEnd + 4
-	if y == controlsY && m.width > 0 {
-		return m.handleControlsClick(x)
+	playerRowY := panelsEnd + 3
+	if y == playerRowY && m.width > 0 {
+		return m.handlePlayerRowClick(x)
 	}
 
 	return m, nil
 }
 
-// handleControlsClick maps a click on the controls row (transport + modes + volume).
-// Hit zones are based on the exact rendered character positions from renderControls,
-// not approximated tolerances — 1:1 accurate like the tab click handler.
-func (m Model) handleControlsClick(x int) (Model, tea.Cmd) {
-	// ── Transport cluster (left) ──
-	// Layout rendered by renderControls:
-	//   transport = pHint + " " + prevLabel + "  " + spaceHint + " " + playLabel + "  " + nHint + " " + nextLabel
-	//     text:  [p] ⏮ Prev  [space] ▶ Play  [n] ⏭ Next
-	//                ←prev→     ←─play/pause─→     ←next→
-	//
-	// Player box has DoubleBorder (1 char left border) + PaddingLeft(2).
-	// Content starts at terminal column 3.
-	contentStartX := 3
+// handlePlayerRowClick maps a click on the combined player row. The
+// zones come from playerRowLayout — the same builder the view renders
+// from — so a click lands exactly where the pixel says it should.
+func (m Model) handlePlayerRowClick(x int) (Model, tea.Cmd) {
+	l := m.playerRowLayout()
 
-	// Render transport components to measure zone boundaries dynamically.
-	pHint := styleKeyHint.Render("[p]")
-	prevLabel := styleCtrlBtn.Render("⏮ Prev")
-	spaceHint := styleKeyHint.Render("[space]")
-	// Use "▶ Play" (7 chars) for zone calculation; "⏸ Pause" (8 chars) is
-	// close enough — the 1-char difference doesn't cross group boundaries.
-	playLabel := styleCtrlBtn.Render("▶ Play")
-	nHint := styleKeyHint.Render("[n]")
-	nextLabel := styleCtrlBtn.Render("⏭ Next")
-
-	prevGroupW := lipgloss.Width(pHint + " " + prevLabel)
-	playGroupW := lipgloss.Width(spaceHint + " " + playLabel)
-	nextGroupW := lipgloss.Width(nHint + " " + nextLabel)
-
-	prevEnd := contentStartX + prevGroupW // exclusive
-	playEnd := prevEnd + 2 + playGroupW   // +2 for "  " between groups
-
-	// ── Right cluster (modes + volume) ──
-	sHint := styleKeyHint.Render("[s]")
-	rHint := styleKeyHint.Render("[r]")
-	volDownHint := styleKeyHint.Render("[-]")
-	volUpHint := styleKeyHint.Render("[+]")
-	volBar := renderVolumeBar(m.volume, 8)
-
-	var repeatText string
-	switch {
-	case m.queue.IsRepeat():
-		repeatText = "🔁 ONE"
-	case m.queue.IsRepeatAll():
-		repeatText = "🔁 ALL"
-	default:
-		repeatText = "🔁 OFF"
-	}
-
-	shuffleLabel := sHint + " " + "🔀 SHFL"  // "[s] 🔀 SHFL"
-	repeatLabel := rHint + " " + repeatText // "[r] 🔁 ..."
-	volLabel := volDownHint + " " + volBar + " " + fmt.Sprintf("%d%%", m.volume) + " " + volUpHint
-	right := lipgloss.JoinHorizontal(lipgloss.Left, shuffleLabel, "  ", repeatLabel, "  ", volLabel)
-	rightW := lipgloss.Width(right)
-
-	transportW := prevGroupW + 2 + playGroupW + 2 + nextGroupW
-	contentW := m.width - 6 // from renderControls
-	sepW := 1               // "│"
-	gap := contentW - transportW - rightW - sepW
-	if gap < 2 {
-		gap = 2
-	}
-	rightStartX := contentStartX + transportW + gap + sepW
-
-	// ── Transport clicks (queue required) ──
-	if m.queue.Len() > 0 && x < rightStartX {
+	// ── Transport ──
+	if x >= l.transportStart && x < l.transportEnd {
 		switch {
-		case x >= contentStartX && x < prevEnd: // prev zone
-			return m, m.prevTrack()
-
-		case x >= prevEnd && x < playEnd: // play/pause zone
+		case x < l.prevEnd:
+			if m.queue.Len() > 0 {
+				return m, m.prevTrack()
+			}
+		case x < l.playEnd:
 			return m, m.togglePlayPause()
-
-		default: // next zone: x >= playEnd && x < rightStartX
-			return m, m.nextTrack()
+		default:
+			if m.queue.Len() > 0 {
+				return m, m.nextTrack()
+			}
 		}
+		return m, nil
 	}
 
-	// Empty queue: only play/pause still works (via the player directly).
-	if m.queue.Len() == 0 && x >= prevEnd && x < playEnd {
-		return m, m.togglePlayPause()
+	// ── Seek bar ──
+	if x >= l.barStart && x < l.barStart+l.barWidth {
+		if m.playerState == player.StateStopped || m.duration <= 0 {
+			return m, nil
+		}
+		pct := float64(x-l.barStart) / float64(l.barWidth)
+		targetPos := pct * m.duration
+		delta := targetPos - m.position
+		if m.player != nil {
+			m.player.Seek(delta)
+		}
+		// Optimistically update so the bar jumps immediately — the next
+		// PositionMsg from the player will correct any discrepancy.
+		m.position = targetPos
+		m.lastPosition = targetPos
+		m.lastPositionAt = time.Now()
+		return m, nil
 	}
 
-	// ── Right cluster clicks ──
-	if x >= rightStartX {
-		shuffleW := lipgloss.Width(shuffleLabel)
-		repeatW := lipgloss.Width(repeatLabel)
-		volLabelW := lipgloss.Width(volLabel)
-
-		shuffleEnd := rightStartX + shuffleW // exclusive
-		repeatStart := shuffleEnd + 2        // after "  "
-		repeatEnd := repeatStart + repeatW   // exclusive
-		volStart := repeatEnd + 2            // after "  "
-		volEnd := volStart + volLabelW       // exclusive
-
+	// ── Modes and volume ──
+	if x >= l.rightStart && x < l.volEnd {
 		switch {
-		case x < shuffleEnd:
+		case x < l.shuffleEnd:
 			return m, m.toggleShuffleAction()
-
-		case x >= repeatStart && x < repeatEnd:
+		case x >= l.repeatStart && x < l.repeatEnd:
 			return m, m.cycleRepeatAction()
-
-		case x >= volStart && x < volEnd:
-			// ── Volume sub-regions ──
-			volDownW := lipgloss.Width(volDownHint) // "[-]" = 3
-			volUpW := lipgloss.Width(volUpHint)     // "[+]" = 3
-			volDownEnd := volStart + volDownW       // exclusive end of "[-]"
-			volUpStart := volEnd - volUpW           // start of "[+]"
-
-			switch {
-			case x < volDownEnd:
-				cmd := m.changeVolume(-5)
+		case x >= l.volStart && x < l.volDownEnd:
+			cmd := m.changeVolume(-5)
+			m.setStatus(fmt.Sprintf("Volume: %d%%", m.volume))
+			return m, cmd
+		case x >= l.volUpStart && x < l.volEnd:
+			cmd := m.changeVolume(+5)
+			m.setStatus(fmt.Sprintf("Volume: %d%%", m.volume))
+			return m, cmd
+		case !l.compact && x >= l.volDownEnd+1 && x < l.volUpStart-1:
+			// Click on the volume bar — set proportionally.
+			barStart := l.volDownEnd + 1
+			barW := (l.volUpStart - 1) - barStart
+			if barW > 0 {
+				pct := float64(x-barStart) / float64(barW) * 100.0
+				cmd := m.setVolumeTo(int(pct))
 				m.setStatus(fmt.Sprintf("Volume: %d%%", m.volume))
 				return m, cmd
-
-			case x >= volUpStart:
-				cmd := m.changeVolume(+5)
-				m.setStatus(fmt.Sprintf("Volume: %d%%", m.volume))
-				return m, cmd
-
-			default:
-				// Click on the volume bar or percentage — set proportionally.
-				barStart := volStart + volDownW + 1 // after "[-] "
-				barEnd := volEnd - volUpW - 1       // before " [+]"
-				barWidth := barEnd - barStart
-				if barWidth > 0 {
-					pct := float64(x-barStart) / float64(barWidth) * 100.0
-					cmd := m.setVolumeTo(int(pct))
-					m.setStatus(fmt.Sprintf("Volume: %d%%", m.volume))
-					return m, cmd
-				}
-				return m, nil
 			}
 		}
 	}
@@ -550,58 +469,4 @@ func (m Model) handleControlsClick(x int) (Model, tea.Cmd) {
 func (m Model) activateFocusedItem() (Model, tea.Cmd) {
 	cmd := m.activateSelection()
 	return m, cmd
-}
-
-// handleProgressClick maps a click on the progress bar row to a seek position.
-// The bar layout matches renderPlayerBar: [h] ▓▓▓▓░░░░  MM:SS / M:SS [l]
-func (m Model) handleProgressClick(x int) (Model, tea.Cmd) {
-	if m.playerState == player.StateStopped || m.duration <= 0 {
-		return m, nil
-	}
-
-	innerW := m.width - 6
-	contentStartX := 3 // double border (1) + left padding (2)
-
-	hHint := styleKeyHint.Render("[h]")
-	lHint := styleKeyHint.Render("[l]")
-
-	// Replicate timeInfo from renderPlayerBar to measure rightPart width.
-	currentStr := formatTime(m.position)
-	totalStr := formatDuration(int(m.duration))
-	if len(currentStr) < len(totalStr) {
-		currentStr = strings.Repeat(" ", len(totalStr)-len(currentStr)) + currentStr
-	}
-	timeInfo := currentStr + " / " + totalStr
-	rightPart := styleTime.Render(timeInfo)
-
-	barWidth := innerW - lipgloss.Width(rightPart) - lipgloss.Width(hHint) - lipgloss.Width(lHint) - 5
-	if barWidth < 10 {
-		barWidth = 10
-	}
-
-	barStartX := contentStartX + lipgloss.Width(hHint) + 1
-	barEndX := barStartX + barWidth
-
-	if x < barStartX || x >= barEndX {
-		return m, nil
-	}
-
-	// Map click position to seek position.
-	relX := x - barStartX
-	pct := float64(relX) / float64(barWidth)
-	targetPos := pct * m.duration
-
-	delta := targetPos - m.position
-	if m.player != nil {
-		m.player.Seek(delta)
-	}
-	// Optimistically update so the bar jumps immediately — the next
-	// PositionMsg from the player will correct any discrepancy.
-	m.position = targetPos
-	m.lastPosition = targetPos
-	m.lastPositionAt = time.Now()
-	m.setStatus(fmt.Sprintf("Seeked to %s", formatTime(targetPos)))
-	m.updatePresence()
-
-	return m, nil
 }

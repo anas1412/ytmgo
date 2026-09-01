@@ -91,7 +91,6 @@ func (m *Model) activateSelection() tea.Cmd {
 				(m.settings.PlaybackMode == settings.PlaybackHybrid && !t.Downloaded) {
 				m.ensureDownloader()
 				m.downloader.Enqueue(t.ID, t.Title, r.Uploader, t.URL, m.downloadDir(), r.CoverURL)
-				m.revealDownloads()
 				cmds = append(cmds, downloadCmd(m.downloader))
 			}
 			return tea.Batch(cmds...)
@@ -150,13 +149,6 @@ func (m *Model) syncNowPlaying(wasVisible bool) tea.Cmd {
 	}
 	m.viz = v
 	return vizFrameCmd(m.viz)
-}
-
-// revealDownloads opens the downloads panel. Called wherever a job is
-// queued: the panel starts hidden, and a download the listener cannot
-// see is worse than a panel they have to dismiss.
-func (m *Model) revealDownloads() {
-	m.downloadsHidden = false
 }
 
 // leaveAlbumView drops any open album preview — tracklist and cover

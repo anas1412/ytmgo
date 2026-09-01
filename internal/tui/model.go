@@ -32,6 +32,7 @@ const (
 	PageLibrary               // 2 — downloaded tracks + download queue
 	PageHistory               // 3 — listening history
 	PageSettings              // 4 — configuration
+	PageDownloads             // 5 — download jobs, full page
 )
 
 // Panel identifies which panel within a page has keyboard focus.
@@ -347,11 +348,6 @@ type Model struct {
 
 	// ── Downloads ──
 	downloader *downloader.Downloader
-	// downloadsHidden collapses the downloads sub-panel so the queue
-	// takes the whole right column. Hidden by default and toggled with
-	// X; queueing a download reveals it again, so a job is never
-	// running somewhere the listener cannot see it.
-	downloadsHidden bool
 
 	// ── MPRIS (media keys / desktop integration) ──
 	mpris *mpris.Service
@@ -488,7 +484,6 @@ func InitialModel() Model {
 
 	return Model{
 		activePage:             PageStream,
-		downloadsHidden:        true,
 		npOn:                   true,
 		activePanel:            PanelSearch,
 		searchInput:            ti,
