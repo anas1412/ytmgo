@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"fmt"
 	"image"
 	"image/color"
 	"strings"
@@ -528,5 +529,66 @@ func TestAlbumArtFollowsTheAlbum(t *testing.T) {
 	}
 	if !strings.Contains(m.View(), coverart.KittyClearID(coverart.AlbumImageID)) {
 		t.Error("the frame after closing does not carry the album-art delete")
+	}
+}
+
+// TestAlbumArtAppearsOnLoad: the frame after the art arrives must place
+// the image and must NOT delete it. The delete escape rides the player
+// bar, which renders after the strip — so a delete scheduled alongside
+// the transmit removed the image the same frame drew, and the art only
+// appeared after something re-sent it (a page switch and back).
+func TestAlbumArtAppearsOnLoad(t *testing.T) {
+	t.Setenv("TMUX", "")
+	t.Setenv("KITTY_WINDOW_ID", "1")
+
+	m := worstCaseModel(t, 150, 40)
+	alb := ytmusic.Album{Title: "Homage", Artist: "Tesla"}
+	m.openAlbum = &alb
+	m.albumTracks = m.results[:5]
+
+	nm, _ := m.Update(AlbumArtLoadedMsg{
+		URL: "https://example/album.jpg",
+		Img: image.NewRGBA(image.Rect(0, 0, 64, 64)),
+		Seq: m.albumSeq,
+	})
+	m = nm.(Model)
+
+	frame := m.View()
+	if !strings.Contains(frame, "i=1338") {
+		t.Fatal("the frame after the art arrived carries no album-art escape")
+	}
+	if strings.Contains(frame, coverart.KittyClearID(coverart.AlbumImageID)) {
+		t.Error("the same frame deletes the image it just placed")
+	}
+}
+
+// TestAlbumClickMatchesRow: the header strip shifts the tracklist down
+// by its rows, and the click math has to shift with it — without the
+// correction every click in an open album landed a row and a half off.
+func TestAlbumClickMatchesRow(t *testing.T) {
+	m := worstCaseModel(t, 150, 40)
+	alb := ytmusic.Album{Title: "Homage", Artist: "Tesla"}
+	m.openAlbum = &alb
+	m.albumTracks = m.results[:10]
+	m.searchCursor, m.searchOffset = 0, 0
+
+	// Find where each numbered row actually renders, then click it.
+	lines := strings.Split(m.View(), "\n")
+	for want := 0; want < 3; want++ {
+		marker := fmt.Sprintf("%02d. ", want+1)
+		row := -1
+		for i, l := range lines {
+			if strings.Contains(l, marker) {
+				row = i
+				break
+			}
+		}
+		if row < 0 {
+			t.Fatalf("track %s not on screen", marker)
+		}
+		nm, _ := m.handleClick(10, row)
+		if nm.searchCursor != want {
+			t.Errorf("click on rendered row of track %d selected %d", want+1, nm.searchCursor)
+		}
 	}
 }

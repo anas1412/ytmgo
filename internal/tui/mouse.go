@@ -328,6 +328,11 @@ func (m Model) handleClick(x, y int) (Model, tea.Cmd) {
 				}
 				m.libraryCursor = idx
 			default:
+				// An open album renders its header strip above the
+				// list, so the rows are shifted down by that much.
+				if m.openAlbum != nil {
+					idx = (y - clickItemOffsetY - albumStripRows) / clickLinesPerItem
+				}
 				idx += m.searchOffset
 				// Clamp against the active list (results, albums, or an
 				// open album's tracks), not len(m.results).

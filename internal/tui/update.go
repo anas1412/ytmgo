@@ -263,8 +263,12 @@ func (m Model) dispatch(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.albumArtImg = msg.Img
 		m.albumArtURL = msg.URL
-		// Replace whatever album art is resident: delete then transmit.
-		m.albumArtClearN = coverSendFrames
+		// Transmit only — no delete. Re-transmitting under the same id
+		// replaces any resident image, and the delete escape rides the
+		// player bar, which renders *after* the strip in the frame: a
+		// delete scheduled here lands right behind the placement and
+		// removes the image the same frame draws, leaving the strip
+		// blank until something re-sent it.
 		m.albumArtSendN = coverSendFrames
 		return m, nil
 
