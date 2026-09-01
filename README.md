@@ -105,6 +105,14 @@ System dependencies (mpv, yt-dlp, ffmpeg) are **not** touched — they may be us
 
 ![ytmgo TUI screenshot](ytmgo.png)
 
+Album preview, live spectrum, and synced lyrics — in the default palette above,
+or one of the nine built-in themes:
+
+<p align="center">
+  <img src="screenshot-catppuccin.png" alt="ytmgo in the catppuccin theme" width="49%">
+  <img src="screenshot-nord.png" alt="ytmgo in the nord theme" width="49%">
+</p>
+
 ---
 
 ## Prerequisites
