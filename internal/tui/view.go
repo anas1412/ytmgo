@@ -314,7 +314,14 @@ func (m Model) renderSettingsPanels() string {
 
 func (m Model) renderHeader() string {
 	// Logo
-	logo := styleLogo.Render("♫ ytmgo")
+	// A wordmark, not an icon: at terminal font sizes the note glyph
+	// that used to lead this read as a rendering artifact rather than a
+	// mark. The accent bar carries the brand instead — a block, so it
+	// is the same width in every terminal, unlike the music, triangle
+	// and circle glyphs, which are East-Asian Ambiguous and double up
+	// wherever a terminal is configured for CJK.
+	logo := lipgloss.NewStyle().Foreground(colorAccent2).Render("▌") +
+		styleLogo.Render("ytmgo")
 
 	// Search input.
 	//
