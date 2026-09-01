@@ -76,7 +76,7 @@ Comment=YouTube Music from the Terminal
 Exec=ytmgo
 Icon=ytmgo
 Terminal=true
-Categories=Audio;Music;Player;
+Categories=AudioVideo;Audio;Music;Player;
 EOF
 }
 PKGBUILD_EOF

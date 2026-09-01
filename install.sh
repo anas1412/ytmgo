@@ -183,13 +183,72 @@ mkdir -p "$INSTALL_DIR"
 install -m 0755 "$tmp/$BINARY" "$INSTALL_DIR/$BINARY"
 success "Installed ${BINARY} ${tag} → ${INSTALL_DIR}/${BINARY}"
 
-# ─── PATH nudge ─────────────────────────────────────────────────────
+# ─── Desktop entry ──────────────────────────────────────────────────
+# The AUR package ships one; everyone else got a bare binary and no
+# launcher entry. Installed to the same prefix as the binary, so a
+# --user install lands in ~/.local/share and a root install system-wide.
+if [ "$os" = "Linux" ]; then
+  if [ "$INSTALL_DIR" = "/usr/local/bin" ] || [ "$INSTALL_DIR" = "/usr/bin" ]; then
+    DATA_DIR="/usr/local/share"
+  else
+    DATA_DIR="${XDG_DATA_HOME:-$HOME/.local/share}"
+  fi
+  app_dir="$DATA_DIR/applications"
+  icon_dir="$DATA_DIR/icons/hicolor/256x256/apps"
+  if mkdir -p "$app_dir" "$icon_dir" 2>/dev/null; then
+    icon_url="https://raw.githubusercontent.com/${REPO}/${tag}/ytmgo-icon.png"
+    if curl -fsSL -o "$icon_dir/ytmgo.png" "$icon_url" 2>/dev/null; then
+      icon_line="Icon=ytmgo"
+    else
+      # No icon is not a reason to skip the launcher entry.
+      rm -f "$icon_dir/ytmgo.png"
+      icon_line="Icon=multimedia-audio-player"
+    fi
+    cat > "$app_dir/ytmgo.desktop" <<DESKTOP_EOF
+[Desktop Entry]
+Type=Application
+Name=ytmgo
+Comment=YouTube Music from the Terminal
+Exec=$INSTALL_DIR/$BINARY
+$icon_line
+Terminal=true
+Categories=AudioVideo;Audio;Music;Player;
+DESKTOP_EOF
+    chmod 0644 "$app_dir/ytmgo.desktop"
+    # Mint/GNOME cache launcher entries; without this the item can take
+    # a re-login to appear.
+    command -v update-desktop-database >/dev/null 2>&1 &&
+      update-desktop-database "$app_dir" >/dev/null 2>&1 || true
+    success "Desktop entry → ${app_dir}/ytmgo.desktop"
+  fi
+fi
+
+# ─── PATH ───────────────────────────────────────────────────────────
+# ~/.local/bin is the usual case on Debian/Ubuntu/Mint, where ~/.profile
+# adds it to PATH *only if it already existed at login*. Installing
+# creates it, so a first install leaves the command missing until the
+# next login — which reads as "installed, but command not found". Wire
+# it into the shell rc files so a new terminal just works, and tell the
+# user how to fix the one they are standing in.
 case ":$PATH:" in
   *":$INSTALL_DIR:"*) ;;
   *)
-    warn "$INSTALL_DIR is not on your PATH."
-    printf '   Add this to your ~/.bashrc (or ~/.zshrc):\n'
-    printf '   %sexport PATH="%s:$PATH"%s\n' "$BOLD" "$INSTALL_DIR" "$RESET"
+    line="export PATH=\"$INSTALL_DIR:\$PATH\""
+    added=""
+    for rc in "$HOME/.bashrc" "$HOME/.zshrc"; do
+      [ -f "$rc" ] || continue
+      grep -qF "$INSTALL_DIR" "$rc" 2>/dev/null && continue
+      printf '\n# added by ytmgo installer\n%s\n' "$line" >> "$rc"
+      added="$added $(basename "$rc")"
+    done
+    if [ -n "$added" ]; then
+      success "Added $INSTALL_DIR to PATH in:$added"
+      printf '   %sNew terminals will find it. For this one:%s\n' "$BOLD" "$RESET"
+    else
+      warn "$INSTALL_DIR is not on your PATH."
+      printf '   Add this to your shell rc file:\n'
+    fi
+    printf '   %s%s%s\n' "$BOLD" "$line" "$RESET"
     ;;
 esac
 

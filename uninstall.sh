@@ -100,6 +100,29 @@ else
   warn "Skipping binary removal."
 fi
 
+# ─── 1b. Remove the desktop entry and icon ──────────────────────────
+# Installed since the launcher entry was added; older installs and the
+# Arch package (which pacman owns) simply have nothing to remove here.
+if ask "Remove the desktop entry and icon?" true; then
+  removed=false
+  for d in "${XDG_DATA_HOME:-$HOME/.local/share}" /usr/local/share; do
+    for f in "$d/applications/ytmgo.desktop" \
+             "$d/icons/hicolor/256x256/apps/ytmgo.png"; do
+      if [ -f "$f" ] && rm -f "$f" 2>/dev/null; then
+        info "Removed $f"
+        removed=true
+      fi
+    done
+    command -v update-desktop-database >/dev/null 2>&1 &&
+      update-desktop-database "$d/applications" >/dev/null 2>&1 || true
+  done
+  if [ "$removed" = true ]; then
+    success "Removed desktop entry"
+  else
+    warn "No desktop entry found"
+  fi
+fi
+
 # ─── 2. Remove config directory (DB with settings/favorites/history) ──
 CONFIG_DIR="$HOME/.config/ytmgo"
 if [ "$KEEP_USER_DATA" = true ]; then
