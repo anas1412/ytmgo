@@ -8,6 +8,7 @@ import (
 	"ytmgo/internal/db"
 	"ytmgo/internal/discordrpc"
 	"ytmgo/internal/downloader"
+	"ytmgo/internal/lyrics"
 	"ytmgo/internal/mpris"
 	"ytmgo/internal/player"
 	"ytmgo/internal/queue"
@@ -111,6 +112,7 @@ type (
 		Album  ytmusic.Album
 		Tracks []search.Result
 		Error  error
+		Seq    int // generation counter; stale responses are skipped
 	}
 
 	// LibraryScanMsg carries the list of downloaded tracks found on disk.
@@ -188,6 +190,14 @@ type (
 		Img image.Image
 		Err error
 	}
+
+	// LyricsLoadedMsg carries a fetched lyrics payload (or why none).
+	LyricsLoadedMsg struct {
+		TrackID string
+		Lyrics  *lyrics.Lyrics // nil = none found
+		Error   error
+		Seq     int // generation counter; stale responses are skipped
+	}
 )
 
 // tickMsg triggers periodic UI updates (progress bar animation).
@@ -242,12 +252,18 @@ type Model struct {
 	// ── Albums (Stream page, toggled with A) ──
 	// The left panel shows exactly one list at a time, so albums reuse
 	// searchCursor/searchOffset rather than carrying their own.
-	albumMode              bool            // search returns albums instead of songs
-	albums                 []ytmusic.Album // album search results (cached across A toggles)
-	albumQuery             string          // query behind m.albums, so toggling back doesn't refetch
-	openAlbum              *ytmusic.Album  // non-nil: showing this album's tracks
-	albumTracks            []search.Result // tracks of openAlbum, as playable results
-	isLoadingAlbum         bool
+	albumMode      bool            // search returns albums instead of songs
+	albums         []ytmusic.Album // album search results (cached across A toggles)
+	albumQuery     string          // query behind m.albums, so toggling back doesn't refetch
+	openAlbum      *ytmusic.Album  // non-nil: showing this album's tracks
+	albumTracks    []search.Result // tracks of openAlbum, as playable results
+	isLoadingAlbum bool
+	albumSeq       int // bumped per AlbumTracks fetch; stale responses dropped
+	// albumCoverURL, when set, takes over the now-playing panel's art
+	// slot for the duration of an album preview: browsing an album
+	// should show that album's cover, not whatever happens to be
+	// playing. Cleared on leaving the album view.
+	albumCoverURL          string
 	showingRecommendations bool
 	// recsLoaded records that a recommendations fetch has come back, so
 	// an empty list can be told apart from one still loading. They are
@@ -360,6 +376,23 @@ type Model struct {
 	// dropped one cannot swallow it.
 	coverSendN  int // frames still carrying the image transmit
 	coverClearN int // frames still carrying the image delete
+
+	// ── Lyrics (y) ──
+	// The lyrics view lives inside the now-playing panel, replacing the
+	// spectrum while lyricsOn is set: art on the left, lines on the
+	// right. lyricsSeq drops stale fetches when tracks change fast;
+	// lyricsTrackID records which track the loaded lines belong to;
+	// lyricsFollow keeps the active (synced) line centred until the
+	// user scrolls the pane themselves.
+	lyricsOn      bool
+	lyricLines    []lyrics.Line
+	lyricsSynced  bool
+	lyricsTrackID string
+	lyricsLoading bool
+	lyricsErr     string
+	lyricsSeq     int
+	lyricsOffset  int
+	lyricsFollow  bool
 
 	// ── Async URL resolution ──
 	// pendingResolve stores the context of an in-flight YouTube URL
@@ -525,6 +558,12 @@ func (m *Model) startTrackPlayback(playURL string, t queue.Track) tea.Cmd {
 	}
 	// Keep the cover panel in step with what is playing.
 	if cmd := m.refreshCoverCmd(); cmd != nil {
+		cmds = append(cmds, cmd)
+	}
+	// Keep the lyrics view in step with what is playing. loadLyricsCmd
+	// does nothing while the lyrics view is off, so nothing is fetched
+	// for a feature the user has never opened.
+	if cmd := m.loadLyricsCmd(t); cmd != nil {
 		cmds = append(cmds, cmd)
 	}
 	// Prefetch the URL for the next track in the queue so playback
@@ -723,25 +762,38 @@ func (m *Model) updateDiscordRPC() {
 	discordrpc.Update(t, m.playerState, m.position)
 }
 
-// refreshCoverCmd loads the current track's art when the cover panel is
-// showing and the art on screen belongs to a different track. Returns
-// nil when there is nothing to do.
+// desiredCoverURL returns what the now-playing panel's art slot should
+// show right now. While an album is open for preview its own cover
+// takes the slot; otherwise it is the playing track's art.
+func (m Model) desiredCoverURL() string {
+	if m.albumCoverURL != "" {
+		return m.albumCoverURL
+	}
+	if t, ok := m.queue.Current(); ok {
+		return t.CoverURL
+	}
+	return ""
+}
+
+// refreshCoverCmd loads the art for desiredCoverURL when the cover
+// panel is showing and the art on screen belongs to something else.
+// Returns nil when there is nothing to do.
 func (m *Model) refreshCoverCmd() tea.Cmd {
 	if !m.npOn {
 		return nil
 	}
-	t, ok := m.queue.Current()
-	if !ok || t.CoverURL == "" {
+	url := m.desiredCoverURL()
+	if url == "" {
 		m.coverImg = nil
 		m.coverURL = ""
 		return nil
 	}
-	if t.CoverURL == m.coverURL || (m.coverLoading && t.CoverURL == m.coverURL) {
+	if url == m.coverURL {
 		return nil
 	}
 	m.coverLoading = true
 	m.coverErr = ""
-	return loadCoverCmd(t.CoverURL)
+	return loadCoverCmd(url)
 }
 
 // reinitDiscordRPC tears down and re-initialises the Discord RPC

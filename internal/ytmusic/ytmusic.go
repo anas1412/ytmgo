@@ -19,6 +19,7 @@ package ytmusic
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"regexp"
@@ -40,12 +41,13 @@ var httpClient = &http.Client{Timeout: 15 * time.Second}
 
 // Track is one song from search or radio results.
 type Track struct {
-	VideoID  string
-	Title    string
-	Artist   string
-	Album    string
-	Duration int // seconds
-	CoverURL string
+	VideoID       string
+	Title         string
+	Artist        string
+	Album         string
+	AlbumBrowseID string // MPREb_… — the id AlbumTracks takes (empty when unknown)
+	Duration      int    // seconds
+	CoverURL      string
 }
 
 // WatchURL returns the playable URL for a videoId. mpv resolves it via
@@ -204,15 +206,19 @@ func parseSearchItem(item interface{}) (Track, bool) {
 	}
 
 	// Second column runs: [Artist, " • ", Album, " • ", "4:58"].
+	// Each run may carry a navigationEndpoint; the album run's points
+	// at the album page (MPREb_…), which open-album-from-song uses.
 	runs, _ := dig(item, "flexColumns", 1, "musicResponsiveListItemFlexColumnRenderer",
 		"text", "runs").([]interface{})
 	var fields []string
+	var fieldAlbumIDs []string // parallel to fields: album browse id of the run, if any
 	for _, r := range runs {
 		s := digString(r, "text")
 		if strings.TrimSpace(s) == "•" || s == "" {
 			continue
 		}
 		fields = append(fields, s)
+		fieldAlbumIDs = append(fieldAlbumIDs, albumBrowseIDFromRun(r))
 	}
 	for i, f := range fields {
 		switch {
@@ -222,6 +228,7 @@ func parseSearchItem(item interface{}) (Track, bool) {
 			t.Duration = parseClock(f)
 		case t.Album == "":
 			t.Album = f
+			t.AlbumBrowseID = fieldAlbumIDs[i]
 		}
 	}
 
@@ -241,23 +248,37 @@ func parseRadioItem(item interface{}) (Track, bool) {
 	// Byline runs: [Artist, " • ", Album, " • ", "2016"].
 	runs, _ := dig(item, "longBylineText", "runs").([]interface{})
 	var fields []string
+	var fieldAlbumIDs []string // parallel to fields, as in parseSearchItem
 	for _, r := range runs {
 		s := digString(r, "text")
 		if strings.TrimSpace(s) == "•" || s == "" {
 			continue
 		}
 		fields = append(fields, s)
+		fieldAlbumIDs = append(fieldAlbumIDs, albumBrowseIDFromRun(r))
 	}
 	if len(fields) > 0 {
 		t.Artist = fields[0]
 	}
 	if len(fields) > 1 {
 		t.Album = fields[1]
+		t.AlbumBrowseID = fieldAlbumIDs[1]
 	}
 
 	t.Duration = parseClock(digString(item, "lengthText", "runs", 0, "text"))
 	t.CoverURL = largestThumbnail(dig(item, "thumbnail", "thumbnails"))
 	return t, true
+}
+
+// albumBrowseIDFromRun returns the album browse id (MPREb_…) carried by
+// a byline run's navigation endpoint, or "" when the run doesn't point
+// at an album. Artist runs point at channels (MPLA…), so filtering on
+// the MPRE prefix picks out just the album run.
+func albumBrowseIDFromRun(run interface{}) string {
+	if id := digString(run, "navigationEndpoint", "browseEndpoint", "browseId"); strings.HasPrefix(id, "MPRE") {
+		return id
+	}
+	return ""
 }
 
 // sizeRe matches the size suffix of googleusercontent thumbnail URLs.
@@ -355,6 +376,83 @@ func findKey(v interface{}, key string) interface{} {
 	return nil
 }
 
+// ─── lyrics ─────────────────────────────────────────────────────────
+
+// ErrNoLyrics reports that YouTube Music carries no lyrics for a track.
+var ErrNoLyrics = errors.New("ytmusic: no lyrics")
+
+// PlainLyrics fetches a track's lyrics from YouTube Music: the next
+// endpoint exposes a lyrics engagement panel whose browse id (MPLYR…)
+// the browse endpoint then serves as a description shelf. Plain text
+// only — YouTube Music does not provide timings, so synced lyrics come
+// from elsewhere.
+func PlainLyrics(videoID string) (string, error) {
+	root, err := post("next", map[string]interface{}{
+		"context": clientContext(),
+		"videoId": videoID,
+	})
+	if err != nil {
+		return "", err
+	}
+	browseID := lyricsBrowseID(root)
+	if browseID == "" {
+		return "", ErrNoLyrics
+	}
+
+	root, err = post("browse", map[string]interface{}{
+		"context":  clientContext(),
+		"browseId": browseID,
+	})
+	if err != nil {
+		return "", err
+	}
+	shelf := findKey(root, "musicDescriptionShelfRenderer")
+	if shelf == nil {
+		return "", ErrNoLyrics
+	}
+	runs, _ := dig(shelf, "description", "runs").([]interface{})
+	var b strings.Builder
+	for _, r := range runs {
+		b.WriteString(digString(r, "text"))
+	}
+	text := strings.TrimSpace(b.String())
+	if text == "" {
+		return "", ErrNoLyrics
+	}
+	return text, nil
+}
+
+// lyricsBrowseID hunts the next response for the lyrics engagement
+// panel (identified by its MPLYR panel identifier) and returns the
+// browse id carried inside it.
+func lyricsBrowseID(root interface{}) string {
+	var found string
+	var walk func(v interface{})
+	walk = func(v interface{}) {
+		if found != "" {
+			return
+		}
+		switch t := v.(type) {
+		case map[string]interface{}:
+			if id, ok := t["panelIdentifier"].(string); ok && strings.Contains(id, "MPLYR") {
+				if b := digString(findKey(t, "browseEndpoint"), "browseId"); strings.HasPrefix(b, "MPLYR") {
+					found = b
+					return
+				}
+			}
+			for _, vv := range t {
+				walk(vv)
+			}
+		case []interface{}:
+			for _, vv := range t {
+				walk(vv)
+			}
+		}
+	}
+	walk(root)
+	return found
+}
+
 // ─── albums ─────────────────────────────────────────────────────────
 
 // albumsFilterParams restricts /search to the Albums shelf.
@@ -443,9 +541,10 @@ func AlbumTracks(browseID string) (Album, error) {
 			VideoID: digString(item, "playlistItemData", "videoId"),
 			Title: digString(item, "flexColumns", 0, "musicResponsiveListItemFlexColumnRenderer",
 				"text", "runs", 0, "text"),
-			Artist:   album.Artist,
-			Album:    album.Title,
-			CoverURL: album.CoverURL,
+			Artist:        album.Artist,
+			Album:         album.Title,
+			AlbumBrowseID: album.BrowseID,
+			CoverURL:      album.CoverURL,
 		}
 		if t.VideoID == "" {
 			t.VideoID = digString(item, "overlay", "musicItemThumbnailOverlayRenderer", "content",

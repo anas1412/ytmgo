@@ -243,6 +243,10 @@ func (m Model) dispatch(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.coverSendN = coverSendFrames
 		return m, nil
 
+	// ── Lyrics loaded ────────────────────────────────────────────
+	case LyricsLoadedMsg:
+		return m.handleLyricsLoaded(msg)
+
 	// ── URL prefetched (background cache populate) ──────────────
 	case URLPrefetchedMsg:
 		return m.handleURLPrefetched(msg)

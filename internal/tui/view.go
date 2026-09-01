@@ -389,7 +389,10 @@ func (m Model) renderPanels() string {
 		case m.openAlbum != nil:
 			aHint := styleKeyHint.Render("[a]")
 			escHint := styleKeyHint.Render("[esc]")
-			panelLabel = "ALBUM  " + aHint + " queue all  " + xHint + " download  " + escHint + " back"
+			// Album name before the hints, so a narrow panel truncates
+			// the hints first and the information survives.
+			panelLabel = "ALBUM — " + m.openAlbum.Title + "  " +
+				aHint + " queue all  " + xHint + " download  " + escHint + " back"
 		case m.albumMode:
 			albHint := styleKeyHint.Render("[A]")
 			panelLabel = "ALBUMS  " + albHint + " songs  " + xHint + " download album"
@@ -660,13 +663,36 @@ func coverFitCells(img image.Image, maxCols, maxRows int) (cols, rows int) {
 	return cols, rows
 }
 
+// displayPosition returns the playback position to render: the last
+// IPC position glided forward by wall-clock time while playing, so
+// both the progress bar and the lyrics highlight move smoothly
+// between the player's coarse updates.
+func (m Model) displayPosition() float64 {
+	pos := m.position
+	if m.playerState == player.StatePlaying {
+		elapsed := time.Since(m.lastPositionAt).Seconds()
+		if elapsed < 1.0 && elapsed >= 0 {
+			pos = m.lastPosition + elapsed
+			if m.duration > 0 && pos > m.duration {
+				pos = m.duration
+			}
+		}
+	}
+	return pos
+}
+
 // npPanelTitle labels the now-playing panel with whatever is playing.
 func (m Model) npPanelTitle() string {
 	vHint := styleKeyHint.Render("[v]")
-	if t, ok := m.queue.Current(); ok && t.Title != "" {
-		return "NOW PLAYING  " + vHint + " hide  " + t.Title
+	yHint := styleKeyHint.Render("[y]")
+	lyr := yHint + " lyrics"
+	if m.lyricsOn {
+		lyr = yHint + " spectrum"
 	}
-	return "NOW PLAYING  " + vHint + " hide"
+	if t, ok := m.queue.Current(); ok && t.Title != "" {
+		return "NOW PLAYING  " + vHint + " hide  " + lyr + "  " + t.Title
+	}
+	return "NOW PLAYING  " + vHint + " hide  " + lyr
 }
 
 // renderNowPlayingPanel draws album art on the left and the spectrum on
@@ -688,7 +714,14 @@ func (m Model) renderNowPlayingPanel(width, height int) string {
 	if coverCols > 0 {
 		vizW-- // a column of breathing space between the two
 	}
-	vizBlock := m.renderSpectrum(max(0, vizW), height)
+	// The lyrics view swaps in for the spectrum on the same footprint,
+	// so nothing about the panel's geometry (or its tests) changes.
+	var vizBlock []string
+	if m.lyricsOn {
+		vizBlock = m.renderLyricsPane(max(0, vizW), height)
+	} else {
+		vizBlock = m.renderSpectrum(max(0, vizW), height)
+	}
 
 	lines := make([]string, height)
 	for i := 0; i < height; i++ {
@@ -782,6 +815,71 @@ func (m Model) clearCoverImage() string {
 		return ""
 	}
 	return coverart.KittyClear()
+}
+
+// ─── Lyrics pane ─────────────────────────────────────────────────────
+
+// activeLyricLine returns the index of the lyric line that is current
+// at the interpolated playback position, or -1 for plain lyrics.
+func (m Model) activeLyricLine() int {
+	if !m.lyricsSynced {
+		return -1
+	}
+	pos := m.displayPosition()
+	idx := -1
+	for i, ln := range m.lyricLines {
+		if ln.Time <= pos+0.05 {
+			idx = i
+		} else {
+			break
+		}
+	}
+	return idx
+}
+
+// renderLyricsPane draws the lyrics column of the now-playing panel:
+// loading / empty states when there is nothing to show, plain lines
+// otherwise, with the current line highlighted when the lyrics are
+// synced. While lyricsFollow is set (until the user scrolls the pane
+// themselves) the window keeps the active line near its middle.
+func (m Model) renderLyricsPane(width, height int) []string {
+	if width < 4 || height < 1 {
+		return nil
+	}
+	switch {
+	case m.lyricsLoading:
+		return []string{styleTextDim.Render(truncate(m.spinner()+"  Loading lyrics…", width))}
+	case m.lyricsErr != "":
+		return []string{styleTextDim.Render(truncate(m.lyricsErr, width))}
+	case len(m.lyricLines) == 0:
+		msg := "No lyrics found"
+		if m.lyricsTrackID == "" {
+			msg = "Play a track to see its lyrics"
+		}
+		return []string{styleTextDim.Render(truncate(msg, width))}
+	}
+
+	active := m.activeLyricLine()
+	offset := m.lyricsOffset
+	if m.lyricsFollow && active >= 0 {
+		offset = active - height/2
+	}
+	offset = max(0, min(offset, max(0, len(m.lyricLines)-height)))
+
+	rows := make([]string, 0, height)
+	for i := offset; i < min(offset+height, len(m.lyricLines)); i++ {
+		ln := m.lyricLines[i]
+		text := truncate(strings.TrimSpace(ln.Text), width)
+		switch {
+		case text == "":
+			rows = append(rows, "") // LRC spacer between stanzas
+		case i == active:
+			rows = append(rows, styleNowTitle.Render(text))
+		default:
+			rows = append(rows, styleTextDim.Render(text))
+		}
+	}
+	return rows
 }
 
 // renderSpectrum returns the bar rows, stretched to fill the width it
@@ -1626,19 +1724,8 @@ func (m Model) renderPlayerBar() string {
 
 		// Smooth progress: glide the bar from the last reported position
 		// using elapsed wall-clock time, so it moves continuously between
-		// coarse IPC updates instead of jumping every 500ms. Bounded to
-		// 2× the tick interval so a missed IPC update doesn't make the
-		// bar race ahead of reality.
-		displayPos := m.position
-		if m.playerState == player.StatePlaying {
-			elapsed := time.Since(m.lastPositionAt).Seconds()
-			if elapsed < 1.0 && elapsed >= 0 {
-				displayPos = m.lastPosition + elapsed
-				if m.duration > 0 && displayPos > m.duration {
-					displayPos = m.duration
-				}
-			}
-		}
+		// coarse IPC updates instead of jumping every 500ms.
+		displayPos := m.displayPosition()
 		currentStr := formatTime(displayPos)
 		totalStr := t.Duration
 		if totalStr == "" {

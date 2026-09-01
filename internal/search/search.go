@@ -12,24 +12,28 @@ import (
 
 // Result is a single search/recommendation result.
 type Result struct {
-	ID       string
-	Title    string
-	Uploader string
-	Duration int    // seconds
-	URL      string // playable YouTube Music watch URL
-	CoverURL string // album art URL (empty if unavailable)
+	ID            string
+	Title         string
+	Uploader      string
+	Album         string // album title (empty when the source didn't say)
+	Duration      int    // seconds
+	URL           string // playable YouTube Music watch URL
+	CoverURL      string // album art URL (empty if unavailable)
+	AlbumBrowseID string // album page id (MPREb_…); empty when unknown
 }
 
 // ToTrack converts a search Result to a queue.Track.
 func (r Result) ToTrack() queue.Track {
 	return queue.Track{
-		ID:          r.ID,
-		Title:       r.Title,
-		Artist:      r.Uploader,
-		Duration:    formatDuration(r.Duration),
-		DurationSec: r.Duration,
-		URL:         r.URL,
-		CoverURL:    r.CoverURL,
+		ID:            r.ID,
+		Title:         r.Title,
+		Artist:        r.Uploader,
+		Album:         r.Album,
+		Duration:      formatDuration(r.Duration),
+		DurationSec:   r.Duration,
+		URL:           r.URL,
+		CoverURL:      r.CoverURL,
+		AlbumBrowseID: r.AlbumBrowseID,
 	}
 }
 
@@ -106,12 +110,14 @@ func FetchRecommendations(limit int, seedVideoIDs []string) ([]Result, error) {
 
 func ytTrackToResult(t ytmusic.Track) Result {
 	return Result{
-		ID:       t.VideoID,
-		Title:    t.Title,
-		Uploader: t.Artist,
-		Duration: t.Duration,
-		URL:      ytmusic.WatchURL(t.VideoID),
-		CoverURL: t.CoverURL,
+		ID:            t.VideoID,
+		Title:         t.Title,
+		Uploader:      t.Artist,
+		Album:         t.Album,
+		Duration:      t.Duration,
+		URL:           ytmusic.WatchURL(t.VideoID),
+		CoverURL:      t.CoverURL,
+		AlbumBrowseID: t.AlbumBrowseID,
 	}
 }
 

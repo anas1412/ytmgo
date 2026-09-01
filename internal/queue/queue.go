@@ -7,15 +7,17 @@ import (
 
 // Track represents a music track
 type Track struct {
-	ID          string `json:"id"` // YouTube video ID
-	Title       string `json:"title"`
-	Artist      string `json:"artist"`
-	Duration    string `json:"duration"`     // human readable e.g. "3:45"
-	DurationSec int    `json:"duration_sec"` // seconds
-	FilePath    string `json:"file_path"`    // local path once downloaded
-	Downloaded  bool   `json:"downloaded"`
-	URL         string `json:"url"`       // original youtube URL/query
-	CoverURL    string `json:"cover_url"` // album art URL (empty = use YouTube thumbnail)
+	ID            string `json:"id"` // YouTube video ID
+	Title         string `json:"title"`
+	Artist        string `json:"artist"`
+	Album         string `json:"album,omitempty"` // album title (empty when unknown)
+	Duration      string `json:"duration"`        // human readable e.g. "3:45"
+	DurationSec   int    `json:"duration_sec"`    // seconds
+	FilePath      string `json:"file_path"`       // local path once downloaded
+	Downloaded    bool   `json:"downloaded"`
+	URL           string `json:"url"`                       // original youtube URL/query
+	CoverURL      string `json:"cover_url"`                 // album art URL (empty = use YouTube thumbnail)
+	AlbumBrowseID string `json:"album_browse_id,omitempty"` // album page id (MPREb_…); empty = unknown/legacy
 }
 
 // PlayURL returns the source that playback should use for this track:

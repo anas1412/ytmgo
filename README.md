@@ -83,6 +83,8 @@ System dependencies (mpv, yt-dlp, ffmpeg) are **not** touched — they may be us
 ## Features
 
 - **Native YouTube Music search** — Talks to YT Music's own API directly (no key, no login, no third-party proxy). Results carry exact video IDs, so playback starts on the right recording every time.
+- **Album preview** — Press `i` on any song — in results, the queue, favorites, or history — to open its album's tracklist, ready to queue or download in one key. The album's cover takes over the now-playing panel while you browse; nothing is queued until you ask.
+- **Synced lyrics** — Press `y` to swap the spectrum for lyrics, with the current line highlighted as the song plays (via LRCLIB, plain-text fallback from YT Music). Cached locally, so replays are instant.
 - **Autoplay radio** — When the queue runs dry, ytmgo queues what YouTube Music itself would play next, seeded from your listening history.
 - **Download in one key** — Press `x` on any track and it downloads. Queue-friendly, one at a time, with progress feedback.
 - **Favorites, history, library** — `f` to bookmark, a listening-history page, and a filterable page for everything on disk.
@@ -241,10 +243,12 @@ Tab cycles focus through: search input → result list → queue panel → searc
 | `s` | Toggle shuffle |
 | `r` | Cycle repeat: OFF → ONE → ALL |
 | `x` | Download selected track |
+| `i` | Open the album of the selected track |
 | `R` | Refresh recommendations |
 | `A` | Toggle search between songs and albums |
 | `a` | Queue every track of the open album |
 | `v` | Toggle the now-playing panel (art + spectrum) |
+| `y` | Toggle lyrics in the now-playing panel (wheel over the panel to scroll) |
 | `X` | Toggle the downloads panel (hidden until a download starts) |
 | `U` | Check for updates / confirm install |
 | `1` … `5` | Switch page: Stream / Favorites / Library / History / Settings |
@@ -265,7 +269,8 @@ Tab cycles focus through: search input → result list → queue panel → searc
 - [mpv](https://mpv.io/) — Media player backend (one persistent instance, JSON IPC)
 - [yt-dlp](https://github.com/yt-dlp/yt-dlp) — Downloads and stream resolution
 - [ffmpeg](https://ffmpeg.org/) — Audio extraction and cover-art embedding
-- YouTube Music InnerTube API — Track search, radio, and recommendations (keyless)
+- YouTube Music InnerTube API — Track search, radio, lyrics fallback, and recommendations (keyless)
+- [LRCLIB](https://lrclib.net) — Synced lyrics (keyless)
 - [godbus](https://github.com/godbus/dbus) — MPRIS media-key integration
 - [modernc.org/sqlite](https://modernc.org/sqlite) — Embedded SQLite (no CGO)
 

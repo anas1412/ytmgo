@@ -2,6 +2,7 @@ package tui
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -15,6 +16,7 @@ import (
 	"ytmgo/internal/db"
 	"ytmgo/internal/downloader"
 	"ytmgo/internal/library"
+	"ytmgo/internal/lyrics"
 	"ytmgo/internal/mpris"
 	"ytmgo/internal/player"
 	"ytmgo/internal/queue"
@@ -128,11 +130,14 @@ func searchAlbumsCmd(query string, limit int) tea.Cmd {
 
 // openAlbumCmd fetches one album's tracklist and converts it to
 // playable results, so the left panel can render it like any other list.
-func openAlbumCmd(a ytmusic.Album) tea.Cmd {
+// seq is the generation counter — a slow response for a superseded
+// open request is dropped by the handler instead of overwriting the
+// album the user asked for later.
+func openAlbumCmd(a ytmusic.Album, seq int) tea.Cmd {
 	return func() tea.Msg {
 		full, err := ytmusic.AlbumTracks(a.BrowseID)
 		if err != nil {
-			return AlbumTracksMsg{Album: a, Error: err}
+			return AlbumTracksMsg{Album: a, Error: err, Seq: seq}
 		}
 		tracks := make([]search.Result, 0, len(full.Tracks))
 		for _, t := range full.Tracks {
@@ -141,15 +146,17 @@ func openAlbumCmd(a ytmusic.Album) tea.Cmd {
 				cover = full.CoverURL
 			}
 			tracks = append(tracks, search.Result{
-				ID:       t.VideoID,
-				Title:    t.Title,
-				Uploader: t.Artist,
-				Duration: t.Duration,
-				URL:      ytmusic.WatchURL(t.VideoID),
-				CoverURL: cover,
+				ID:            t.VideoID,
+				Title:         t.Title,
+				Uploader:      t.Artist,
+				Album:         full.Title,
+				Duration:      t.Duration,
+				URL:           ytmusic.WatchURL(t.VideoID),
+				CoverURL:      cover,
+				AlbumBrowseID: full.BrowseID,
 			})
 		}
-		return AlbumTracksMsg{Album: full, Tracks: tracks}
+		return AlbumTracksMsg{Album: full, Tracks: tracks, Seq: seq}
 	}
 }
 
@@ -388,6 +395,42 @@ func loadCoverCmd(url string) tea.Cmd {
 	}
 }
 
+// ─── Lyrics ─────────────────────────────────────────────────────────
+
+// fetchLyricsCmd fetches lyrics for t: the SQLite cache first, then
+// LRCLIB (synced) with an InnerTube plain-text fallback. Definitive
+// misses are cached as "" so replays don't refetch; transient errors
+// are never cached.
+func fetchLyricsCmd(t queue.Track, seq int, database *db.DB) tea.Cmd {
+	return func() tea.Msg {
+		if database != nil && t.ID != "" {
+			if text, synced, found, err := database.LoadCachedLyrics(t.ID); err == nil && found {
+				return lyricsMsgFromCache(t.ID, text, synced, seq)
+			}
+		}
+		l, err := lyrics.Fetch(t.ID, t.Title, t.Artist, t.DurationSec)
+		if err != nil {
+			if errors.Is(err, lyrics.ErrNotFound) && database != nil && t.ID != "" {
+				_ = database.SaveCachedLyrics(t.ID, "", false) // known miss
+			}
+			return LyricsLoadedMsg{TrackID: t.ID, Error: err, Seq: seq}
+		}
+		if database != nil && t.ID != "" {
+			_ = database.SaveCachedLyrics(t.ID, l.Raw, l.Synced) // best-effort
+		}
+		return LyricsLoadedMsg{TrackID: t.ID, Lyrics: l, Seq: seq}
+	}
+}
+
+// lyricsMsgFromCache rebuilds a LyricsLoadedMsg from cached text: an
+// empty text is a recorded miss, not an error.
+func lyricsMsgFromCache(trackID, text string, synced bool, seq int) LyricsLoadedMsg {
+	if text == "" {
+		return LyricsLoadedMsg{TrackID: trackID, Seq: seq}
+	}
+	return LyricsLoadedMsg{TrackID: trackID, Lyrics: lyrics.FromText(text, synced), Seq: seq}
+}
+
 // ─── Tick commands ──────────────────────────────────────────────────────
 
 // tickCmd returns a command that fires every 500ms for progress animation.
@@ -405,6 +448,28 @@ func playerTickCmd() tea.Cmd {
 	return tea.Tick(playerTickInterval, func(_ time.Time) tea.Msg {
 		return playerTickMsg{}
 	})
+}
+
+// loadLyricsCmd starts a lyrics fetch for t unless lyrics for that
+// exact track are already loaded or in flight, or the lyrics view is
+// off (no work for a panel that is never shown). Returns nil when
+// there is nothing to do.
+func (m *Model) loadLyricsCmd(t queue.Track) tea.Cmd {
+	if !m.lyricsOn {
+		return nil
+	}
+	if t.ID == "" || (t.ID == m.lyricsTrackID && (m.lyricsLoading || len(m.lyricLines) > 0)) {
+		return nil
+	}
+	m.lyricsSeq++
+	m.lyricsTrackID = t.ID
+	m.lyricsLoading = true
+	m.lyricsErr = ""
+	m.lyricLines = nil
+	m.lyricsSynced = false
+	m.lyricsOffset = 0
+	m.lyricsFollow = true
+	return fetchLyricsCmd(t, m.lyricsSeq, m.db)
 }
 
 // ─── Settings ───────────────────────────────────────────────────────────
