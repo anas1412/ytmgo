@@ -622,12 +622,9 @@ func (m Model) renderStreamList(width, height int) string {
 // whatever arrives to the real width, so an imperfect guess here costs
 // nothing but bar thickness.
 func (m Model) vizBars() int {
-	innerW := (m.width-2)/2 - 2 - 2
-	_, npH := m.leftPanelSplit()
-	if npH == 0 {
-		npH = (m.panelHeight() - 6) * 45 / 100 // the height it will get once open
-	}
-	avail := innerW - int(float64(npH)*coverart.CellAspect) - 1
+	// The spectrum owns the whole panel now — the artwork moved to the
+	// player bar, so nothing is subtracted for it any more.
+	avail := (m.width-2)/2 - 4
 	n := avail / 3 // roughly two cells per bar plus a gap
 	if n < 4 {
 		n = 4
@@ -992,22 +989,32 @@ func (m Model) renderAlbumTracks(width, height int) string {
 		if m.openAlbum.Year != "" {
 			stats += " · " + m.openAlbum.Year
 		}
-		stats += fmt.Sprintf(" · %d tracks · %s", len(m.albumTracks), formatTotalDuration(total))
 
-		artCols, artRows := coverFitCells(m.albumArtImg, albumArtSlotCols, albumStripRows)
-		art := renderArtBlock(m.albumArtImg, m.albumArtURL, artCols, artRows, albumStripRows,
+		// Art on the left, text beside it — the same shape as the
+		// player bar's card, at album-page size.
+		artH := albumStripRows - 1 // last strip row is the separator
+		artCols, artRows := coverFitCells(m.albumArtImg, albumArtSlotCols, artH)
+		art := renderArtBlock(m.albumArtImg, m.albumArtURL, artCols, artRows, artH,
 			m.albumArtSendN, coverart.AlbumImageID, &albumArtRender)
-		textW := rowW
+		inset := 0
 		if artCols > 0 {
-			textW = rowW - artCols - 2
+			inset = artCols + 2
+		}
+		textW := max(4, rowW-inset)
+		trackWord := "tracks"
+		if len(m.albumTracks) == 1 {
+			trackWord = "track"
 		}
 		strip := []string{
-			styleNowTitle.Render(truncate(m.openAlbum.Title, max(4, textW))),
-			styleTextDim.Render(truncate(stats, max(4, textW))),
+			styleNowTitle.Render(truncate(m.openAlbum.Title, textW)),
+			styleTextDim.Render(truncate(stats, textW)),
+			styleTextDim.Render(truncate(fmt.Sprintf("%d %s · %s",
+				len(m.albumTracks), trackWord, formatTotalDuration(total)), textW)),
+			"",
 			"",
 		}
 		for i := range strip {
-			if artCols == 0 {
+			if inset == 0 {
 				lines = append(lines, strip[i])
 				continue
 			}
@@ -1015,11 +1022,10 @@ func (m Model) renderAlbumTracks(width, height int) string {
 			if i < len(art) {
 				a = art[i]
 			}
-			pad := rowW - lipgloss.Width(strip[i]) - artCols
-			if pad < 1 {
-				pad = 1
+			if pad := inset - 2 - lipgloss.Width(a); pad > 0 {
+				a += strings.Repeat(" ", pad)
 			}
-			lines = append(lines, strip[i]+strings.Repeat(" ", pad)+a)
+			lines = append(lines, a+"  "+strip[i])
 		}
 	}
 
