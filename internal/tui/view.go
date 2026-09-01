@@ -475,12 +475,6 @@ func (m Model) renderPanels() string {
 	}
 	queueTitle := fmt.Sprintf("QUEUE  %s  %s remove  %s clear  %s reorder",
 		queueCount, dHint, dCapHint, reorderHint)
-	if lyricsContentH == 0 {
-		// The way to open the lyrics pane, placed ahead of the other
-		// hints so a narrow title cannot truncate it away.
-		queueTitle = fmt.Sprintf("QUEUE  %s  %s lyrics  %s remove  %s clear  %s reorder",
-			queueCount, styleKeyHint.Render("[y]"), dHint, dCapHint, reorderHint)
-	}
 	queueTitleStyled := stylePanelTitle.Render(truncate(queueTitle, titleW))
 	queueContent := m.renderQueue(panelWidth, queueContentH)
 	queuePanel := lipgloss.JoinVertical(lipgloss.Top,

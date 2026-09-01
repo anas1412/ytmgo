@@ -213,13 +213,15 @@ var Keys = KeyMap{
 // ShortHelp returns key bindings for the compact help line: the panel
 // toggles plus the general-purpose utilities. Playback and navigation
 // hints stay inline next to their contextual UI element (player bar
-// controls, panel titles, header), but the two panel toggles have no
-// permanent home of their own — the panel each one reopens is exactly
-// the thing that is not on screen — so they live here.
+// controls, panel titles, header), but the two pane toggles have no
+// permanent home of their own — the pane each one reopens is exactly
+// the thing that is not on screen — so they live here. Downloads left
+// this list when it became a page: its way in is the [5] tab, which is
+// always visible in the header.
 func (k KeyMap) ShortHelp() []key.Binding {
 	return []key.Binding{
 		k.Visualizer,
-		k.Downloads,
+		k.Lyrics,
 		k.Help,
 		k.Quit,
 	}
