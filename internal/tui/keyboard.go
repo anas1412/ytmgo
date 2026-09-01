@@ -803,7 +803,7 @@ func (m *Model) handleGlobalKey(msg tea.KeyMsg) (handled bool, cmd tea.Cmd) {
 			}
 			m.loadPlayHistory()
 			return true, nil
-		case "6": // Keys.PageDownloads
+		case "5": // Keys.PageDownloads
 			if m.activePage != PageDownloads {
 				m.switchPage(PageDownloads)
 				n := 0
@@ -817,7 +817,7 @@ func (m *Model) handleGlobalKey(msg tea.KeyMsg) (handled bool, cmd tea.Cmd) {
 				}
 			}
 			return true, nil
-		case "5": // Keys.PageSettings
+		case "6": // Keys.PageSettings
 			if m.activePage != PageSettings {
 				m.switchPage(PageSettings)
 				m.setStatus("")

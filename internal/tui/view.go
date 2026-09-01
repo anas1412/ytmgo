@@ -297,8 +297,8 @@ func (m Model) renderHeader() string {
 		{"2", "Favs"},
 		{"3", "Library"},
 		{"4", "History"},
-		{"5", "Settings"},
-		{"6", "Downloads"},
+		{"5", "Downloads"},
+		{"6", "Settings"},
 	}
 	var renderedTabs []string
 	for i, t := range tabs {

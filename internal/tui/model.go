@@ -31,8 +31,8 @@ const (
 	PageFavorites             // 1 — bookmarked tracks
 	PageLibrary               // 2 — downloaded tracks + download queue
 	PageHistory               // 3 — listening history
-	PageSettings              // 4 — configuration
-	PageDownloads             // 5 — download jobs, full page
+	PageDownloads             // 4 — download jobs, full page
+	PageSettings              // 5 — configuration, last as convention has it
 )
 
 // Panel identifies which panel within a page has keyboard focus.

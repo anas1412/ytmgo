@@ -251,7 +251,7 @@ Tab cycles focus through: search input → result list → queue panel → searc
 | `y` | Toggle the lyrics pane under the queue (wheel over it to scroll) |
 | `X` | Jump to the Downloads page and back |
 | `U` | Check for updates / confirm install |
-| `1` … `6` | Switch page: Stream / Favorites / Library / History / Settings / Downloads |
+| `1` … `6` | Switch page: Stream / Favorites / Library / History / Downloads / Settings |
 | `L` | Jump straight to the Library page |
 | `Ctrl+↑` / `Ctrl+↓` | Move item up/down in queue |
 | `o` | Open download directory |

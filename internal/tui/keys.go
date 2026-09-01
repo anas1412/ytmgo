@@ -197,12 +197,12 @@ var Keys = KeyMap{
 		key.WithHelp("4", "history"),
 	),
 	PageSettings: key.NewBinding(
-		key.WithKeys("5"),
-		key.WithHelp("5", "settings page"),
+		key.WithKeys("6"),
+		key.WithHelp("6", "settings page"),
 	),
 	PageDownloads: key.NewBinding(
-		key.WithKeys("6"),
-		key.WithHelp("6", "downloads page"),
+		key.WithKeys("5"),
+		key.WithHelp("5", "downloads page"),
 	),
 	Escape: key.NewBinding(
 		key.WithKeys("esc"),
