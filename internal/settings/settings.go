@@ -29,6 +29,7 @@ type Settings struct {
 	DownloadDir       string `json:"download_dir"`        // relative or absolute path for downloads
 	DownloadFormat    string `json:"download_format"`     // m4a or mp3
 	ShowQuotes        bool   `json:"show_quotes"`         // fetch internet quotes
+	ShowHints         bool   `json:"show_hints"`          // inline [key] hints outside the footer
 	DiscordRPCEnabled bool   `json:"discord_rpc_enabled"` // enable Discord Rich Presence
 	AutoplayEnabled   bool   `json:"autoplay_enabled"`    // auto-queue related tracks when queue empties
 	Theme             string `json:"theme"`               // auto, dark, light or terminal
@@ -43,6 +44,7 @@ func Defaults() *Settings {
 		DownloadDir:       "downloads",
 		DownloadFormat:    FormatM4A,
 		ShowQuotes:        true,
+		ShowHints:         true,
 		DiscordRPCEnabled: true,
 		AutoplayEnabled:   true,
 		Theme:             "terminal",

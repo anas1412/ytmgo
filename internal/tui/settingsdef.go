@@ -70,6 +70,16 @@ var settingDefs = []settingDef{
 		},
 	},
 	{
+		label: "Show Key Hints",
+		kind:  settingToggle,
+		value: func(m *Model) string { return boolStr(m.settings.ShowHints) },
+		desc:  staticDesc("Inline [key] hints in titles and the player bar — the footer always keeps its set (z toggles too)"),
+		activate: func(m *Model) tea.Cmd {
+			m.settings.ShowHints = !m.settings.ShowHints
+			return saveSettingsCmd(m.db, m.settings)
+		},
+	},
+	{
 		label: "Show Quotes",
 		kind:  settingToggle,
 		value: func(m *Model) string { return boolStr(m.settings.ShowQuotes) },

@@ -393,6 +393,17 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
+	case "z":
+		// Show or hide the inline [key] hints. The footer always keeps
+		// its set — including this key — so the way back never hides.
+		m.settings.ShowHints = !m.settings.ShowHints
+		if m.settings.ShowHints {
+			m.setStatus("Key hints shown")
+		} else {
+			m.setStatus("Key hints hidden  (z to bring them back)")
+		}
+		return m, saveSettingsCmd(m.db, m.settings)
+
 	case "X":
 		// Downloads live on their own page; X jumps there and back.
 		if m.activePage == PageDownloads {

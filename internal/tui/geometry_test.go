@@ -139,7 +139,10 @@ func checkPanelGeometry(t *testing.T, m Model, w, h int, what string) {
 	}
 	controls := -1
 	for i, line := range lines {
-		if strings.Contains(line, "[space]") {
+		// The prev icon is on the controls row in every mode — compact
+		// or full, hints on or off — and nowhere else ("Playback
+		// finished" on the title row is why matching "Play" failed).
+		if strings.Contains(line, "⏮") {
 			controls = i
 			break
 		}
@@ -656,5 +659,35 @@ func TestDownloadJumpsToDownloadsPage(t *testing.T) {
 			break
 		}
 		time.Sleep(10 * time.Millisecond)
+	}
+}
+
+// TestHintsToggleKeepsGeometry: hiding the hints shortens titles and
+// player clusters; the frame must stay exact and every player zone must
+// stay inside its row, in both states.
+func TestHintsToggleKeepsGeometry(t *testing.T) {
+	for _, size := range [][2]int{{200, 50}, {150, 40}, {120, 35}, {80, 24}} {
+		w, h := size[0], size[1]
+		for _, show := range []bool{true, false} {
+			m := worstCaseModel(t, w, h)
+			m.settings.ShowHints = show
+			m.queue.SetCurrentIndex(0)
+			m.playerState = player.StatePlaying
+			m.duration = 200
+			label := "hints on"
+			if !show {
+				label = "hints off"
+			}
+			checkPanelGeometry(t, m, w, h, label)
+
+			l := m.playerRowLayout()
+			end := 3 + (w - 6)
+			for _, z := range [][2]int{{l.prevEnd, l.playEnd}, {l.playEnd, l.transportEnd},
+				{l.barStart, l.barStart + l.barWidth}, {l.rightStart, l.volEnd}} {
+				if z[0] < 3 || z[1] > end || z[0] > z[1] {
+					t.Errorf("%dx%d %s: zone [%d,%d] outside content [3,%d]", w, h, label, z[0], z[1], end)
+				}
+			}
+		}
 	}
 }

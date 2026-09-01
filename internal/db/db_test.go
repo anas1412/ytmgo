@@ -212,3 +212,27 @@ func TestLyricsCacheIsBounded(t *testing.T) {
 		t.Errorf("newest entry was evicted (found=%v, err=%v)", found, err)
 	}
 }
+
+// TestShowHintsRoundTrips — the theme taught us a settings field is not
+// a setting until both halves of the round trip name its column.
+func TestShowHintsRoundTrips(t *testing.T) {
+	d := openTestDB(t)
+	s, err := d.LoadSettings()
+	if err != nil {
+		t.Fatalf("LoadSettings: %v", err)
+	}
+	if !s.ShowHints {
+		t.Error("hints should default to shown")
+	}
+	s.ShowHints = false
+	if err := d.SaveSettings(s); err != nil {
+		t.Fatalf("SaveSettings: %v", err)
+	}
+	got, err := d.LoadSettings()
+	if err != nil {
+		t.Fatalf("LoadSettings: %v", err)
+	}
+	if got.ShowHints {
+		t.Error("hidden hints came back shown — the column is not round-tripping")
+	}
+}

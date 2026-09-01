@@ -33,6 +33,7 @@ type KeyMap struct {
 	AlbumInfo     key.Binding
 	Visualizer    key.Binding
 	Lyrics        key.Binding
+	Hints         key.Binding
 	Downloads     key.Binding
 	Open          key.Binding
 	Update        key.Binding
@@ -168,6 +169,10 @@ var Keys = KeyMap{
 		key.WithKeys("X"),
 		key.WithHelp("X", "downloads"),
 	),
+	Hints: key.NewBinding(
+		key.WithKeys("z"),
+		key.WithHelp("z", "hints"),
+	),
 	Open: key.NewBinding(
 		key.WithKeys("o"),
 		key.WithHelp("o", "open download dir"),
@@ -222,6 +227,7 @@ func (k KeyMap) ShortHelp() []key.Binding {
 	return []key.Binding{
 		k.Visualizer,
 		k.Lyrics,
+		k.Hints,
 		k.Help,
 		k.Quit,
 	}
@@ -275,6 +281,7 @@ func (k KeyMap) FullHelp() [][]key.Binding {
 			k.AlbumInfo,
 			k.Visualizer,
 			k.Lyrics,
+			k.Hints,
 			k.Downloads,
 		},
 		{

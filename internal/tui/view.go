@@ -117,6 +117,16 @@ func (m Model) View() string {
 	return m.paintBg(m.fillHeight(view))
 }
 
+// hints returns s when inline key hints are on, and nothing when the
+// user has hidden them (z) — the footer keeps the permanent set, so the
+// way back never disappears.
+func (m Model) hints(s string) string {
+	if m.settings.ShowHints {
+		return s
+	}
+	return ""
+}
+
 // fillHeight pads the output to exactly m.height lines so a previous taller
 // render (e.g. before a terminal shrink) is fully overwritten. Without this,
 // Bubble Tea's incremental renderer leaves stale content visible at the bottom.
@@ -303,17 +313,24 @@ func (m Model) renderHeader() string {
 	var renderedTabs []string
 	for i, t := range tabs {
 		hint := styleKeyHint.Render("[" + t.key + "]")
+		if !m.settings.ShowHints {
+			hint = ""
+		}
 		label := styleNavTab.Render(t.label)
 		if int(m.activePage) == i {
 			label = styleNavTabActive.Render(t.label)
 		}
-		renderedTabs = append(renderedTabs, hint+" "+label)
+		rendered := label
+		if hint != "" {
+			rendered = hint + " " + label
+		}
+		renderedTabs = append(renderedTabs, rendered)
 	}
 	tabsStr := strings.Join(renderedTabs, " ")
 
 	// Tab hint — shown inline so users discover focus cycling without
 	// glancing down at the help bar.
-	tabHint := styleKeyHint.Render("[tab]") + styleTextDim.Render(" cycle")
+	tabHint := m.hints(styleKeyHint.Render("[tab]") + styleTextDim.Render(" cycle"))
 	// [v] used to sit here too; it lives in the help bar now, next to
 	// [X], so the two panel toggles are advertised together in one place.
 	left := lipgloss.JoinHorizontal(lipgloss.Center, logo, "   ", searchView, "  ", tabHint)
@@ -375,45 +392,45 @@ func (m Model) renderPanels() string {
 		cHint := styleKeyHint.Render("[C]")
 		panelLabel = "HISTORY  " + xHint + " download  " + cHint + " clear"
 	case PageFavorites:
-		panelLabel = "FAVORITES  " + fHint + " unfav  " + xHint + " download"
+		panelLabel = "FAVORITES" + m.hints("  "+fHint+" unfav  "+xHint+" download")
 	case PageDownloads:
 		oHint := styleKeyHint.Render("[o]")
 		n := 0
 		if m.downloader != nil {
 			n = len(m.downloader.Jobs())
 		}
-		panelLabel = fmt.Sprintf("DOWNLOADS  [%d]  %s open folder", n, oHint)
+		panelLabel = fmt.Sprintf("DOWNLOADS  [%d]", n) + m.hints("  "+oHint+" open folder")
 	case PageLibrary:
 		dHint := styleKeyHint.Render("[d]")
-		panelLabel = "LIBRARY  " + dHint + " delete  " + fHint + " add to fav"
+		panelLabel = "LIBRARY" + m.hints("  "+dHint+" delete  "+fHint+" add to fav")
 		q := m.searchInput.Value()
 		if q != "" {
-			panelLabel = "LIBRARY  🔍 \"" + q + "\"  " + dHint + " delete  " + fHint + " add to fav"
+			panelLabel = "LIBRARY  🔍 \"" + q + "\"" + m.hints("  "+dHint+" delete  "+fHint+" add to fav")
 		}
 	case PageStream:
 		switch {
 		case m.openAlbum != nil:
 			aHint := styleKeyHint.Render("[a]")
 			escHint := styleKeyHint.Render("[esc]")
-			panelLabel = "ALBUM  " +
-				aHint + " queue all  " + xHint + " download  " + escHint + " back"
+			panelLabel = "ALBUM" +
+				m.hints("  "+aHint+" queue all  "+xHint+" download  "+escHint+" back")
 		case m.albumMode:
 			albHint := styleKeyHint.Render("[A]")
-			panelLabel = "ALBUMS  " + albHint + " songs  " + xHint + " download album"
+			panelLabel = "ALBUMS" + m.hints("  "+albHint+" songs  "+xHint+" download album")
 		case m.showingRecommendations:
 			rHint := styleKeyHint.Render("[R]")
 			albHint := styleKeyHint.Render("[A]")
-			panelLabel = "RECOMMENDATIONS  " + rHint + " refresh  " + albHint + " albums  " + xHint + " download  " + fHint + " fav"
+			panelLabel = "RECOMMENDATIONS" + m.hints("  "+rHint+" refresh  "+albHint+" albums  "+xHint+" download  "+fHint+" fav")
 		default:
 			albHint := styleKeyHint.Render("[A]")
-			panelLabel = "SEARCH RESULTS  " + albHint + " albums  " + xHint + " download  " + fHint + " add to fav"
+			panelLabel = "SEARCH RESULTS" + m.hints("  "+albHint+" albums  "+xHint+" download  "+fHint+" add to fav")
 		}
 	default:
 		if m.showingRecommendations {
 			rHint := styleKeyHint.Render("[R]")
-			panelLabel = "RECOMMENDATIONS  " + rHint + " refresh  " + xHint + " download  " + fHint + " add to fav"
+			panelLabel = "RECOMMENDATIONS" + m.hints("  "+rHint+" refresh  "+xHint+" download  "+fHint+" add to fav")
 		} else {
-			panelLabel = "SEARCH RESULTS  " + xHint + " download  " + fHint + " add to fav"
+			panelLabel = "SEARCH RESULTS" + m.hints("  "+xHint+" download  "+fHint+" add to fav")
 		}
 	}
 	// Truncate every panel title to the panel width: a wrapped title
@@ -473,8 +490,8 @@ func (m Model) renderPanels() string {
 	if total := m.queueTotalSecs(); total > 0 {
 		queueCount = fmt.Sprintf("[%d · %s]", m.queue.Len(), formatTotalDuration(total))
 	}
-	queueTitle := fmt.Sprintf("QUEUE  %s  %s remove  %s clear  %s reorder",
-		queueCount, dHint, dCapHint, reorderHint)
+	queueTitle := fmt.Sprintf("QUEUE  %s", queueCount) +
+		m.hints(fmt.Sprintf("  %s remove  %s clear  %s reorder", dHint, dCapHint, reorderHint))
 	queueTitleStyled := stylePanelTitle.Render(truncate(queueTitle, titleW))
 	queueContent := m.renderQueue(panelWidth, queueContentH)
 	queuePanel := lipgloss.JoinVertical(lipgloss.Top,
@@ -494,7 +511,7 @@ func (m Model) renderPanels() string {
 	rightPanel := queuePanel
 	if lyricsContentH > 0 {
 		yHint := styleKeyHint.Render("[y]")
-		lyricsTitle := "LYRICS  " + yHint + " hide"
+		lyricsTitle := "LYRICS" + m.hints("  "+yHint+" hide")
 		if t, ok := m.queue.Current(); ok && t.Title != "" {
 			lyricsTitle += "  " + t.Title
 		}
@@ -679,7 +696,7 @@ func (m Model) displayPosition() float64 {
 
 // npPanelTitle labels the now-playing panel with whatever is playing.
 func (m Model) npPanelTitle() string {
-	return "VISUALIZER  " + styleKeyHint.Render("[v]") + " hide"
+	return "VISUALIZER" + m.hints("  "+styleKeyHint.Render("[v]")+" hide")
 }
 
 // renderNowPlayingPanel is the visualizer: the spectrum, full width.
@@ -1774,7 +1791,10 @@ func (m Model) renderPlayerBar() string {
 	rows := []string{
 		truncate(nowPlaying, max(1, innerW)),
 		truncate(albumRow, max(1, innerW)),
-		truncate(combined, max(1, fullW)),
+		// innerW, not fullW: the combined row is placed after the cover
+		// column, so letting it run to the full width overflowed the
+		// box by exactly the cover slot.
+		truncate(combined, max(1, innerW)),
 	}
 
 	var content string

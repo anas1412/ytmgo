@@ -61,9 +61,18 @@ func (m Model) playerRowLayout() playerRowLayout {
 	l := playerRowLayout{compact: innerW < 110, transportStart: contentStartX}
 
 	// ── Transport cluster ──
-	pHint := styleKeyHint.Render("[p]")
-	spaceHint := styleKeyHint.Render("[space]")
-	nHint := styleKeyHint.Render("[n]")
+	// With hints hidden the buttons keep their words and stay clickable;
+	// only the bracketed key tokens go. The zones derive from whatever
+	// is rendered, so the mouse follows automatically.
+	hint := func(k string) string {
+		if !m.settings.ShowHints {
+			return ""
+		}
+		return styleKeyHint.Render(k) + " "
+	}
+	pHint := hint("[p]")
+	spaceHint := hint("[space]")
+	nHint := hint("[n]")
 	playing := m.playerState == player.StatePlaying
 	prevTxt, nextTxt, playTxt := "⏮ Prev", "⏭ Next", "▶ Play"
 	if playing {
@@ -79,9 +88,9 @@ func (m Model) playerRowLayout() playerRowLayout {
 	if playing {
 		playStyle = styleCtrlBtnActive
 	}
-	prevGroup := pHint + " " + styleCtrlBtn.Render(prevTxt)
-	playGroup := spaceHint + " " + playStyle.Render(playTxt)
-	nextGroup := nHint + " " + styleCtrlBtn.Render(nextTxt)
+	prevGroup := pHint + styleCtrlBtn.Render(prevTxt)
+	playGroup := spaceHint + playStyle.Render(playTxt)
+	nextGroup := nHint + styleCtrlBtn.Render(nextTxt)
 	l.prevEnd = contentStartX + lipgloss.Width(prevGroup)
 	l.playEnd = l.prevEnd + 2 + lipgloss.Width(playGroup)
 	l.transportEnd = l.playEnd + 2 + lipgloss.Width(nextGroup)
@@ -99,7 +108,7 @@ func (m Model) playerRowLayout() playerRowLayout {
 	if l.compact {
 		shuffleTxt = "🔀"
 	}
-	shuffleLabel := styleKeyHint.Render("[s]") + " " + shuffleStyle.Render(shuffleTxt)
+	shuffleLabel := hint("[s]") + shuffleStyle.Render(shuffleTxt)
 
 	var repeatTxt string
 	var repeatOn bool
@@ -117,10 +126,15 @@ func (m Model) playerRowLayout() playerRowLayout {
 	} else if repeatOn {
 		repeatStyle = styleModeActive
 	}
-	repeatLabel := styleKeyHint.Render("[r]") + " " + repeatStyle.Render(repeatTxt)
+	repeatLabel := hint("[r]") + repeatStyle.Render(repeatTxt)
 
 	volDown := styleKeyHint.Render("[-]")
 	volUp := styleKeyHint.Render("[+]")
+	if !m.settings.ShowHints {
+		// The volume steppers stay as click targets, just quieter.
+		volDown = styleKeyHint.Render("−")
+		volUp = styleKeyHint.Render("+")
+	}
 	volMid := fmt.Sprintf("%d%%", m.volume)
 	if !l.compact {
 		l.volBarCells = 8
@@ -132,7 +146,10 @@ func (m Model) playerRowLayout() playerRowLayout {
 
 	// ── Time and seek bar fill whatever is left ──
 	timeInfo := ""
-	if m.duration > 0 && m.playerState != player.StateStopped {
+	// Below this the compact clusters alone fill the row (the cover
+	// slot costs ten columns on top of a narrow terminal); the time is
+	// the least load-bearing part — the bar still shows the position.
+	if m.duration > 0 && m.playerState != player.StateStopped && innerW >= 72 {
 		displayPos := m.displayPosition()
 		cur := formatTime(displayPos)
 		tot := formatTime(m.duration)
@@ -146,7 +163,7 @@ func (m Model) playerRowLayout() playerRowLayout {
 		timeInfo = cur + sep + tot
 	}
 	hPart, lPart := "", ""
-	if !l.compact {
+	if !l.compact && m.settings.ShowHints {
 		hPart = styleKeyHint.Render("[h]") + " "
 		lPart = " " + styleKeyHint.Render("[l]")
 	}

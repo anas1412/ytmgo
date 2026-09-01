@@ -184,11 +184,17 @@ func (m Model) handleClick(x, y int) (Model, tea.Cmd) {
 		var tabWidths []int
 		for i, t := range tabs {
 			hint := styleKeyHint.Render("[" + t.key + "]")
+			if !m.settings.ShowHints {
+				hint = ""
+			}
 			label := styleNavTab.Render(t.label)
 			if int(m.activePage) == i {
 				label = styleNavTabActive.Render(t.label)
 			}
-			rendered := hint + " " + label
+			rendered := label
+			if hint != "" {
+				rendered = hint + " " + label
+			}
 			renderedTabs = append(renderedTabs, rendered)
 			tabWidths = append(tabWidths, lipgloss.Width(rendered))
 		}
