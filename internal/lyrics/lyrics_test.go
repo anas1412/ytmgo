@@ -2,8 +2,10 @@ package lyrics
 
 import (
 	"errors"
+	"net/http"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestParseLRC(t *testing.T) {
@@ -116,5 +118,42 @@ func TestLiveFetchMiss(t *testing.T) {
 	}
 	if !errors.Is(err, ErrNotFound) {
 		t.Skipf("lookup unavailable (not a definitive miss): %v", err)
+	}
+}
+
+// failingTransport makes every LRCLIB request fail, standing in for the
+// service being down, slow or rate-limiting.
+type failingTransport struct{ inner http.RoundTripper }
+
+func (f failingTransport) RoundTrip(r *http.Request) (*http.Response, error) {
+	if strings.Contains(r.URL.Host, "lrclib") {
+		return nil, errors.New("simulated LRCLIB outage")
+	}
+	return f.inner.RoundTrip(r)
+}
+
+// TestFallsBackWhenLRCLIBIsDown: LRCLIB has the synced lyrics and is
+// asked first, but it is not a hard dependency. It used to be — the
+// YouTube Music fallback ran only on a definitive 404, so an outage, a
+// timeout or a rate-limit returned no lyrics at all for tracks YouTube
+// Music could have answered.
+func TestFallsBackWhenLRCLIBIsDown(t *testing.T) {
+	if testing.Short() {
+		t.Skip("short mode: skipping network test")
+	}
+	old := httpClient
+	httpClient = &http.Client{Transport: failingTransport{http.DefaultTransport}, Timeout: 15 * time.Second}
+	defer func() { httpClient = old }()
+
+	// A track known to carry lyrics on YouTube Music.
+	l, err := Fetch("QLHMhVonF-s", "黄昏のBAY CITY", "八神純子", 251)
+	if err != nil {
+		t.Skipf("youtube music lyrics unavailable: %v", err)
+	}
+	if l == nil || l.Raw == "" {
+		t.Fatal("LRCLIB down and nothing came back — the fallback did not run")
+	}
+	if l.Source != "youtube" {
+		t.Errorf("lyrics came from %q, expected the youtube fallback", l.Source)
 	}
 }

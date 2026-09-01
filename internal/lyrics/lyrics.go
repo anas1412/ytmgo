@@ -70,21 +70,31 @@ func Fetch(trackID, title, artist string, durationSec int) (*Lyrics, error) {
 		return nil, ErrNotFound
 	}
 
-	l, err := fetchLRCLIB(t, a, durationSec)
-	if err == nil {
+	l, lrcErr := fetchLRCLIB(t, a, durationSec)
+	if lrcErr == nil {
 		return l, nil
 	}
-	if !errors.Is(err, ErrNotFound) {
-		return nil, err // transient — the caller may retry later
-	}
 
+	// YouTube Music is tried whatever went wrong at LRCLIB, not only on
+	// a definitive miss. LRCLIB has the synced lyrics and is worth
+	// asking first, but it being slow, rate-limiting or down should
+	// cost the timing, not the lyrics: InnerTube is already a hard
+	// dependency of the app and often has the plain text.
 	if ytmusic.IsVideoID(trackID) {
 		text, err := ytmusic.PlainLyrics(trackID)
 		if err == nil && text != "" {
 			return plainFromText(text, "youtube"), nil
 		}
 	}
-	return nil, ErrNotFound
+
+	// Both were asked. A definitive miss at LRCLIB with nothing at
+	// YouTube Music means this track has no lyrics, and the caller may
+	// remember that. Anything else was a failure, not an answer, and
+	// must not be cached as one.
+	if errors.Is(lrcErr, ErrNotFound) {
+		return nil, ErrNotFound
+	}
+	return nil, lrcErr
 }
 
 // ─── LRCLIB ──────────────────────────────────────────────────────────
@@ -95,7 +105,11 @@ const lrclibURL = "https://lrclib.net/api/get"
 // for a contactable client string.
 const userAgent = "ytmgo (https://github.com/anas1412/ytmgo)"
 
-var httpClient = &http.Client{Timeout: 15 * time.Second}
+// A short timeout: this is a foreground request behind a keypress, and
+// there is a fallback to reach afterwards. Waiting a quarter of a minute
+// on the first leg before even trying the second is worse than failing
+// over quickly.
+var httpClient = &http.Client{Timeout: 6 * time.Second}
 
 type lrclibResponse struct {
 	PlainLyrics  string `json:"plainLyrics"`

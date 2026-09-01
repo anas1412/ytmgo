@@ -390,8 +390,23 @@ func (d *DB) SaveCachedLyrics(trackID, text string, synced bool) error {
 	if err != nil {
 		return fmt.Errorf("save cached lyrics: %w", err)
 	}
+	// Keep the newest lyricsCacheMax and drop the rest. A song's lyrics
+	// never change, so this is a size bound rather than a staleness one:
+	// evicting one costs a single refetch, after which it is the newest
+	// row again. At roughly 800 bytes a track the cap is about 1.5 MB.
+	_, err = d.Exec(`DELETE FROM lyrics_cache WHERE track_id NOT IN (
+		SELECT track_id FROM lyrics_cache ORDER BY fetched_at DESC, rowid DESC LIMIT ?)`,
+		lyricsCacheMax)
+	if err != nil {
+		return fmt.Errorf("trim lyrics cache: %w", err)
+	}
 	return nil
 }
+
+// lyricsCacheMax is how many tracks' lyrics are kept. A var so the test
+// can shrink it: exercising the cap at its real size means two thousand
+// inserts, which is ten seconds the suite does not need to spend.
+var lyricsCacheMax = 2000
 
 // LoadCachedLyrics reads cached lyrics for a track. found reports
 // whether a row exists at all: found with empty text is a recorded

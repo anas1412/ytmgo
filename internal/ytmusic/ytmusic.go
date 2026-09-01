@@ -422,9 +422,14 @@ func PlainLyrics(videoID string) (string, error) {
 	return text, nil
 }
 
-// lyricsBrowseID hunts the next response for the lyrics engagement
-// panel (identified by its MPLYR panel identifier) and returns the
-// browse id carried inside it.
+// lyricsBrowseID hunts the next response for the browse id of the
+// lyrics tab. Lyrics live under the MPLY namespace — in practice
+// MPLYt-prefixed ids — so the id itself is what identifies them.
+//
+// It used to also require a panelIdentifier containing "MPLYR". The
+// response carries no panelIdentifier at all, and the ids are MPLYt,
+// so neither condition could ever match and every lookup reported that
+// the track had no lyrics.
 func lyricsBrowseID(root interface{}) string {
 	var found string
 	var walk func(v interface{})
@@ -434,11 +439,9 @@ func lyricsBrowseID(root interface{}) string {
 		}
 		switch t := v.(type) {
 		case map[string]interface{}:
-			if id, ok := t["panelIdentifier"].(string); ok && strings.Contains(id, "MPLYR") {
-				if b := digString(findKey(t, "browseEndpoint"), "browseId"); strings.HasPrefix(b, "MPLYR") {
-					found = b
-					return
-				}
+			if b, ok := t["browseId"].(string); ok && strings.HasPrefix(b, "MPLY") {
+				found = b
+				return
 			}
 			for _, vv := range t {
 				walk(vv)

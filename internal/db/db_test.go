@@ -1,6 +1,7 @@
 package db
 
 import (
+	"fmt"
 	"testing"
 
 	"ytmgo/internal/library"
@@ -181,5 +182,33 @@ func TestThemeRoundTrips(t *testing.T) {
 	}
 	if got.Theme != "gruvbox" {
 		t.Errorf("theme came back as %q, want gruvbox", got.Theme)
+	}
+}
+
+// TestLyricsCacheIsBounded: lyrics are cached forever by design — a
+// song's words do not change — so the table needs a size bound or it
+// grows for the life of the install.
+func TestLyricsCacheIsBounded(t *testing.T) {
+	d := openTestDB(t)
+
+	defer func(n int) { lyricsCacheMax = n }(lyricsCacheMax)
+	lyricsCacheMax = 50
+
+	for i := 0; i < lyricsCacheMax+20; i++ {
+		if err := d.SaveCachedLyrics(fmt.Sprintf("vid%05d", i), "la la la", false); err != nil {
+			t.Fatalf("SaveCachedLyrics: %v", err)
+		}
+	}
+	var n int
+	if err := d.QueryRow(`SELECT count(*) FROM lyrics_cache`).Scan(&n); err != nil {
+		t.Fatalf("count: %v", err)
+	}
+	if n > lyricsCacheMax {
+		t.Errorf("cache holds %d rows, cap is %d", n, lyricsCacheMax)
+	}
+	// The most recent write must survive the trim that follows it.
+	newest := fmt.Sprintf("vid%05d", lyricsCacheMax+19)
+	if _, _, found, err := d.LoadCachedLyrics(newest); err != nil || !found {
+		t.Errorf("newest entry was evicted (found=%v, err=%v)", found, err)
 	}
 }

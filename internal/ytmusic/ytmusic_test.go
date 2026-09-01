@@ -171,3 +171,25 @@ func TestLiveAlbums(t *testing.T) {
 		full.Title, full.Artist, full.Year, len(full.Tracks), withDur,
 		full.Tracks[0].Title, full.Tracks[0].Duration)
 }
+
+// TestLiveLyrics: the lyrics lookup matched on a panelIdentifier
+// containing "MPLYR" and a browse id with the same prefix. The response
+// carries no panelIdentifier at all and the ids are MPLYt, so nothing
+// ever matched and every track came back as having no lyrics — which
+// made the fallback behind LRCLIB dead code.
+func TestLiveLyrics(t *testing.T) {
+	if testing.Short() {
+		t.Skip("short mode: skipping network test")
+	}
+	hits, err := Search("Bohemian Rhapsody Queen", 1)
+	if err != nil || len(hits) == 0 {
+		t.Skipf("live search unavailable: %v", err)
+	}
+	text, err := PlainLyrics(hits[0].VideoID)
+	if err != nil {
+		t.Fatalf("a track this famous has lyrics; got %v", err)
+	}
+	if len(text) < 100 {
+		t.Errorf("lyrics are %d bytes, expected a full song", len(text))
+	}
+}
