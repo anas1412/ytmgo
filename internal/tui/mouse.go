@@ -452,16 +452,21 @@ func (m Model) handlePlayerRowClick(x int) (Model, tea.Cmd) {
 			cmd := m.changeVolume(+5)
 			m.setStatus(fmt.Sprintf("Volume: %d%%", m.volume))
 			return m, cmd
-		case !l.compact && x >= l.volDownEnd+1 && x < l.volUpStart-1:
-			// Click on the volume bar — set proportionally.
-			barStart := l.volDownEnd + 1
-			barW := (l.volUpStart - 1) - barStart
-			if barW > 0 {
-				pct := float64(x-barStart) / float64(barW) * 100.0
-				cmd := m.setVolumeTo(int(pct))
-				m.setStatus(fmt.Sprintf("Volume: %d%%", m.volume))
-				return m, cmd
-			}
+		case l.volBarCells > 0 && x >= l.volBarStart && x < l.volBarEnd:
+			// Click on the volume bar. The zone is the bar's own cells
+			// — it used to run through the percentage text too, so the
+			// divisor was half again the visible bar and clicking its
+			// right end landed around 60%. The maths mirror the fill
+			// rule (cell i lit when volume reaches (i+1)/cells), so
+			// clicking a cell fills the bar exactly through it.
+			cell := x - l.volBarStart
+			// Round up: the fill rule lights cell i once the volume
+			// reaches (i+1)/cells of 100, and truncating down (12.5→12)
+			// would leave the clicked cell itself unlit.
+			pct := ((cell+1)*100 + l.volBarCells - 1) / l.volBarCells
+			cmd := m.setVolumeTo(pct)
+			m.setStatus(fmt.Sprintf("Volume: %d%%", m.volume))
+			return m, cmd
 		}
 	}
 

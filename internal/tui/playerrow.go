@@ -24,9 +24,11 @@ type playerRowLayout struct {
 	// Seek bar.
 	barStart, barWidth int
 
-	// Right cluster: modes and volume.
+	// Right cluster: modes and volume. volBarStart/volBarEnd bound the
+	// volume bar's actual cells — not the percentage text after it.
 	rightStart, shuffleEnd, repeatStart, repeatEnd int
 	volStart, volDownEnd, volUpStart, volEnd       int
+	volBarStart, volBarEnd, volBarCells            int
 
 	// compact drops the button words, the [h]/[l] hints and the volume
 	// bar so the row still fits a narrow terminal.
@@ -121,7 +123,8 @@ func (m Model) playerRowLayout() playerRowLayout {
 	volUp := styleKeyHint.Render("[+]")
 	volMid := fmt.Sprintf("%d%%", m.volume)
 	if !l.compact {
-		volMid = renderVolumeBar(m.volume, 8) + " " + volMid
+		l.volBarCells = 8
+		volMid = renderVolumeBar(m.volume, l.volBarCells) + " " + volMid
 	}
 	volLabel := volDown + " " + volMid + " " + volUp
 	right := shuffleLabel + "  " + repeatLabel + "  " + volLabel
@@ -191,5 +194,9 @@ func (m Model) playerRowLayout() playerRowLayout {
 	l.volEnd = l.volStart + lipgloss.Width(volLabel)
 	l.volDownEnd = l.volStart + lipgloss.Width(volDown)
 	l.volUpStart = l.volEnd - lipgloss.Width(volUp)
+	if l.volBarCells > 0 {
+		l.volBarStart = l.volDownEnd + 1 // after "[-] "
+		l.volBarEnd = l.volBarStart + l.volBarCells
+	}
 	return l
 }

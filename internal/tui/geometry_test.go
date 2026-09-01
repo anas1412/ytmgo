@@ -6,6 +6,7 @@ import (
 	"image/color"
 	"strings"
 	"testing"
+	"time"
 
 	"ytmgo/internal/coverart"
 	"ytmgo/internal/lyrics"
@@ -590,5 +591,70 @@ func TestAlbumClickMatchesRow(t *testing.T) {
 		if nm.searchCursor != want {
 			t.Errorf("click on rendered row of track %d selected %d", want+1, nm.searchCursor)
 		}
+	}
+}
+
+// TestVolumeBarClickIsExact: clicking cell i of the volume bar must
+// fill the bar exactly through cell i. The old zone ran through the
+// percentage text after the bar, so its divisor was wider than the bar
+// itself and the mapping drifted rightward.
+func TestVolumeBarClickIsExact(t *testing.T) {
+	m := worstCaseModel(t, 150, 40)
+	m.queue.SetCurrentIndex(0)
+	m.playerState = player.StatePlaying
+	m.duration = 200
+	l := m.playerRowLayout()
+	if l.volBarCells == 0 {
+		t.Fatal("full-width layout should carry a volume bar")
+	}
+	for cell := 0; cell < l.volBarCells; cell++ {
+		nm, _ := m.handlePlayerRowClick(l.volBarStart + cell)
+		// The handler rounds up so the clicked cell crosses the fill
+		// threshold — 12.5 truncated to 12 would leave it unlit.
+		want := ((cell+1)*100 + l.volBarCells - 1) / l.volBarCells
+		if nm.volume != want {
+			t.Errorf("click on cell %d set volume %d, want %d", cell, nm.volume, want)
+		}
+		// And the rendered bar must show exactly cell+1 filled cells.
+		filled := int(float64(nm.volume) / 100.0 * float64(l.volBarCells))
+		if filled != cell+1 {
+			t.Errorf("cell %d: volume %d renders %d filled cells, want %d", cell, nm.volume, filled, cell+1)
+		}
+	}
+	// One past the bar is the percentage text: it must do nothing.
+	nm, _ := m.handlePlayerRowClick(l.volBarEnd + 1)
+	if nm.volume != m.volume {
+		t.Errorf("click on the percentage text changed the volume")
+	}
+}
+
+// TestDownloadJumpsToDownloadsPage: an explicit x lands the user on the
+// downloads page so the job it started is in front of them.
+func TestDownloadJumpsToDownloadsPage(t *testing.T) {
+	// An empty PATH keeps the enqueued job from launching a real
+	// yt-dlp: the worker's exec fails instantly and the job just sits
+	// there failed, which is all this test needs.
+	t.Setenv("PATH", t.TempDir())
+
+	m := worstCaseModel(t, 150, 40)
+	// A URL in hand means x enqueues directly instead of resolving
+	// first — the async half is covered by the resolved-URL handler.
+	m.results[0].URL = "https://music.youtube.com/watch?v=m9SMT5ipbxk"
+	nm, _ := m.handleKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'x'}})
+	m = nm.(Model)
+	if m.activePage != PageDownloads {
+		t.Errorf("x left the user on page %v, want the downloads page", m.activePage)
+	}
+	if m.downloader == nil || len(m.downloader.Jobs()) == 0 {
+		t.Fatal("x queued nothing")
+	}
+	m.downloader.Close()
+	// Wait for the worker to finish failing the job, so its mkdir
+	// cannot race the temp dir's cleanup.
+	for i := 0; i < 100; i++ {
+		if st := m.downloader.Jobs()[0].Status; st != 0 && m.downloader.Jobs()[0].Progress == 0 {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
 	}
 }
