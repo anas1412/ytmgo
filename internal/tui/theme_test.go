@@ -179,25 +179,28 @@ func TestSearchFieldFitsItsBox(t *testing.T) {
 	}
 }
 
-// TestSearchFieldFillOnlyWhenPainted: the field's well is a filled
-// block, which reads as an input only when the rest of the UI is filled
-// too. On the themes that leave the terminal's backdrop alone it would
-// be an opaque island in a transparent header.
+// TestSearchFieldFillOnlyWhenPainted: the field's well is filled on
+// themes that paint their own background and left alone on the two that
+// do not. The fill is laid over the finished field in one pass, so this
+// checks the rendered header rather than any single style — several
+// styles each painting their own idea of the colour is exactly the bug
+// that made the field look stitched together.
 func TestSearchFieldFillOnlyWhenPainted(t *testing.T) {
 	defer ApplyTheme(ThemeTerminal)
-	for _, th := range []Theme{ThemeTerminal, ThemeYtmgo} {
+	for _, th := range themeOrder {
 		ApplyTheme(th)
-		if styleSearchBox.GetBackground() != nil {
-			if _, isNo := styleSearchBox.GetBackground().(lipgloss.NoColor); !isNo {
-				t.Errorf("%s: search field paints a fill on a transparent theme", th)
-			}
+		m := worstCaseModel(t, 150, 40)
+		header := m.renderHeader()
+		fill := sgrColor(colorBgHover, 48)
+		got := fill != "" && strings.Contains(header, fill)
+		if got != paintBackground {
+			t.Errorf("%s: header fill = %v, want %v", th, got, paintBackground)
 		}
-	}
-	ApplyTheme(Theme("nord"))
-	if bg := styleSearchBox.GetBackground(); bg == nil {
-		t.Error("nord: search field should have a fill")
-	} else if _, isNo := bg.(lipgloss.NoColor); isNo {
-		t.Error("nord: search field should have a fill")
+		// However it is filled, the run must close — an unterminated
+		// fill carried the colour across the page tabs beside it.
+		if paintBackground && !strings.Contains(header, "\x1b[49m") {
+			t.Errorf("%s: the field's fill is never closed", th)
+		}
 	}
 }
 

@@ -47,13 +47,13 @@ func buildInlineStyles() {
 	// only when the rest of the UI is filled too — on the two themes
 	// that leave the terminal's own backdrop alone it is an opaque
 	// island in an otherwise transparent header. There it goes without
-	// a fill, and the prompt, placeholder and cursor carry the affordance.
-	well := func(st lipgloss.Style) lipgloss.Style {
-		if !paintBackground {
-			return st
-		}
-		return st.Background(colorBgHover)
-	}
+	// a fill, and the prompt, placeholder and a bar carry the affordance.
+	//
+	// None of these styles paint the fill themselves. renderHeader lays
+	// it under the finished field in one pass instead: lipgloss renders
+	// the same colour a shade apart in padding and in text, so a fill
+	// assembled from several styles met itself mid-field.
+	well := func(st lipgloss.Style) lipgloss.Style { return st }
 
 	// No underline: the textinput pads its value area out to Width with
 	// the placeholder style, so underlining it drew a rule across
@@ -189,6 +189,26 @@ func (m Model) paintBg(view string) string {
 	return strings.Join(lines, "\n")
 }
 
+// fillRun lays bg under a string that already carries styling of its
+// own. A wrapper's Background cannot do this: the inner escapes reset
+// the background to the terminal default part-way through, which left
+// the search field filled at its prompt and its last pad cell with a
+// hole between them. Same fix as paintBg — the resets are rewritten to
+// the colour that is meant to be underneath.
+func fillRun(s string, bg lipgloss.TerminalColor) string {
+	seq := sgrColor(bg, 48)
+	if seq == "" {
+		return s
+	}
+	// The trailing reset closes the run: without it the fill opens and
+	// never ends, carrying the colour across everything drawn after it
+	// on the line. paintBg rewrites that reset to the page background.
+	return seq + strings.NewReplacer(
+		"\x1b[49m", seq,
+		"\x1b[0m", "\x1b[0m"+seq,
+	).Replace(s) + "\x1b[49m"
+}
+
 // sgrColor renders a colour as a truecolour SGR sequence for the given
 // layer (38 foreground, 48 background).
 func sgrColor(c lipgloss.TerminalColor, layer int) string {
@@ -196,6 +216,10 @@ func sgrColor(c lipgloss.TerminalColor, layer int) string {
 		return ""
 	}
 	r, g, b, _ := c.RGBA()
+	// Truncate, exactly as lipgloss does when it emits the same colour.
+	// Rounding here is arguably more accurate and is the wrong call: it
+	// put this one higher than lipgloss's own padding in a channel, and
+	// two shades of the "same" colour met mid-fill.
 	return fmt.Sprintf("\x1b[%d;2;%d;%d;%dm", layer, r>>8, g>>8, b>>8)
 }
 
@@ -305,6 +329,12 @@ func (m Model) renderHeader() string {
 		searchView = styleSearchBoxFocused.Render(inner)
 	} else {
 		searchView = styleSearchBox.Render(inner)
+	}
+	if paintBackground {
+		// One pass over the finished field, so the whole well is a
+		// single continuous colour rather than a fill stitched from
+		// each style's own idea of it.
+		searchView = fillRun(searchView, colorBgHover)
 	}
 	// A bar marks where the field begins — brighter when it has focus.
 	// Themes that paint a fill already show the field's extent, so the
