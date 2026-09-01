@@ -665,10 +665,15 @@ func coverFitCells(img image.Image, maxCols, maxRows int) (cols, rows int) {
 	}
 	ratio := float64(b.Dy()) / float64(b.Dx()) // height / width
 	rows = maxRows
-	cols = int(float64(rows) * coverart.CellAspect / ratio)
+	// Round to the nearest cell, not down: 4 rows of a square cover
+	// want 9.6 columns, and truncating to 9 rendered it 6% narrow.
+	cols = int(float64(rows)*coverart.CellAspect/ratio + 0.5)
 	if cols > maxCols {
 		cols = maxCols
-		rows = int(float64(cols) * ratio / coverart.CellAspect)
+		rows = int(float64(cols)*ratio/coverart.CellAspect + 0.5)
+		if rows > maxRows {
+			rows = maxRows
+		}
 	}
 	if cols < 1 || rows < 1 {
 		return 0, 0
