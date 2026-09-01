@@ -55,16 +55,15 @@ func buildInlineStyles() {
 		return st.Background(colorBgHover)
 	}
 
-	// On no-fill themes the underline marks the field as an input.
-	// These styles are safe to underline: the textinput applies them to
-	// plain text runs, never to strings already carrying ANSI.
+	// No underline: the textinput pads its value area out to Width with
+	// the placeholder style, so underlining it drew a rule across
+	// eighteen empty cells as well as the text. The field is marked
+	// with a bar to its left instead — see renderHeader.
 	textinputStyle = well(lipgloss.NewStyle().
-		Foreground(colorText).
-		Underline(!paintBackground))
+		Foreground(colorText))
 	textinputPlaceholder = well(lipgloss.NewStyle().
 		Foreground(colorTextDim).
-		Italic(true).
-		Underline(!paintBackground))
+		Italic(true))
 	styleTextDim = lipgloss.NewStyle().Foreground(colorTextDim)
 
 	// App background
@@ -307,6 +306,16 @@ func (m Model) renderHeader() string {
 	} else {
 		searchView = styleSearchBox.Render(inner)
 	}
+	// A bar marks where the field begins — brighter when it has focus.
+	// Themes that paint a fill already show the field's extent, so the
+	// bar is for the two that do not.
+	if !paintBackground {
+		barColor := colorBorder
+		if m.searchFocused {
+			barColor = colorAccent2
+		}
+		searchView = lipgloss.NewStyle().Foreground(barColor).Render("▏") + searchView
+	}
 
 	// Build page tabs (right side) with inline key hints matching [h] / [l] style
 	type tabDef struct {
@@ -344,7 +353,9 @@ func (m Model) renderHeader() string {
 	tabHint := m.hints(styleKeyHint.Render("[tab]") + styleTextDim.Render(" cycle"))
 	// [v] used to sit here too; it lives in the help bar now, next to
 	// [X], so the two panel toggles are advertised together in one place.
-	left := lipgloss.JoinHorizontal(lipgloss.Center, logo, "   ", searchView, "  ", tabHint)
+	// The logo is a wordmark, the field is a control — give them enough
+	// air not to read as one run of text.
+	left := lipgloss.JoinHorizontal(lipgloss.Center, logo, "     ", searchView, "  ", tabHint)
 
 	gap := m.width - lipgloss.Width(left) - lipgloss.Width(tabsStr) - 2
 	if gap < 1 {

@@ -99,12 +99,12 @@ func (m Model) rightPanelSplit() (queueContentH, lyricsContentH int) {
 		return m.panelHeight() - 2, 0
 	}
 	total := m.panelHeight() - 4
-	lyricsContentH = total * 55 / 100
-	if lyricsContentH < lyricsMinRows {
-		lyricsContentH = lyricsMinRows
+	lyricsContentH = total * bottomPaneRatio / 100
+	if lyricsContentH < bottomPaneMin {
+		lyricsContentH = bottomPaneMin
 	}
-	if total-lyricsContentH < queueMinRows {
-		lyricsContentH = total - queueMinRows
+	if total-lyricsContentH < topPaneMin {
+		lyricsContentH = total - topPaneMin
 	}
 	return total - lyricsContentH, lyricsContentH
 }
@@ -117,9 +117,19 @@ const (
 	albumArtSlotCols = 10
 )
 
+// Both columns split at the same ratio and the same minimums, so the
+// visualizer and the lyrics pane are the same height and their top
+// borders line up across the screen. Divergent values put the two
+// dividers at different heights, which read as a mistake.
 const (
-	lyricsMinRows = 6
-	queueMinRows  = 5
+	bottomPaneRatio = 30 // percent of the splittable rows
+	bottomPaneMin   = 6
+	topPaneMin      = 7
+)
+
+const (
+	lyricsMinRows = bottomPaneMin
+	queueMinRows  = topPaneMin
 )
 
 // lyricsFits reports whether the right column can hold both the queue
@@ -138,8 +148,8 @@ func (m Model) lyricsVisible() bool {
 // usable. Below this the now-playing panel refuses to open rather than
 // crushing the results list into two or three visible items.
 const (
-	npMinRows      = 6
-	resultsMinRows = 7
+	npMinRows      = bottomPaneMin
+	resultsMinRows = topPaneMin
 )
 
 // leftPanelSplit returns the Height() values for the results panel and
@@ -157,14 +167,14 @@ func (m Model) leftPanelSplit() (resultsH, npH int) {
 	if total < npMinRows+resultsMinRows {
 		return full, 0
 	}
-	// A third shorter than it used to be: the spectrum reads the same
-	// at this height, and the rows above it are a results list.
-	npH = total * 30 / 100
-	if npH < npMinRows {
-		npH = npMinRows
+	// Same ratio and minimums as the lyrics pane opposite, so the two
+	// bottom panels are one height and their borders align.
+	npH = total * bottomPaneRatio / 100
+	if npH < bottomPaneMin {
+		npH = bottomPaneMin
 	}
-	if total-npH < resultsMinRows {
-		npH = total - resultsMinRows
+	if total-npH < topPaneMin {
+		npH = total - topPaneMin
 	}
 	return total - npH, npH
 }
