@@ -75,6 +75,17 @@ ask() {
 BINARY="ytmgo"
 BIN_PATH=""
 
+# rm_f removes a file, escalating to sudo only when the path is not
+# ours to delete — the binary and desktop entry live under /usr/local
+# when the installer had sudo.
+rm_f() {
+  [ -e "$1" ] || return 1
+  if rm -f "$1" 2>/dev/null; then
+    return 0
+  fi
+  command -v sudo >/dev/null 2>&1 && sudo rm -f "$1"
+}
+
 # ─── 1. Remove the binary ────────────────────────────────────────────
 if ask "Remove the ytmgo binary?" true; then
   if command -v "$BINARY" >/dev/null 2>&1; then
@@ -108,7 +119,7 @@ if ask "Remove the desktop entry and icon?" true; then
   for d in "${XDG_DATA_HOME:-$HOME/.local/share}" /usr/local/share; do
     for f in "$d/applications/ytmgo.desktop" \
              "$d/icons/hicolor/256x256/apps/ytmgo.png"; do
-      if [ -f "$f" ] && rm -f "$f" 2>/dev/null; then
+      if [ -f "$f" ] && rm_f "$f"; then
         info "Removed $f"
         removed=true
       fi

@@ -94,10 +94,20 @@ goarch="$arch"
 asset="${BINARY}_${os}_${goarch}.tar.gz"
 
 # ─── Pick install dir ────────────────────────────────────────────────
+# /usr/local/bin whenever we can write there, because it is on every
+# shell's PATH already — the same reason the Arch package's /usr/bin
+# just works. ~/.local/bin needs PATH wiring that only helps the *next*
+# shell, which read as "installed, but command not found". The deps
+# step already uses sudo on Linux, so using it for one binary is not a
+# new ask.
+SUDO=""
 if [ -n "${YTMGO_INSTALL_DIR:-}" ]; then
   INSTALL_DIR="$YTMGO_INSTALL_DIR"
 elif [ "$(id -u)" -eq 0 ]; then
   INSTALL_DIR="/usr/local/bin"
+elif [ "$os" = "Linux" ] && command -v sudo >/dev/null 2>&1; then
+  INSTALL_DIR="/usr/local/bin"
+  SUDO="sudo"
 else
   INSTALL_DIR="$HOME/.local/bin"
 fi
@@ -179,8 +189,8 @@ info "Extracting…"
 tar -xzf "$tmp/$asset" -C "$tmp" "$BINARY"
 chmod +x "$tmp/$BINARY"
 
-mkdir -p "$INSTALL_DIR"
-install -m 0755 "$tmp/$BINARY" "$INSTALL_DIR/$BINARY"
+$SUDO mkdir -p "$INSTALL_DIR"
+$SUDO install -m 0755 "$tmp/$BINARY" "$INSTALL_DIR/$BINARY"
 success "Installed ${BINARY} ${tag} → ${INSTALL_DIR}/${BINARY}"
 
 # ─── Desktop entry ──────────────────────────────────────────────────
@@ -195,16 +205,16 @@ if [ "$os" = "Linux" ]; then
   fi
   app_dir="$DATA_DIR/applications"
   icon_dir="$DATA_DIR/icons/hicolor/256x256/apps"
-  if mkdir -p "$app_dir" "$icon_dir" 2>/dev/null; then
+  if $SUDO mkdir -p "$app_dir" "$icon_dir" 2>/dev/null; then
     icon_url="https://raw.githubusercontent.com/${REPO}/${tag}/ytmgo-icon.png"
-    if curl -fsSL -o "$icon_dir/ytmgo.png" "$icon_url" 2>/dev/null; then
+    if curl -fsSL -o "$tmp/ytmgo-icon.png" "$icon_url" 2>/dev/null; then
+      $SUDO install -m 0644 "$tmp/ytmgo-icon.png" "$icon_dir/ytmgo.png"
       icon_line="Icon=ytmgo"
     else
       # No icon is not a reason to skip the launcher entry.
-      rm -f "$icon_dir/ytmgo.png"
       icon_line="Icon=multimedia-audio-player"
     fi
-    cat > "$app_dir/ytmgo.desktop" <<DESKTOP_EOF
+    cat > "$tmp/ytmgo.desktop" <<DESKTOP_EOF
 [Desktop Entry]
 Type=Application
 Name=ytmgo
@@ -214,11 +224,11 @@ $icon_line
 Terminal=true
 Categories=AudioVideo;Audio;Music;Player;
 DESKTOP_EOF
-    chmod 0644 "$app_dir/ytmgo.desktop"
+    $SUDO install -m 0644 "$tmp/ytmgo.desktop" "$app_dir/ytmgo.desktop"
     # Mint/GNOME cache launcher entries; without this the item can take
     # a re-login to appear.
     command -v update-desktop-database >/dev/null 2>&1 &&
-      update-desktop-database "$app_dir" >/dev/null 2>&1 || true
+      $SUDO update-desktop-database "$app_dir" >/dev/null 2>&1 || true
     success "Desktop entry → ${app_dir}/ytmgo.desktop"
   fi
 fi
@@ -230,6 +240,11 @@ fi
 # next login — which reads as "installed, but command not found". Wire
 # it into the shell rc files so a new terminal just works, and tell the
 # user how to fix the one they are standing in.
+if [ "$INSTALL_DIR" = "/usr/local/bin" ] || [ "$INSTALL_DIR" = "/usr/bin" ]; then
+  # System locations are on every default PATH; a shell missing them is
+  # exotic enough that editing rc files would be a guess.
+  :
+else
 case ":$PATH:" in
   *":$INSTALL_DIR:"*) ;;
   *)
@@ -251,6 +266,7 @@ case ":$PATH:" in
     printf '   %s%s%s\n' "$BOLD" "$line" "$RESET"
     ;;
 esac
+fi
 
 # ─── System deps check + install ───────────────────────────────────
 # Auto-install any missing mpv/yt-dlp/ffmpeg via the user's package
