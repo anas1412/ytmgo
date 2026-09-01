@@ -14,13 +14,15 @@ func searchResultToTrack(r search.Result) queue.Track {
 	m := d / 60
 	s := d % 60
 	return queue.Track{
-		ID:          r.ID,
-		Title:       r.Title,
-		Artist:      r.Uploader,
-		Duration:    fmt.Sprintf("%d:%02d", m, s),
-		DurationSec: d,
-		URL:         r.URL,
-		CoverURL:    r.CoverURL,
+		ID:            r.ID,
+		Title:         r.Title,
+		Artist:        r.Uploader,
+		Album:         r.Album,
+		Duration:      fmt.Sprintf("%d:%02d", m, s),
+		DurationSec:   d,
+		URL:           r.URL,
+		CoverURL:      r.CoverURL,
+		AlbumBrowseID: r.AlbumBrowseID,
 	}
 }
 

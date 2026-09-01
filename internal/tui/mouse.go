@@ -35,6 +35,12 @@ const (
 func (m Model) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 	// Wheel up/down (action is always press, identified by button)
 	if msg.Button == tea.MouseButtonWheelUp {
+		// Over the lyrics pane, the wheel scrolls the lyrics and
+		// releases the auto-follow until the next track.
+		if m.overLyricsPane(msg.X, msg.Y) {
+			m.scrollLyrics(-3)
+			return m, nil
+		}
 		switch m.activePage {
 		case PageSettings:
 			if !m.settingsEditField && m.settingsCursor > 0 {
@@ -76,6 +82,12 @@ func (m Model) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	if msg.Button == tea.MouseButtonWheelDown {
+		// Over the lyrics pane, the wheel scrolls the lyrics and
+		// releases the auto-follow until the next track.
+		if m.overLyricsPane(msg.X, msg.Y) {
+			m.scrollLyrics(3)
+			return m, nil
+		}
 		switch m.activePage {
 		case PageSettings:
 			if !m.settingsEditField && m.settingsCursor < len(settingDefs)-1 {
@@ -126,6 +138,32 @@ func (m Model) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 	}
 
 	return m, nil
+}
+
+// overLyricsPane reports whether (x, y) sits over the lyrics column of
+// the now-playing panel. Geometry mirrors renderPanels: the left
+// column starts at y=1, the results box renders resultsH content rows
+// inside 3 lines of chrome, and the now-playing box follows with npH
+// content rows inside 2 border lines.
+func (m Model) overLyricsPane(x, y int) bool {
+	if !m.lyricsOn || !m.npVisible() {
+		return false
+	}
+	resultsH, npH := m.leftPanelSplit()
+	if npH <= 0 {
+		return false
+	}
+	npTop := 1 + resultsH + 3
+	return x < m.width/2 && y >= npTop && y < npTop+npH+2
+}
+
+// scrollLyrics scrolls the lyrics pane by delta rows, releasing the
+// auto-follow until the next track starts.
+func (m *Model) scrollLyrics(delta int) {
+	_, npH := m.leftPanelSplit()
+	maxOffset := max(0, len(m.lyricLines)-npH)
+	m.lyricsFollow = false
+	m.lyricsOffset = max(0, min(m.lyricsOffset+delta, maxOffset))
 }
 
 // handleClick maps a mouse click at (x, y) to the relevant UI action.
@@ -301,11 +339,13 @@ func (m Model) handleClick(x, y int) (Model, tea.Cmd) {
 				m.libraryCursor = idx
 			default:
 				idx += m.searchOffset
+				// Clamp against the active list (results, albums, or an
+				// open album's tracks), not len(m.results).
 				switch {
 				case idx < 0:
 					idx = 0
-				case idx >= len(m.results):
-					idx = len(m.results) - 1
+				case idx >= m.streamListLen():
+					idx = m.streamListLen() - 1
 				}
 				m.searchCursor = idx
 			}

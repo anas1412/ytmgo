@@ -337,7 +337,9 @@ func (m *Model) moveCursorToEdge(bottom bool) {
 			m.clampLibraryOffset()
 		}
 	default:
-		if n := len(m.results); n > 0 {
+		// Stream page: the active list is results, albums, or an open
+		// album's tracks — streamListLen knows which one owns the cursor.
+		if n := m.streamListLen(); n > 0 {
 			m.searchCursor = pick(n)
 			m.clampSearchOffset()
 		}

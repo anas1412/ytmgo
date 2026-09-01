@@ -72,6 +72,13 @@ CREATE TABLE IF NOT EXISTS url_cache (
     resolved_at  TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
+CREATE TABLE IF NOT EXISTS lyrics_cache (
+    track_id   TEXT PRIMARY KEY,
+    lyrics     TEXT NOT NULL DEFAULT '',
+    synced     INTEGER NOT NULL DEFAULT 0,
+    fetched_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
 CREATE TABLE IF NOT EXISTS library_cache (
     file_path    TEXT PRIMARY KEY,
     mtime        INTEGER NOT NULL,
@@ -369,6 +376,38 @@ func (d *DB) LoadCachedURL(trackID string) (string, error) {
 		return "", fmt.Errorf("load cached URL: %w", err)
 	}
 	return url, nil
+}
+
+// ─── Lyrics cache ────────────────────────────────────────────────────────
+
+// SaveCachedLyrics stores fetched lyrics for a track, keyed by the
+// track's video ID. An empty text records a definitive miss ("no
+// lyrics exist"), so replays don't refetch; transient failures are
+// never saved.
+func (d *DB) SaveCachedLyrics(trackID, text string, synced bool) error {
+	_, err := d.Exec(`INSERT OR REPLACE INTO lyrics_cache (track_id, lyrics, synced, fetched_at) VALUES (?, ?, ?, datetime('now'))`,
+		trackID, text, boolInt(synced))
+	if err != nil {
+		return fmt.Errorf("save cached lyrics: %w", err)
+	}
+	return nil
+}
+
+// LoadCachedLyrics reads cached lyrics for a track. found reports
+// whether a row exists at all: found with empty text is a recorded
+// miss ("no lyrics exist") and must not be refetched, while found
+// false means the track was never looked up.
+func (d *DB) LoadCachedLyrics(trackID string) (text string, synced, found bool, err error) {
+	var stored string
+	var s int
+	err = d.QueryRow(`SELECT lyrics, synced FROM lyrics_cache WHERE track_id = ?`, trackID).Scan(&stored, &s)
+	if err == sql.ErrNoRows {
+		return "", false, false, nil
+	}
+	if err != nil {
+		return "", false, false, fmt.Errorf("load cached lyrics: %w", err)
+	}
+	return stored, s != 0, true, nil
 }
 
 // ─── Library metadata cache ─────────────────────────────────────────────

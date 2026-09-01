@@ -1,12 +1,14 @@
 package tui
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
 	"time"
 
 	"ytmgo/internal/downloader"
+	"ytmgo/internal/lyrics"
 	"ytmgo/internal/player"
 	"ytmgo/internal/queue"
 	ver "ytmgo/internal/version"
@@ -78,21 +80,25 @@ func (m Model) handleAlbumResults(msg AlbumResultsMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	m.albums = msg.Albums
-	m.openAlbum = nil
-	m.albumTracks = nil
+	coverCmd := m.leaveAlbumView()
 	m.resetStreamCursor()
 	if len(msg.Albums) == 0 {
 		m.setStatus("No albums found")
 	} else {
 		m.setStatus(fmt.Sprintf("Found %d albums", len(msg.Albums)))
 	}
-	return m, nil
+	return m, coverCmd
 }
 
 // ── Album opened (tracklist fetched) ─────────────────────────────────
 
 func (m Model) handleAlbumTracks(msg AlbumTracksMsg) (tea.Model, tea.Cmd) {
 	m.isLoadingAlbum = false
+	// A superseded open (the user pressed `i` on another song, or
+	// re-entered a different album) must not overwrite the newer one.
+	if msg.Seq != m.albumSeq {
+		return m, nil
+	}
 	if msg.Error != nil {
 		m.err = msg.Error
 		m.setStatus("Cannot open album: " + msg.Error.Error())
@@ -103,6 +109,12 @@ func (m Model) handleAlbumTracks(msg AlbumTracksMsg) (tea.Model, tea.Cmd) {
 	m.albumTracks = msg.Tracks
 	m.resetStreamCursor()
 	m.setStatus(fmt.Sprintf("%s — %d tracks  ([a] queue all · [esc] back)", alb.Title, len(msg.Tracks)))
+	// The album page's own art replaces the provisional one from the
+	// song result (usually identical, but the page is authoritative).
+	if alb.CoverURL != "" && alb.CoverURL != m.albumCoverURL {
+		m.albumCoverURL = alb.CoverURL
+		return m, m.refreshCoverCmd()
+	}
 	return m, nil
 }
 
@@ -127,6 +139,31 @@ func (m Model) handleAlbumDownload(msg AlbumDownloadMsg) (tea.Model, tea.Cmd) {
 	m.revealDownloads()
 	m.setStatus(fmt.Sprintf("Downloading %s — %d tracks", alb.Title, len(alb.Tracks)))
 	return m, downloadCmd(m.downloader)
+}
+
+// ── Lyrics loaded ────────────────────────────────────────────────────
+
+func (m Model) handleLyricsLoaded(msg LyricsLoadedMsg) (tea.Model, tea.Cmd) {
+	m.lyricsLoading = false
+	// Stale — another track is playing now; a newer fetch is in flight.
+	if msg.Seq != m.lyricsSeq || msg.TrackID != m.lyricsTrackID {
+		return m, nil
+	}
+	switch {
+	case msg.Error != nil && !errors.Is(msg.Error, lyrics.ErrNotFound):
+		m.lyricLines = nil
+		m.lyricsErr = "Lyrics unavailable: " + msg.Error.Error()
+	case msg.Lyrics == nil || len(msg.Lyrics.Lines) == 0:
+		m.lyricLines = nil
+		m.lyricsErr = "No lyrics found"
+	default:
+		m.lyricsErr = ""
+		m.lyricLines = msg.Lyrics.Lines
+		m.lyricsSynced = msg.Lyrics.Synced
+		m.lyricsOffset = 0
+		m.lyricsFollow = true
+	}
+	return m, nil
 }
 
 // ── Update check complete ─────────────────────────────────────────────

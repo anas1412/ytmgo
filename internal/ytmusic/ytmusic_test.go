@@ -80,6 +80,51 @@ func TestLiveSearchAndRadio(t *testing.T) {
 		first.Title, first.Artist, first.Duration, len(radio), radio[0].Title, radio[0].Artist)
 }
 
+// TestLiveSearchAlbumLinks verifies that song results carry the album
+// browse id (and title) the TUI's open-album-of-track key (`i`) needs,
+// and that the id actually resolves to a tracklist. Skipped when the
+// network or endpoint is unavailable.
+func TestLiveSearchAlbumLinks(t *testing.T) {
+	if testing.Short() {
+		t.Skip("short mode: skipping network test")
+	}
+	tracks, err := Search("bohemian rhapsody queen", 5)
+	if err != nil {
+		t.Skipf("live search unavailable: %v", err)
+	}
+	if len(tracks) == 0 {
+		t.Fatal("search returned zero tracks")
+	}
+	linked := 0
+	for _, tr := range tracks {
+		if tr.Album == "" {
+			t.Errorf("track %q has no album title", tr.Title)
+			continue
+		}
+		if !strings.HasPrefix(tr.AlbumBrowseID, "MPRE") {
+			t.Errorf("track %q (album %q) has no album browseId", tr.Title, tr.Album)
+			continue
+		}
+		linked++
+	}
+	if linked == 0 {
+		t.Fatal("no result carried an album link")
+	}
+
+	full, err := AlbumTracks(tracks[0].AlbumBrowseID)
+	if err != nil {
+		t.Skipf("live album page unavailable: %v", err)
+	}
+	if len(full.Tracks) == 0 {
+		t.Fatal("album page returned no tracks")
+	}
+	if full.Tracks[0].AlbumBrowseID != tracks[0].AlbumBrowseID {
+		t.Errorf("album tracks lost their album browseId")
+	}
+	t.Logf("%d/%d results album-linked; %q resolved to %d tracks",
+		linked, len(tracks), full.Title, len(full.Tracks))
+}
+
 // TestLiveAlbums exercises album search and the album page against the
 // real endpoints. Skipped when the network or endpoint is unavailable.
 func TestLiveAlbums(t *testing.T) {

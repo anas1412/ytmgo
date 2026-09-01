@@ -41,11 +41,10 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.err = nil
 				m.resetStreamCursor()
 				if m.albumMode {
+					coverCmd := m.leaveAlbumView()
 					m.albums = nil
 					m.albumQuery = query
-					m.openAlbum = nil
-					m.albumTracks = nil
-					return m, searchAlbumsCmd(query, m.settings.SearchLimit)
+					return m, tea.Batch(coverCmd, searchAlbumsCmd(query, m.settings.SearchLimit))
 				}
 				m.results = nil
 				return m, searchCmd(query, m.settings.SearchLimit)
@@ -167,13 +166,13 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case "esc":
-		// Inside an album: step back to the album list.
-		if m.activePage == PageStream && m.openAlbum != nil {
-			m.openAlbum = nil
-			m.albumTracks = nil
+		// Inside an album: step back to the album list. The preview's
+		// cover override leaves with it, restoring the playing art.
+		if m.activePage == PageStream && (m.openAlbum != nil || m.isLoadingAlbum || m.albumCoverURL != "") {
+			coverCmd := m.leaveAlbumView()
 			m.resetStreamCursor()
 			m.setStatus("Albums")
-			return m, nil
+			return m, coverCmd
 		}
 		if m.activePage == PageSettings && m.settingsEditField {
 			// Cancel inline editing on Settings page
@@ -296,16 +295,15 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.albumMode = !m.albumMode
-		m.openAlbum = nil
-		m.albumTracks = nil
+		coverCmd := m.leaveAlbumView()
 		m.resetStreamCursor()
 		if !m.albumMode {
 			// Back to songs: restore whatever the results panel had.
 			m.setStatus("Searching songs")
 			if len(m.results) == 0 {
-				return m, m.showRecommendations()
+				return m, tea.Batch(coverCmd, m.showRecommendations())
 			}
-			return m, nil
+			return m, coverCmd
 		}
 		// Album results are kept across toggles: only refetch when the
 		// query actually changed, so flipping A back and forth is free.
@@ -315,13 +313,18 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.albumQuery = q
 			m.isSearching = true
 			m.setStatus("Searching albums…")
-			return m, searchAlbumsCmd(q, m.settings.SearchLimit)
+			return m, tea.Batch(coverCmd, searchAlbumsCmd(q, m.settings.SearchLimit))
 		case len(m.albums) > 0:
 			m.setStatus(fmt.Sprintf("Albums — %d results", len(m.albums)))
 		default:
 			m.setStatus("Albums — type a query and press Enter")
 		}
-		return m, nil
+		return m, coverCmd
+
+	case "i":
+		// Open the album page of the highlighted track, from any list
+		// that knows it: search results, queue, favorites, history.
+		return m, m.openAlbumOfSelected()
 
 	case "a":
 		// Queue every track of the open album.
@@ -364,6 +367,38 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.setStatus("Now playing panel off")
 		// The spectrum was clocking redraws; restart the ticker.
 		return m, m.resumePlayerTick()
+
+	case "y":
+		// The lyrics view replaces the spectrum inside the now-playing
+		// panel, so turning it on implies opening that panel.
+		if m.activePage == PageSettings {
+			m.setStatus("The lyrics view is not shown on the settings page")
+			return m, nil
+		}
+		if !m.lyricsOn && !m.npFits() {
+			m.setStatus("Terminal too short for the lyrics view — make the window taller")
+			return m, nil
+		}
+		var cmds []tea.Cmd
+		if !m.npOn {
+			m.npOn = true
+			m.clampSearchOffset()
+			if cmd := m.refreshCoverCmd(); cmd != nil {
+				cmds = append(cmds, cmd)
+			}
+		}
+		m.lyricsOn = !m.lyricsOn
+		if !m.lyricsOn {
+			m.setStatus("Lyrics off")
+			return m, tea.Batch(cmds...)
+		}
+		m.setStatus("Lyrics on  ([y] hide)")
+		if t, ok := m.queue.Current(); ok {
+			if cmd := m.loadLyricsCmd(t); cmd != nil {
+				cmds = append(cmds, cmd)
+			}
+		}
+		return m, tea.Batch(cmds...)
 
 	case "X":
 		// Collapse the downloads panel so the queue gets the whole
@@ -421,11 +456,19 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			t := m.queue.Tracks()[m.queueCursor]
 			return m, m.toggleFavorite(t)
 		default:
-			// Stream page search results or recommendations
-			if m.activePage != PageSettings && m.activePanel == PanelSearch && len(m.results) > 0 && m.searchCursor >= 0 && m.searchCursor < len(m.results) {
-				r := m.results[m.searchCursor]
-				t := m.resolveTrack(r)
-				return m, m.toggleFavorite(t)
+			// Stream page: search results, recommendations, or an open
+			// album's tracks — whichever list owns the cursor. (The bare
+			// album list shows albums, which are not favoritable.)
+			if m.activePage != PageSettings && m.activePanel == PanelSearch {
+				list := m.results
+				if m.openAlbum != nil {
+					list = m.albumTracks
+				}
+				if len(list) > 0 && m.searchCursor >= 0 && m.searchCursor < len(list) {
+					r := list[m.searchCursor]
+					t := m.resolveTrack(r)
+					return m, m.toggleFavorite(t)
+				}
 			}
 		}
 		return m, nil

@@ -112,6 +112,33 @@ func TestURLCache(t *testing.T) {
 	}
 }
 
+func TestLyricsCache(t *testing.T) {
+	d := openTestDB(t)
+
+	// Never looked up: found=false, distinct from a recorded miss.
+	if _, _, found, err := d.LoadCachedLyrics("nope"); err != nil || found {
+		t.Fatalf("missing entry: found=%v err=%v, want false nil", found, err)
+	}
+
+	// A synced hit round-trips.
+	if err := d.SaveCachedLyrics("id1", "[00:05.00] hello", true); err != nil {
+		t.Fatalf("SaveCachedLyrics: %v", err)
+	}
+	text, synced, found, err := d.LoadCachedLyrics("id1")
+	if err != nil || !found || text != "[00:05.00] hello" || !synced {
+		t.Fatalf("cached lyrics = %q synced=%v found=%v err=%v", text, synced, found, err)
+	}
+
+	// A recorded miss ("no lyrics exist") is found with empty text, so
+	// callers skip the refetch without confusing it with never-tried.
+	if err := d.SaveCachedLyrics("id2", "", false); err != nil {
+		t.Fatalf("SaveCachedLyrics miss: %v", err)
+	}
+	if text, _, found, err := d.LoadCachedLyrics("id2"); err != nil || !found || text != "" {
+		t.Fatalf("recorded miss = %q found=%v err=%v, want empty true nil", text, found, err)
+	}
+}
+
 func TestLibraryCacheRoundTrip(t *testing.T) {
 	d := openTestDB(t)
 	in := library.DurationCache{
