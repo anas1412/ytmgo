@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -244,6 +245,25 @@ func TestNoInvisibleText(t *testing.T) {
 		} {
 			if same(s.style.GetForeground(), s.style.GetBackground()) {
 				t.Errorf("%s: %s draws its text in its own background colour", th, s.name)
+			}
+		}
+	}
+}
+
+// TestNoLiteralANSIInFrames: lipgloss underlines by styling content
+// rune-by-rune, which splits apart any ANSI sequences already inside
+// the string and prints them as literal text — "[3;90mSearch" in the
+// header is how it looked. So no rendered frame, on any theme, may
+// contain an escape-shaped fragment that is not led by a real ESC.
+func TestNoLiteralANSIInFrames(t *testing.T) {
+	defer ApplyTheme(ThemeTerminal)
+	re := regexp.MustCompile(`[^\x1b]\[[0-9;]+m`)
+	for _, th := range themeOrder {
+		ApplyTheme(th)
+		m := worstCaseModel(t, 150, 40)
+		for _, line := range strings.Split(m.View(), "\n") {
+			if loc := re.FindString(line); loc != "" {
+				t.Fatalf("%s: frame contains a literal ANSI fragment %q — an inner escape was mangled", th, loc)
 			}
 		}
 	}

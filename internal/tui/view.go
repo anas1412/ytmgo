@@ -55,11 +55,16 @@ func buildInlineStyles() {
 		return st.Background(colorBgHover)
 	}
 
+	// On no-fill themes the underline marks the field as an input.
+	// These styles are safe to underline: the textinput applies them to
+	// plain text runs, never to strings already carrying ANSI.
 	textinputStyle = well(lipgloss.NewStyle().
-		Foreground(colorText))
+		Foreground(colorText).
+		Underline(!paintBackground))
 	textinputPlaceholder = well(lipgloss.NewStyle().
 		Foreground(colorTextDim).
-		Italic(true))
+		Italic(true).
+		Underline(!paintBackground))
 	styleTextDim = lipgloss.NewStyle().Foreground(colorTextDim)
 
 	// App background
@@ -67,11 +72,14 @@ func buildInlineStyles() {
 		Background(colorBg)
 
 	// Search input wrapper - inline style (no border, stays on 1 line).
-	// On themes without a fill the underline is what marks the field as
-	// an input at all.
+	// Never underline THIS style: its content is the textinput's render,
+	// which already carries ANSI sequences, and lipgloss underlines by
+	// styling rune-by-rune — which splits those inner escapes apart and
+	// prints them as literal text. The underline affordance for no-fill
+	// themes lives on the textinput's own styles below, which are applied
+	// to plain text runs.
 	styleSearchBox = well(lipgloss.NewStyle().
 		Foreground(colorText).
-		Underline(!paintBackground).
 		Padding(0, searchBoxPadding).
 		Width(searchBoxWidth).
 		Height(1))
