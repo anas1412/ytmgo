@@ -108,15 +108,30 @@ func (m Model) handleAlbumTracks(msg AlbumTracksMsg) (tea.Model, tea.Cmd) {
 	alb := msg.Album
 	m.openAlbum = &alb
 	m.albumTracks = msg.Tracks
+	// Fetch the album's cover for the header strip. Albums opened from
+	// a track (i) sometimes lack their own CoverURL; the first track's
+	// art is the same square.
+	artURL := alb.CoverURL
+	if artURL == "" && len(msg.Tracks) > 0 {
+		artURL = msg.Tracks[0].CoverURL
+	}
+	var cmds []tea.Cmd
+	if artURL != "" && artURL != m.albumArtURL {
+		if cmd := loadAlbumArtCmd(artURL, m.albumSeq); cmd != nil {
+			cmds = append(cmds, cmd)
+		}
+	}
 	m.resetStreamCursor()
 	m.setStatus(fmt.Sprintf("%s — %d tracks  ([a] queue all · [esc] back)", alb.Title, len(msg.Tracks)))
 	// The album page's own art replaces the provisional one from the
 	// song result (usually identical, but the page is authoritative).
 	if alb.CoverURL != "" && alb.CoverURL != m.albumCoverURL {
 		m.albumCoverURL = alb.CoverURL
-		return m, m.refreshCoverCmd()
+		if cmd := m.refreshCoverCmd(); cmd != nil {
+			cmds = append(cmds, cmd)
+		}
 	}
-	return m, nil
+	return m, tea.Batch(cmds...)
 }
 
 // ── Album download requested ─────────────────────────────────────────

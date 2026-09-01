@@ -122,6 +122,12 @@ func (m Model) coverOnScreen() bool {
 	return m.playerCoverSlot() && m.coverImg != nil
 }
 
+// albumArtOnScreen reports whether the browse strip is showing the open
+// album's cover — the stream page, an open album, and art in hand.
+func (m Model) albumArtOnScreen() bool {
+	return m.activePage == PageStream && m.openAlbum != nil && m.albumArtImg != nil
+}
+
 // syncNowPlaying starts or stops the spectrum so it runs exactly while
 // the panel is on screen, and takes the artwork with it. Called once
 // per message with the visibility from before the message was handled,

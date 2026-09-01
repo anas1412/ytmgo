@@ -386,6 +386,17 @@ func vizFrameCmd(v *visualizer.Visualizer) tea.Cmd {
 
 // ─── Cover art ──────────────────────────────────────────────────────
 
+// loadAlbumArtCmd fetches the open album's cover for the browse strip.
+func loadAlbumArtCmd(url string, seq int) tea.Cmd {
+	if url == "" {
+		return nil
+	}
+	return func() tea.Msg {
+		img, err := coverart.Load(url)
+		return AlbumArtLoadedMsg{URL: url, Img: img, Err: err, Seq: seq}
+	}
+}
+
 // loadCoverCmd fetches and decodes one track's album art. Results are
 // cached in the coverart package, so re-showing a cover is instant.
 func loadCoverCmd(url string) tea.Cmd {

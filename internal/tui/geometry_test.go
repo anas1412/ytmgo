@@ -108,9 +108,12 @@ func TestLayoutGeometryAlbums(t *testing.T) {
 		}
 		checkPanelGeometry(t, m, w, h, "album list")
 
-		// Album tracklist.
+		// Album tracklist, with the strip's art in hand — the art path
+		// must obey the same geometry as the text-only strip.
 		alb := ytmusic.Album{Title: long, Artist: "Mild High Club"}
 		m.openAlbum = &alb
+		m.albumArtImg = image.NewRGBA(image.Rect(0, 0, 544, 544))
+		m.albumArtURL = "https://example/album.jpg"
 		for i := 0; i < 25; i++ {
 			m.albumTracks = append(m.albumTracks, search.Result{
 				ID: "sZxzPcT1Meg", Title: "ラブ・ストーリーは突然に - " + long,
@@ -489,5 +492,41 @@ func TestPlayerRowZonesInsideRow(t *testing.T) {
 			l.repeatEnd <= l.volStart && l.volStart < l.volEnd) {
 			t.Errorf("%dx%d: zones out of order: %+v", w, h, l)
 		}
+	}
+}
+
+// TestAlbumArtFollowsTheAlbum: the strip's kitty image is owed a delete
+// when the album closes — otherwise it stays painted over the results
+// list that replaces the tracklist.
+func TestAlbumArtFollowsTheAlbum(t *testing.T) {
+	t.Setenv("TMUX", "")
+	t.Setenv("KITTY_WINDOW_ID", "1")
+
+	m := worstCaseModel(t, 150, 40)
+	alb := ytmusic.Album{Title: "Skiptracing", Artist: "Mild High Club"}
+	m.openAlbum = &alb
+	m.albumTracks = m.results[:5] // a strip needs a tracklist under it
+	m.albumArtImg = image.NewRGBA(image.Rect(0, 0, 64, 64))
+	m.albumArtURL = "https://example/album.jpg"
+	m.albumArtSendN = coverSendFrames
+
+	if !m.albumArtOnScreen() {
+		t.Fatal("album art should be on screen with the album open")
+	}
+	if !strings.Contains(m.View(), "i=1338") {
+		t.Error("the open album's frame carries no album-art escape")
+	}
+
+	// Close the album through Update so the reconcile sees it.
+	nm, _ := m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	m = nm.(Model)
+	if m.openAlbum != nil {
+		t.Fatal("esc did not close the album")
+	}
+	if m.albumArtClearN <= 0 {
+		t.Fatal("closing the album did not schedule the art delete")
+	}
+	if !strings.Contains(m.View(), coverart.KittyClearID(coverart.AlbumImageID)) {
+		t.Error("the frame after closing does not carry the album-art delete")
 	}
 }

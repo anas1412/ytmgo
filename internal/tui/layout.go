@@ -105,8 +105,12 @@ func (m Model) rightPanelSplit() (queueContentH, lyricsContentH int) {
 }
 
 // albumStripRows is the header strip above an open album's tracklist:
-// title, stats, and a separating blank line.
-const albumStripRows = 3
+// title, stats, and a separating blank line. The album's cover spans
+// those rows on the right, at most albumArtSlotCols wide.
+const (
+	albumStripRows   = 3
+	albumArtSlotCols = 8
+)
 
 const (
 	lyricsMinRows = 6

@@ -48,6 +48,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if m.coverClearN > 0 {
 		m.coverClearN--
 	}
+	if m.albumArtSendN > 0 {
+		m.albumArtSendN--
+	}
+	if m.albumArtClearN > 0 {
+		m.albumArtClearN--
+	}
 
 	// Whether the now-playing panel is on screen is derived from two
 	// things — the user's toggle and the current page — so rather than
@@ -56,6 +62,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// reconciled here, once.
 	wasVisible := m.npVisible()
 	wasCover := m.coverOnScreen()
+	wasAlbumArt := m.albumArtOnScreen()
 	updated, cmd := m.dispatch(msg)
 	next, ok := updated.(Model)
 	if !ok {
@@ -72,6 +79,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else {
 			next.coverClearN = coverSendFrames
 			next.coverSendN = 0
+		}
+	}
+	// And the open album's art in the browse strip: closing the album
+	// or leaving the page owes the terminal its delete.
+	if now := next.albumArtOnScreen(); now != wasAlbumArt {
+		if now {
+			next.albumArtSendN = coverSendFrames
+		} else {
+			next.albumArtClearN = coverSendFrames
+			next.albumArtSendN = 0
 		}
 	}
 	return next, cmd
@@ -239,6 +256,17 @@ func (m Model) dispatch(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// The spectrum had been clocking the redraws; hand that back to
 		// the progress ticker so the bar keeps gliding.
 		return m, m.resumePlayerTick()
+
+	case AlbumArtLoadedMsg:
+		if msg.Seq != m.albumSeq || msg.Err != nil {
+			return m, nil // superseded, or best-effort art that didn't load
+		}
+		m.albumArtImg = msg.Img
+		m.albumArtURL = msg.URL
+		// Replace whatever album art is resident: delete then transmit.
+		m.albumArtClearN = coverSendFrames
+		m.albumArtSendN = coverSendFrames
+		return m, nil
 
 	case CoverLoadedMsg:
 		m.coverLoading = false

@@ -693,17 +693,66 @@ func (m Model) renderNowPlayingPanel(width, height int) string {
 	return padPanel(strings.Join(rows, "\n"), width, height)
 }
 
-// coverRender memoises the drawn cover. Rebuilding it costs 11-17ms —
-// fine when the artwork changes, ruinous at the spectrum's frame rate,
-// which is what made the whole UI lag. Keyed by artwork and size, and
-// only ever touched from the render goroutine.
-var coverRender struct {
+// artRenderCache memoises one drawn half-block image. Rebuilding costs
+// 11-17ms — fine when the artwork changes, ruinous at the spectrum's
+// frame rate. One cache per on-screen image, so the player cover and
+// the album cover don't evict each other every frame.
+type artRenderCache struct {
 	key   string
 	lines []string
 }
 
-// renderCoverBlock returns the art's rows, vertically centred. Uses
-// kitty's graphics protocol where available and half-blocks otherwise.
+var coverRender, albumArtRender artRenderCache
+
+// renderArtBlock returns an image's rows, vertically centred in height.
+// Uses kitty's graphics protocol where available (under the given image
+// id) and half-blocks otherwise. sendN>0 means Update still owes the
+// terminal the transmit.
+func renderArtBlock(img image.Image, url string, cols, rows, height, sendN, kittyID int, cache *artRenderCache) []string {
+	if cols < 1 || rows < 1 {
+		return nil
+	}
+	top := max(0, (height-rows)/2)
+	out := make([]string, 0, height)
+	for i := 0; i < top; i++ {
+		out = append(out, "")
+	}
+
+	if coverart.KittySupported() {
+		esc := ""
+		if sendN > 0 {
+			// The encode is cached, so repeating it costs nothing.
+			if t, err := coverart.KittyTransmitCached(img, url, cols, rows, kittyID); err == nil {
+				esc = t
+			}
+		}
+		esc += coverart.KittyDisplayID(cols, rows, kittyID)
+		out = append(out, esc+coverart.Blank(cols))
+		for i := 1; i < rows; i++ {
+			out = append(out, coverart.Blank(cols))
+		}
+		return out
+	}
+
+	key := fmt.Sprintf("blocks|%s|%d|%d", url, cols, rows)
+	if cache.key != key {
+		lines := make([]string, 0, rows)
+		for _, row := range coverart.Grid(img, cols, rows) {
+			var b strings.Builder
+			for _, c := range row {
+				b.WriteString(lipgloss.NewStyle().
+					Foreground(lipgloss.Color(c.Top.Hex())).
+					Background(lipgloss.Color(c.Bottom.Hex())).
+					Render(coverart.HalfBlock))
+			}
+			lines = append(lines, b.String())
+		}
+		cache.key, cache.lines = key, lines
+	}
+	return append(out, cache.lines...)
+}
+
+// renderCoverBlock is the player bar's cover column.
 func (m Model) renderCoverBlock(cols, rows, height int) []string {
 	if cols < 1 || rows < 1 {
 		msg := ""
@@ -718,55 +767,23 @@ func (m Model) renderCoverBlock(cols, rows, height int) []string {
 		}
 		return []string{styleTextDim.Render(msg)}
 	}
-
-	top := max(0, (height-rows)/2)
-	out := make([]string, 0, height)
-	for i := 0; i < top; i++ {
-		out = append(out, "")
-	}
-
-	if coverart.KittySupported() {
-		esc := ""
-		if m.coverSendN > 0 {
-			// Update has flagged this artwork as owed to the terminal.
-			// The encode is cached, so repeating it costs nothing.
-			if t, err := coverart.KittyTransmitCached(m.coverImg, m.coverURL, cols, rows); err == nil {
-				esc = t
-			}
-		}
-		esc += coverart.KittyDisplay(cols, rows)
-		out = append(out, esc+coverart.Blank(cols))
-		for i := 1; i < rows; i++ {
-			out = append(out, coverart.Blank(cols))
-		}
-		return out
-	}
-
-	key := fmt.Sprintf("blocks|%s|%d|%d", m.coverURL, cols, rows)
-	if coverRender.key != key {
-		lines := make([]string, 0, rows)
-		for _, row := range coverart.Grid(m.coverImg, cols, rows) {
-			var b strings.Builder
-			for _, c := range row {
-				b.WriteString(lipgloss.NewStyle().
-					Foreground(lipgloss.Color(c.Top.Hex())).
-					Background(lipgloss.Color(c.Bottom.Hex())).
-					Render(coverart.HalfBlock))
-			}
-			lines = append(lines, b.String())
-		}
-		coverRender.key, coverRender.lines = key, lines
-	}
-	return append(out, coverRender.lines...)
+	return renderArtBlock(m.coverImg, m.coverURL, cols, rows, height, m.coverSendN, coverart.CoverImageID, &coverRender)
 }
 
 // clearCoverImage returns the delete escape while Update says one is
 // owed to the terminal. Pure: the countdown lives in the model.
 func (m Model) clearCoverImage() string {
-	if m.coverClearN <= 0 || !coverart.KittySupported() {
+	if !coverart.KittySupported() {
 		return ""
 	}
-	return coverart.KittyClear()
+	esc := ""
+	if m.coverClearN > 0 {
+		esc += coverart.KittyClear()
+	}
+	if m.albumArtClearN > 0 {
+		esc += coverart.KittyClearID(coverart.AlbumImageID)
+	}
+	return esc
 }
 
 // ─── Lyrics pane ─────────────────────────────────────────────────────
@@ -964,6 +981,7 @@ func (m Model) renderAlbumTracks(width, height int) string {
 
 	// A compact header strip above the tracklist: the album's own line,
 	// then its stats, so the panel title stays short and untruncated.
+	// The album's cover sits right-aligned across the strip's rows.
 	// albumStripRows tells the scroll clamp these rows are spoken for.
 	if m.openAlbum != nil {
 		total := 0
@@ -975,11 +993,34 @@ func (m Model) renderAlbumTracks(width, height int) string {
 			stats += " · " + m.openAlbum.Year
 		}
 		stats += fmt.Sprintf(" · %d tracks · %s", len(m.albumTracks), formatTotalDuration(total))
-		lines = append(lines,
-			styleNowTitle.Render(truncate(m.openAlbum.Title, rowW)),
-			styleTextDim.Render(truncate(stats, rowW)),
+
+		artCols, artRows := coverFitCells(m.albumArtImg, albumArtSlotCols, albumStripRows)
+		art := renderArtBlock(m.albumArtImg, m.albumArtURL, artCols, artRows, albumStripRows,
+			m.albumArtSendN, coverart.AlbumImageID, &albumArtRender)
+		textW := rowW
+		if artCols > 0 {
+			textW = rowW - artCols - 2
+		}
+		strip := []string{
+			styleNowTitle.Render(truncate(m.openAlbum.Title, max(4, textW))),
+			styleTextDim.Render(truncate(stats, max(4, textW))),
 			"",
-		)
+		}
+		for i := range strip {
+			if artCols == 0 {
+				lines = append(lines, strip[i])
+				continue
+			}
+			a := ""
+			if i < len(art) {
+				a = art[i]
+			}
+			pad := rowW - lipgloss.Width(strip[i]) - artCols
+			if pad < 1 {
+				pad = 1
+			}
+			lines = append(lines, strip[i]+strings.Repeat(" ", pad)+a)
+		}
 	}
 
 	maxItems := (height - albumStripRows - 1) / 2

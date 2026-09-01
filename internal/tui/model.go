@@ -192,6 +192,16 @@ type (
 		Err error
 	}
 
+	// AlbumArtLoadedMsg carries the open album's fetched cover. Seq is
+	// the album sequence it was fetched for, so a superseded open
+	// cannot paint its art over a newer album.
+	AlbumArtLoadedMsg struct {
+		URL string
+		Img image.Image
+		Err error
+		Seq int
+	}
+
 	// LyricsLoadedMsg carries a fetched lyrics payload (or why none).
 	LyricsLoadedMsg struct {
 		TrackID string
@@ -372,6 +382,12 @@ type Model struct {
 	// dropped one cannot swallow it.
 	coverSendN  int // frames still carrying the image transmit
 	coverClearN int // frames still carrying the image delete
+
+	// ── Open album's cover (browse panel strip) ──
+	albumArtImg    image.Image
+	albumArtURL    string
+	albumArtSendN  int // frames still carrying the album-art transmit
+	albumArtClearN int // frames still carrying the album-art delete
 
 	// ── Lyrics (y) ──
 	// The lyrics view lives inside the now-playing panel, replacing the

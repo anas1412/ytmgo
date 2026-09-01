@@ -25,10 +25,14 @@ import (
 // Everything here is best-effort: callers fall back to the half-block
 // renderer whenever KittySupported is false or an error comes back.
 
-// coverImageID is the fixed graphics id for the cover. Re-transmitting
-// with the same id replaces the previous image, so only one is ever
-// resident.
-const coverImageID = 1337
+// CoverImageID is the fixed graphics id for the player bar's cover.
+// Re-transmitting with the same id replaces the previous image, so only
+// one is ever resident per id. AlbumImageID is the second slot, for the
+// open album's art in the browse panel — the two are on screen at once.
+const CoverImageID = 1337
+
+// AlbumImageID is the kitty image id for the open album's cover.
+const AlbumImageID = 1338
 
 // chunkSize is the protocol's maximum payload per escape sequence.
 const chunkSize = 4096
@@ -56,9 +60,10 @@ var (
 	transmitValue string
 )
 
-// KittyTransmitCached is KittyTransmit memoised on the artwork and size.
-func KittyTransmitCached(img image.Image, key string, cols, rows int) (string, error) {
-	full := fmt.Sprintf("%s|%d|%d", key, cols, rows)
+// KittyTransmitCached is KittyTransmitID memoised on the artwork, size
+// and image id.
+func KittyTransmitCached(img image.Image, key string, cols, rows, id int) (string, error) {
+	full := fmt.Sprintf("%s|%d|%d|%d", key, cols, rows, id)
 	transmitMu.Lock()
 	if transmitKey == full {
 		v := transmitValue
@@ -67,7 +72,7 @@ func KittyTransmitCached(img image.Image, key string, cols, rows int) (string, e
 	}
 	transmitMu.Unlock()
 
-	esc, err := KittyTransmit(img, cols, rows)
+	esc, err := KittyTransmitID(img, cols, rows, id)
 	if err != nil {
 		return "", err
 	}
@@ -77,11 +82,16 @@ func KittyTransmitCached(img image.Image, key string, cols, rows int) (string, e
 	return esc, nil
 }
 
-// KittyTransmit sends the image to the terminal under a fixed id,
+// KittyTransmit sends the image under the player-cover id.
+func KittyTransmit(img image.Image, cols, rows int) (string, error) {
+	return KittyTransmitID(img, cols, rows, CoverImageID)
+}
+
+// KittyTransmitID sends the image to the terminal under the given id,
 // without displaying it. This is the expensive half — PNG encoding and
 // base64 of the whole image — so it must run only when the artwork
 // changes, never once per rendered frame.
-func KittyTransmit(img image.Image, cols, rows int) (string, error) {
+func KittyTransmitID(img image.Image, cols, rows, id int) (string, error) {
 	if img == nil || cols < 1 || rows < 1 {
 		return "", fmt.Errorf("nothing to transmit")
 	}
@@ -109,7 +119,7 @@ func KittyTransmit(img image.Image, cols, rows int) (string, error) {
 		if first {
 			// a=t: transmit only. f=100: PNG. q=2: no acknowledgements.
 			fmt.Fprintf(&out, "\x1b_Ga=t,f=100,i=%d,q=2,m=%d;%s\x1b\\",
-				coverImageID, more, chunk)
+				id, more, chunk)
 			first = false
 			continue
 		}
@@ -118,21 +128,31 @@ func KittyTransmit(img image.Image, cols, rows int) (string, error) {
 	return out.String(), nil
 }
 
-// KittyDisplay draws the already-transmitted image across cols x rows
-// cells at the cursor, without moving it. This is the cheap half, safe
-// to emit on every frame: a fixed placement id means repeated calls
-// update one placement instead of stacking new ones.
+// KittyDisplay places the player-cover image.
 func KittyDisplay(cols, rows int) string {
-	return fmt.Sprintf("\x1b_Ga=p,i=%d,p=1,c=%d,r=%d,C=1,q=2\x1b\\",
-		coverImageID, cols, rows)
+	return KittyDisplayID(cols, rows, CoverImageID)
 }
 
-// KittyClear removes the cover image and its placement. Images persist
-// until deleted, so this must be emitted whenever the panel stops
-// showing one — otherwise the artwork stays on screen over whatever is
-// drawn next.
+// KittyDisplayID draws the already-transmitted image across cols x rows
+// cells at the cursor, without moving it. This is the cheap half, safe
+// to emit on every frame: a fixed placement id per image means repeated
+// calls update one placement instead of stacking new ones.
+func KittyDisplayID(cols, rows, id int) string {
+	return fmt.Sprintf("\x1b_Ga=p,i=%d,p=1,c=%d,r=%d,C=1,q=2\x1b\\",
+		id, cols, rows)
+}
+
+// KittyClear removes the player-cover image.
 func KittyClear() string {
-	return fmt.Sprintf("\x1b_Ga=d,d=I,i=%d,q=2\x1b\\", coverImageID)
+	return KittyClearID(CoverImageID)
+}
+
+// KittyClearID removes one image and its placement. Images persist
+// until deleted, so this must be emitted whenever the UI stops showing
+// one — otherwise the artwork stays on screen over whatever is drawn
+// next.
+func KittyClearID(id int) string {
+	return fmt.Sprintf("\x1b_Ga=d,d=I,i=%d,q=2\x1b\\", id)
 }
 
 // fit downscales img to sit inside maxW x maxH, preserving its aspect
