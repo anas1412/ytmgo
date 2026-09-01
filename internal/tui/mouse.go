@@ -149,7 +149,7 @@ func (m Model) overLyricsPane(x, y int) bool {
 	if lyricsContentH <= 0 {
 		return false
 	}
-	top := 1 + queueContentH + 3
+	top := 1 + queueContentH + 2
 	return x >= m.width/2 && y >= top && y < top+lyricsContentH+2
 }
 
@@ -275,9 +275,9 @@ func (m Model) handleClick(x, y int) (Model, tea.Cmd) {
 			return m, nil
 		}
 
-		// ── Player row (transport + seek + modes + volume) ──
-		if y == panelsEnd+4 && m.width > 0 {
-			return m.handlePlayerRowClick(x)
+		// ── Player rows: controls (+4), seek line (+5) ──
+		if (y == panelsEnd+4 || y == panelsEnd+5) && m.width > 0 {
+			return m.handlePlayerRowClick(x, y == panelsEnd+5)
 		}
 
 		return m, nil
@@ -294,8 +294,8 @@ func (m Model) handleClick(x, y int) (Model, tea.Cmd) {
 			m.searchInput.Blur()
 		}
 
-		// Items start after: border-top(1) + title-line(1) + implicit pad(1) = 3
-		const clickItemOffsetY = 3
+		// Items start after: header(1) + title-bearing border(1) = 2.
+		const clickItemOffsetY = 2
 		// Each row is 2 lines: title + artist
 		const clickLinesPerItem = 2
 
@@ -335,9 +335,9 @@ func (m Model) handleClick(x, y int) (Model, tea.Cmd) {
 				m.libraryCursor = idx
 			default:
 				// An open album renders its header strip above the
-				// list, so the rows are shifted down by that much.
+				// list, and its tracks are one line each, not two.
 				if m.openAlbum != nil {
-					idx = (y - clickItemOffsetY - albumStripRows) / clickLinesPerItem
+					idx = y - clickItemOffsetY - albumStripRows
 				}
 				idx += m.searchOffset
 				// Clamp against the active list (results, albums, or an
@@ -355,8 +355,9 @@ func (m Model) handleClick(x, y int) (Model, tea.Cmd) {
 			// rightPanelSplit is shared with renderPanels() so the click
 			// boundary always matches what was drawn.
 			queueContentH, _ := m.rightPanelSplit()
-			// Queue sub-panel ends at: start (1) + queueHeight (queueContentH + 3)
-			queueBorderY := clickPanelStartY + queueContentH + 3
+			// Queue sub-panel ends at: start (1) + title border (1) +
+			// content (queueContentH) — the box is contentH + 2 lines.
+			queueBorderY := clickPanelStartY + queueContentH + 2
 			if y < queueBorderY {
 				// Click landed in the queue sub-panel
 				m.activePanel = PanelQueue
@@ -388,24 +389,45 @@ func (m Model) handleClick(x, y int) (Model, tea.Cmd) {
 		return m, nil
 	}
 
-	// ── Player row (transport + seek bar + modes + volume) ──
+	// ── Player rows ──
 	// y layout: header(1) + panels(panelHeight) + status(1)
-	//   + playerBar: border(1) + title(1) + album(1) + combined row(1) + border(1)
-	//   + help(1)
+	//   + playerBar: border(1) + title(1) + album(1) + controls(1)
+	//   + progress(1) + border(1) + help(1)
 	// Status is always rendered, so player starts at panelsEnd+1.
-	playerRowY := panelsEnd + 4
-	if y == playerRowY && m.width > 0 {
-		return m.handlePlayerRowClick(x)
+	if (y == panelsEnd+4 || y == panelsEnd+5) && m.width > 0 {
+		return m.handlePlayerRowClick(x, y == panelsEnd+5)
 	}
 
 	return m, nil
 }
 
-// handlePlayerRowClick maps a click on the combined player row. The
-// zones come from playerRowLayout — the same builder the view renders
-// from — so a click lands exactly where the pixel says it should.
-func (m Model) handlePlayerRowClick(x int) (Model, tea.Cmd) {
+// handlePlayerRowClick maps a click on the player's controls row, or on
+// its seek line when seekRow is set. The zones come from
+// playerRowLayout — the same builder the view renders from — so a click
+// lands exactly where the pixel says it should.
+func (m Model) handlePlayerRowClick(x int, seekRow bool) (Model, tea.Cmd) {
 	l := m.playerRowLayout()
+
+	// ── Seek line (its own row) ──
+	if seekRow {
+		if x >= l.barStart && x < l.barStart+l.barWidth {
+			if m.playerState == player.StateStopped || m.duration <= 0 {
+				return m, nil
+			}
+			pct := float64(x-l.barStart) / float64(l.barWidth)
+			targetPos := pct * m.duration
+			delta := targetPos - m.position
+			if m.player != nil {
+				m.player.Seek(delta)
+			}
+			// Optimistically update so the bar jumps immediately — the
+			// next PositionMsg from the player corrects any discrepancy.
+			m.position = targetPos
+			m.lastPosition = targetPos
+			m.lastPositionAt = time.Now()
+		}
+		return m, nil
+	}
 
 	// ── Transport ──
 	if x >= l.transportStart && x < l.transportEnd {
@@ -421,25 +443,6 @@ func (m Model) handlePlayerRowClick(x int) (Model, tea.Cmd) {
 				return m, m.nextTrack()
 			}
 		}
-		return m, nil
-	}
-
-	// ── Seek bar ──
-	if x >= l.barStart && x < l.barStart+l.barWidth {
-		if m.playerState == player.StateStopped || m.duration <= 0 {
-			return m, nil
-		}
-		pct := float64(x-l.barStart) / float64(l.barWidth)
-		targetPos := pct * m.duration
-		delta := targetPos - m.position
-		if m.player != nil {
-			m.player.Seek(delta)
-		}
-		// Optimistically update so the bar jumps immediately — the next
-		// PositionMsg from the player will correct any discrepancy.
-		m.position = targetPos
-		m.lastPosition = targetPos
-		m.lastPositionAt = time.Now()
 		return m, nil
 	}
 

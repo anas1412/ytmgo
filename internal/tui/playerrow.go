@@ -10,18 +10,20 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-// playerRowLayout is the combined progress-and-controls row of the
-// player bar, together with its click geometry. The view renders .row
-// and the mouse reads the zone offsets; both come from the same builder
-// so they cannot disagree — the old separate rows kept two copies of
-// this arithmetic in sync by hand.
+// playerRowLayout is the player bar's controls-and-progress geometry.
+// The view renders the two rows and the mouse reads the zone offsets;
+// both come from the same builder so they cannot disagree — the old
+// separate rows kept two copies of this arithmetic in sync by hand.
 type playerRowLayout struct {
-	row string
+	// controlsRow is transport on the left, modes and volume flush
+	// right. progressRow is the full-width seek line beneath it: time,
+	// bar with a playhead, time.
+	controlsRow, progressRow string
 
 	// Transport zones: absolute terminal x, exclusive ends.
 	transportStart, prevEnd, playEnd, transportEnd int
 
-	// Seek bar.
+	// Seek bar (on progressRow).
 	barStart, barWidth int
 
 	// Right cluster: modes and volume. volBarStart/volBarEnd bound the
@@ -36,9 +38,10 @@ type playerRowLayout struct {
 }
 
 // playerCoverCols is the width of the cover slot on the player bar's
-// left. Fixed, not fitted to the artwork, so the click zones and the
-// text never shift when the art changes shape or hasn't arrived yet.
-const playerCoverCols = 8
+// left — sized for four rows of square art. Fixed, not fitted to the
+// artwork, so the click zones and the text never shift when the art
+// changes shape or hasn't arrived yet.
+const playerCoverCols = 10
 
 // playerCoverSlot reports whether the player bar reserves its cover
 // column: whenever a current track exists, playing or paused, so the
@@ -104,9 +107,9 @@ func (m Model) playerRowLayout() playerRowLayout {
 	} else if m.queue.IsShuffle() {
 		shuffleStyle = styleModeActive
 	}
-	shuffleTxt := "🔀 SHFL"
+	shuffleTxt := "⇄ SHFL"
 	if l.compact {
-		shuffleTxt = "🔀"
+		shuffleTxt = "⇄"
 	}
 	shuffleLabel := hint("[s]") + shuffleStyle.Render(shuffleTxt)
 
@@ -114,11 +117,11 @@ func (m Model) playerRowLayout() playerRowLayout {
 	var repeatOn bool
 	switch {
 	case m.queue.IsRepeat():
-		repeatTxt, repeatOn = "🔁 ONE", true
+		repeatTxt, repeatOn = "↻ ONE", true
 	case m.queue.IsRepeatAll():
-		repeatTxt, repeatOn = "🔁 ALL", true
+		repeatTxt, repeatOn = "↻ ALL", true
 	default:
-		repeatTxt, repeatOn = "🔁 OFF", false
+		repeatTxt, repeatOn = "↻ OFF", false
 	}
 	repeatStyle := styleModeInactive
 	if flashActive && m.modeFlashTarget == "repeat" {
@@ -144,65 +147,45 @@ func (m Model) playerRowLayout() playerRowLayout {
 	right := shuffleLabel + "  " + repeatLabel + "  " + volLabel
 	rightW := lipgloss.Width(right)
 
-	// ── Time and seek bar fill whatever is left ──
-	timeInfo := ""
-	// Below this the compact clusters alone fill the row (the cover
-	// slot costs ten columns on top of a narrow terminal); the time is
-	// the least load-bearing part — the bar still shows the position.
-	if m.duration > 0 && m.playerState != player.StateStopped && innerW >= 72 {
-		displayPos := m.displayPosition()
-		cur := formatTime(displayPos)
-		tot := formatTime(m.duration)
+	// ── Controls row: transport left, modes and volume flush right ──
+	transportW := l.transportEnd - contentStartX
+	l.rightStart = contentStartX + innerW - rightW
+	gap := innerW - transportW - rightW
+	if gap < 2 {
+		gap = 2
+		l.rightStart = contentStartX + transportW + gap
+	}
+	l.controlsRow = transport + strings.Repeat(" ", gap) + right
+
+	// ── Progress row: its own full-width line ──
+	// [h] MM:SS ▮▮▮●┄┄┄┄ MM:SS [l] — a playhead where the fill ends and
+	// a dotted track for what is left.
+	cur, tot := "--:--", "--:--"
+	if m.duration > 0 && m.playerState != player.StateStopped {
+		cur = formatTime(m.displayPosition())
+		tot = formatTime(m.duration)
 		if len(cur) < len(tot) {
 			cur = strings.Repeat(" ", len(tot)-len(cur)) + cur
 		}
-		sep := " / "
-		if l.compact {
-			sep = "/" // every cell counts at 80 columns
-		}
-		timeInfo = cur + sep + tot
 	}
 	hPart, lPart := "", ""
-	if !l.compact && m.settings.ShowHints {
+	if m.settings.ShowHints {
 		hPart = styleKeyHint.Render("[h]") + " "
 		lPart = " " + styleKeyHint.Render("[l]")
 	}
-	transportW := l.transportEnd - contentStartX
-	fixed := transportW + 2 + lipgloss.Width(hPart) + lipgloss.Width(lPart) + rightW + 2
-	if timeInfo != "" {
-		fixed += lipgloss.Width(timeInfo) + 1
+	l.barWidth = innerW - lipgloss.Width(hPart) - lipgloss.Width(lPart) - len(cur) - len(tot) - 2
+	if l.barWidth < 5 {
+		l.barWidth = 5
 	}
-	// The bar takes what the clusters leave. It also absorbs any
-	// overflow: everything else on the row is fixed-width, so a row
-	// wider than the box could only push the right cluster's click
-	// zones past the border.
-	l.barWidth = innerW - fixed
-	if l.barWidth < 3 {
-		l.barWidth = 3
-	}
-	l.barStart = l.transportEnd + 2 + lipgloss.Width(hPart)
+	l.barStart = contentStartX + lipgloss.Width(hPart) + len(cur) + 1
 
 	displayPct := 0.0
 	if m.duration > 0 {
 		displayPct = (m.displayPosition() / m.duration) * 100.0
 	}
-	bar := renderProgressBar(displayPct, l.barWidth)
-
-	mid := hPart + bar
-	if timeInfo != "" {
-		mid += " " + styleTime.Render(timeInfo)
-	}
-	mid += lPart
-
-	// Right cluster flush against the right edge.
-	l.rightStart = contentStartX + innerW - rightW
-	used := transportW + 2 + lipgloss.Width(mid)
-	spacer := innerW - used - rightW
-	if spacer < 1 {
-		spacer = 1
-		l.rightStart = contentStartX + used + 1
-	}
-	l.row = transport + "  " + mid + strings.Repeat(" ", spacer) + right
+	l.progressRow = hPart + styleTime.Render(cur) + " " +
+		renderSeekBar(displayPct, l.barWidth) + " " +
+		styleTime.Render(tot) + lPart
 
 	l.shuffleEnd = l.rightStart + lipgloss.Width(shuffleLabel)
 	l.repeatStart = l.shuffleEnd + 2

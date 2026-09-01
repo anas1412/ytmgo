@@ -66,9 +66,12 @@ func buildInlineStyles() {
 	styleApp = lipgloss.NewStyle().
 		Background(colorBg)
 
-	// Search input wrapper - inline style (no border, stays on 1 line)
+	// Search input wrapper - inline style (no border, stays on 1 line).
+	// On themes without a fill the underline is what marks the field as
+	// an input at all.
 	styleSearchBox = well(lipgloss.NewStyle().
 		Foreground(colorText).
+		Underline(!paintBackground).
 		Padding(0, searchBoxPadding).
 		Width(searchBoxWidth).
 		Height(1))
@@ -399,7 +402,7 @@ func (m Model) renderPanels() string {
 		if m.downloader != nil {
 			n = len(m.downloader.Jobs())
 		}
-		panelLabel = fmt.Sprintf("DOWNLOADS  [%d]", n) + m.hints("  "+oHint+" open folder")
+		panelLabel = fmt.Sprintf("DOWNLOADS %d", n) + m.hints("  "+oHint+" open folder")
 	case PageLibrary:
 		dHint := styleKeyHint.Render("[d]")
 		panelLabel = "LIBRARY" + m.hints("  "+dHint+" delete  "+fHint+" add to fav")
@@ -433,79 +436,54 @@ func (m Model) renderPanels() string {
 			panelLabel = "SEARCH RESULTS" + m.hints("  "+xHint+" download  "+fHint+" add to fav")
 		}
 	}
-	// Truncate every panel title to the panel width: a wrapped title
-	// grows the box a full row and breaks mouse hit-testing below it.
-	titleW := max(1, panelWidth-2)
+	// Truncate every panel title so the border always has room for its
+	// corners and a dash either side: a wrapped title grows the box a
+	// full row and breaks mouse hit-testing below it.
+	titleW := max(1, panelWidth-5)
 	searchTitle := stylePanelTitle.Render(truncate(panelLabel, titleW))
 
-	// Search panel content.
-	// lipgloss Height(N) on a bordered style renders N+2 total lines (N content
-	// + top + bottom border). The content we pass in is: title (1) +
-	// renderSearchResults(panelWidth, contentH). So total rendered = (1 +
-	// contentH) + 2 = contentH + 3. We want total = panelHeight, so
-	// contentH = panelHeight - 3.
-	// The left column splits like the right one when the now-playing
-	// panel is open: results on top, art + spectrum beneath.
+	// The title lives in the top border now (boxTitled), so a box's
+	// total height is contentH + 2 and the whole column of panelHeight
+	// lines gives contentH = panelHeight - 2 to a single panel.
+	// The left column splits like the right one when the visualizer is
+	// open: results on top, the spectrum beneath.
 	resultsH, npH := m.leftPanelSplit()
-	contentH := panelHeight - 3
+	contentH := panelHeight - 2
 	if npH > 0 {
 		contentH = resultsH
 	}
 	searchContent := m.renderSearchResults(panelWidth, contentH)
-	leftPanel := lipgloss.JoinVertical(lipgloss.Top,
-		searchTitle,
-		indentBlock(searchContent),
-	)
-	leftHeight := panelHeight - 2
-	if npH > 0 {
-		leftHeight = resultsH
-	}
-	leftPanel = leftBorder.
-		Width(panelWidth).
-		Height(leftHeight).
-		Render(leftPanel)
+	leftPanel := boxTitled(searchTitle, leftBorder.GetBorderTopForeground(),
+		indentBlock(searchContent), panelWidth, contentH)
 
 	if npH > 0 {
 		npTitle := stylePanelTitle.Render(truncate(m.npPanelTitle(), titleW))
-		npPanel := lipgloss.JoinVertical(lipgloss.Top,
-			npTitle,
-			indentBlock(m.renderNowPlayingPanel(panelWidth, npH)),
-		)
-		leftPanel = lipgloss.JoinVertical(lipgloss.Top, leftPanel,
-			panelBorder.Width(panelWidth).Height(npH).Render(npPanel))
+		npPanel := boxTitled(npTitle, panelBorder.GetBorderTopForeground(),
+			indentBlock(m.renderNowPlayingPanel(panelWidth, npH)), panelWidth, npH)
+		leftPanel = lipgloss.JoinVertical(lipgloss.Top, leftPanel, npPanel)
 	}
 
 	// Split the right column into queue (top) and lyrics (bottom).
-	// Each sub-panel renders as: border-top (1) + title (1) + content (N)
-	// + border-bottom (1) = N + 3 total lines. The split lives in
-	// rightPanelSplit so the mouse hit-testing stays in sync; the queue
-	// takes the whole column while the lyrics pane is off.
+	// Each sub-panel renders as contentH + 2 lines, its title riding the
+	// top border. The split lives in rightPanelSplit so the mouse
+	// hit-testing stays in sync; the queue takes the whole column while
+	// the lyrics pane is off.
 	queueContentH, lyricsContentH := m.rightPanelSplit()
 
 	// Queue sub-panel (top of right column)
 	dHint := styleKeyHint.Render("[d]")
 	dCapHint := styleKeyHint.Render("[D]")
 	reorderHint := styleKeyHint.Render("[ctrl+↑↓]")
-	queueCount := fmt.Sprintf("[%d]", m.queue.Len())
+	queueCount := fmt.Sprintf("%d", m.queue.Len())
 	if total := m.queueTotalSecs(); total > 0 {
-		queueCount = fmt.Sprintf("[%d · %s]", m.queue.Len(), formatTotalDuration(total))
+		queueCount = fmt.Sprintf("%d · %s", m.queue.Len(), formatTotalDuration(total))
 	}
-	queueTitle := fmt.Sprintf("QUEUE  %s", queueCount) +
+	queueTitle := fmt.Sprintf("QUEUE %s", queueCount) +
 		m.hints(fmt.Sprintf("  %s remove  %s clear  %s reorder", dHint, dCapHint, reorderHint))
 	queueTitleStyled := stylePanelTitle.Render(truncate(queueTitle, titleW))
 	queueContent := m.renderQueue(panelWidth, queueContentH)
-	queuePanel := lipgloss.JoinVertical(lipgloss.Top,
-		queueTitleStyled,
-		indentBlock(queueContent),
-	)
-	queueBoxH := queueContentH
-	if lyricsContentH == 0 {
-		queueBoxH = panelHeight - 2 // one full-height box, as the left column uses
-	}
-	queuePanel = rightBorder.
-		Width(panelWidth).
-		Height(queueBoxH).
-		Render(queuePanel)
+	queuePanel := boxTitled(queueTitleStyled, rightBorder.GetBorderTopForeground(),
+		indentBlock(queueContent), panelWidth, queueContentH)
 
 	// Lyrics sub-panel (bottom of right column), when open.
 	rightPanel := queuePanel
@@ -518,15 +496,10 @@ func (m Model) renderPanels() string {
 		lyricsTitleStyled := stylePanelTitle.Render(truncate(lyricsTitle, titleW))
 		rows := m.renderLyricsPane(max(1, panelWidth-2), lyricsContentH)
 		lyricsContent := padPanel(strings.Join(rows, "\n"), panelWidth, lyricsContentH)
-		lyricsPanel := lipgloss.JoinVertical(lipgloss.Top,
-			lyricsTitleStyled,
-			indentBlock(lyricsContent),
-		)
-		// Bottom sub-panel uses unfocused border (queue owns the focus)
-		lyricsPanel = panelBorder.
-			Width(panelWidth).
-			Height(lyricsContentH).
-			Render(lyricsPanel)
+		// Bottom sub-panel uses the unfocused border colour — the queue
+		// owns the column's focus.
+		lyricsPanel := boxTitled(lyricsTitleStyled, panelBorder.GetBorderTopForeground(),
+			indentBlock(lyricsContent), panelWidth, lyricsContentH)
 		rightPanel = lipgloss.JoinVertical(lipgloss.Top, queuePanel, lyricsPanel)
 	}
 
@@ -848,14 +821,20 @@ func (m Model) renderLyricsPane(width, height int) []string {
 	}
 
 	active := m.activeLyricLine()
+	// The active line anchors a third of the way down, not centred:
+	// what is coming matters more than what was already sung.
+	listH := height
+	if len(m.lyricLines) > height {
+		listH = height - 1 // bottom row goes to the scroll indicator
+	}
 	offset := m.lyricsOffset
 	if m.lyricsFollow && active >= 0 {
-		offset = active - height/2
+		offset = active - listH/3
 	}
-	offset = max(0, min(offset, max(0, len(m.lyricLines)-height)))
+	offset = max(0, min(offset, max(0, len(m.lyricLines)-listH)))
 
 	rows := make([]string, 0, height)
-	for i := offset; i < min(offset+height, len(m.lyricLines)); i++ {
+	for i := offset; i < min(offset+listH, len(m.lyricLines)); i++ {
 		ln := m.lyricLines[i]
 		text := truncate(strings.TrimSpace(ln.Text), width)
 		switch {
@@ -865,6 +844,15 @@ func (m Model) renderLyricsPane(width, height int) []string {
 			rows = append(rows, styleNowTitle.Render(text))
 		default:
 			rows = append(rows, styleTextDim.Render(text))
+		}
+	}
+	if len(m.lyricLines) > height {
+		pos := active + 1
+		if pos < 1 {
+			pos = offset + 1
+		}
+		if ind := scrollIndicator(offset, len(m.lyricLines)-(offset+listH), pos, len(m.lyricLines)); ind != "" {
+			rows = append(rows, truncate(ind, width))
 		}
 	}
 	return rows
@@ -1051,7 +1039,11 @@ func (m Model) renderAlbumTracks(width, height int) string {
 		}
 	}
 
-	maxItems := (height - albumStripRows - 1) / 2
+	// One line per track: the header already names the album's artist,
+	// so repeating it under every row bought nothing and halved the
+	// visible tracks. A track's own artist shows only when it differs —
+	// features, compilations — dimmed after the title.
+	maxItems := height - albumStripRows - 1
 	if maxItems < 1 {
 		maxItems = 1
 	}
@@ -1064,27 +1056,83 @@ func (m Model) renderAlbumTracks(width, height int) string {
 		r := m.albumTracks[i]
 		isSelected := !m.searchFocused && m.activePanel == PanelSearch && i == m.searchCursor
 		prefix := fmt.Sprintf("%0*d. ", numW, i+1)
-		title := truncate(r.Title, max(4, rowW-lipgloss.Width(prefix)-2))
-
-		leftInfo := "   " + m.openAlbum.Artist
 		heart := ""
 		if m.favoriteSet[r.ID] {
-			heart = "♥  "
+			heart = "♥ "
 		}
-		rightInfo := heart + formatDuration(r.Duration)
-		maxLeft := rowW - lipgloss.Width(rightInfo) - 2
-		if maxLeft > 3 {
-			leftInfo = truncate(leftInfo, maxLeft)
+		right := heart + formatDuration(r.Duration)
+
+		title := r.Title
+		var byline string
+		if r.Uploader != "" && r.Uploader != m.openAlbum.Artist {
+			byline = " · " + r.Uploader
 		}
-		spacing := max(1, rowW-lipgloss.Width(leftInfo)-lipgloss.Width(rightInfo))
-		info := leftInfo + strings.Repeat(" ", spacing) + rightInfo
-		lines = append(lines, renderListItemBlock(prefix+title, info, isSelected, false, rowW))
+		maxTitle := rowW - lipgloss.Width(prefix) - lipgloss.Width(right) - 2 - lipgloss.Width(byline)
+		if maxTitle > 3 {
+			title = truncate(title, maxTitle)
+		}
+		lines = append(lines, renderAlbumTrackLine(prefix, title, byline, right, isSelected, rowW))
 	}
 
 	if ind := scrollIndicator(start, len(m.albumTracks)-end, m.searchCursor+1, len(m.albumTracks)); ind != "" {
 		lines = append(lines, ind)
 	}
 	return padPanel(strings.Join(lines, "\n"), width, height)
+}
+
+// boxTitled draws a rounded box whose top border carries the title —
+// ╭─ TITLE ────╮ — instead of spending a content row on it. The title
+// arrives styled and already truncated to boxTitleWidth; content is
+// clamped to exactly contentH rows of at most panelWidth cells, since a
+// stray row or an over-wide line would shift every mouse hit zone.
+func boxTitled(title string, borderColor lipgloss.TerminalColor, content string, panelWidth, contentH int) string {
+	bs := lipgloss.NewStyle().Foreground(borderColor)
+	fill := panelWidth - lipgloss.Width(title) - 3
+	if fill < 0 {
+		fill = 0
+	}
+	var b strings.Builder
+	b.WriteString(bs.Render("╭─ "))
+	b.WriteString(title)
+	b.WriteString(bs.Render(" " + strings.Repeat("─", fill) + "╮"))
+
+	side := bs.Render("│")
+	lines := strings.Split(content, "\n")
+	for i := 0; i < contentH; i++ {
+		line := ""
+		if i < len(lines) {
+			line = truncate(lines[i], panelWidth)
+		}
+		if pad := panelWidth - lipgloss.Width(line); pad > 0 {
+			line += strings.Repeat(" ", pad)
+		}
+		b.WriteString("\n" + side + line + side)
+	}
+	b.WriteString("\n" + bs.Render("╰"+strings.Repeat("─", panelWidth)+"╯"))
+	return b.String()
+}
+
+// renderAlbumTrackLine draws one single-line album track: number and
+// title left, an optional dim byline, duration right.
+func renderAlbumTrackLine(prefix, title, byline, right string, isSelected bool, width int) string {
+	titleStyle := lipgloss.NewStyle().Foreground(colorText)
+	byStyle := lipgloss.NewStyle().Foreground(colorTextDim)
+	rightStyle := lipgloss.NewStyle().Foreground(colorTextDim)
+	var bg lipgloss.Style
+	if isSelected {
+		bg = lipgloss.NewStyle().Background(colorAccent).Width(width)
+		titleStyle = lipgloss.NewStyle().Foreground(colorTitle).Bold(true)
+		byStyle = lipgloss.NewStyle().Foreground(colorBgHover)
+		rightStyle = byStyle
+	} else {
+		bg = lipgloss.NewStyle().Width(width)
+	}
+	left := titleStyle.Render(prefix+title) + byStyle.Render(byline)
+	gap := width - lipgloss.Width(left) - lipgloss.Width(right)
+	if gap < 1 {
+		gap = 1
+	}
+	return bg.Render(truncate(left+strings.Repeat(" ", gap)+rightStyle.Render(right), width))
 }
 
 // padPanel pads rendered rows to the panel's full width and height so
@@ -1483,6 +1531,11 @@ func renderListItemBlock(line, info string, isSelected, isPlaying bool, width in
 	if isSelected {
 		bgStyle = lipgloss.NewStyle().Background(colorAccent).Width(width)
 		titleStyle = lipgloss.NewStyle().Foreground(colorTitle).Bold(true)
+		if isPlaying {
+			// Cursor on the playing row: the highlight must not erase
+			// which track is playing.
+			titleStyle = lipgloss.NewStyle().Foreground(colorPlaying).Bold(true)
+		}
 		infoStyle = lipgloss.NewStyle().Foreground(colorBgHover)
 	} else {
 		bgStyle = lipgloss.NewStyle().Width(width)
@@ -1788,28 +1841,28 @@ func (m Model) renderPlayerBar() string {
 		}
 	}
 
-	// Transport, seek bar and modes share one row — the bar takes
-	// whatever width the clusters leave. Geometry lives in
-	// playerRowLayout, which the mouse reads too.
-	combined := m.playerRowLayout().row
+	// Controls and progress each get a row of their own; the geometry
+	// lives in playerRowLayout, which the mouse reads too.
+	l := m.playerRowLayout()
 
 	rows := []string{
 		truncate(nowPlaying, max(1, innerW)),
 		truncate(albumRow, max(1, innerW)),
-		// innerW, not fullW: the combined row is placed after the cover
-		// column, so letting it run to the full width overflowed the
+		// innerW, not fullW: these rows are placed after the cover
+		// column, so letting them run to the full width overflowed the
 		// box by exactly the cover slot.
-		truncate(combined, max(1, innerW)),
+		truncate(l.controlsRow, max(1, innerW)),
+		truncate(l.progressRow, max(1, innerW)),
 	}
 
 	var content string
 	if m.playerCoverSlot() {
-		// Cover column left of all three rows. renderCoverBlock emits
+		// Cover column left of all four rows. renderCoverBlock emits
 		// the kitty escapes (or half-block cells); a fixed-width slot
 		// keeps the text from shifting while the art loads.
 		cover := m.renderCoverBlock(m.playerCoverFit())
-		lines := make([]string, 3)
-		for i := 0; i < 3; i++ {
+		lines := make([]string, 4)
+		for i := 0; i < 4; i++ {
 			c := ""
 			if i < len(cover) {
 				c = cover[i]
@@ -1818,10 +1871,6 @@ func (m Model) renderPlayerBar() string {
 			if pad > 0 {
 				c += strings.Repeat(" ", pad)
 			}
-			// The combined row measures its own inset, so it must not
-			// be prefixed twice — rows 0 and 1 are plain text and get
-			// the cover plus gap; row 2 already accounted for it in its
-			// zone arithmetic but still needs the visible cells.
 			lines[i] = c + "  " + rows[i]
 		}
 		content = strings.Join(lines, "\n")
@@ -1842,8 +1891,8 @@ func (m Model) renderPlayerBar() string {
 
 // playerCoverFit sizes the art for the player bar's fixed slot.
 func (m Model) playerCoverFit() (cols, rows, height int) {
-	c, r := coverFitCells(m.coverImg, playerCoverCols, 3)
-	return c, r, 3
+	c, r := coverFitCells(m.coverImg, playerCoverCols, 4)
+	return c, r, 4
 }
 
 // ─── Help Bar ──────────────────────────────────────────────────────

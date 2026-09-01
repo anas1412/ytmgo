@@ -246,8 +246,8 @@ func TestNowPlayingRefusesShortTerminals(t *testing.T) {
 		if npH < npMinRows {
 			t.Errorf("%dx%d: sub-panel got %d rows, below the %d minimum", w, h, npH, npMinRows)
 		}
-		if got := resultsH + npH; got != m.panelHeight()-6 {
-			t.Errorf("%dx%d: split sums to %d, want %d", w, h, got, m.panelHeight()-6)
+		if got := resultsH + npH; got != m.panelHeight()-4 {
+			t.Errorf("%dx%d: split sums to %d, want %d", w, h, got, m.panelHeight()-4)
 		}
 	}
 }
@@ -381,11 +381,11 @@ func TestLayoutGeometryLyrics(t *testing.T) {
 				if lh != 0 {
 					t.Errorf("%dx%d %s: hidden lyrics still claim %d rows", w, h, label, lh)
 				}
-				if qh != m.panelHeight()-3 {
-					t.Errorf("%dx%d %s: queue got %d rows, want the full column (%d)", w, h, label, qh, m.panelHeight()-3)
+				if qh != m.panelHeight()-2 {
+					t.Errorf("%dx%d %s: queue got %d rows, want the full column (%d)", w, h, label, qh, m.panelHeight()-2)
 				}
-			} else if qh+lh != m.panelHeight()-6 {
-				t.Errorf("%dx%d %s: split sums to %d, want %d", w, h, label, qh+lh, m.panelHeight()-6)
+			} else if qh+lh != m.panelHeight()-4 {
+				t.Errorf("%dx%d %s: split sums to %d, want %d", w, h, label, qh+lh, m.panelHeight()-4)
 			}
 		}
 	}
@@ -464,7 +464,9 @@ func TestCoverFollowsPlayback(t *testing.T) {
 }
 
 // TestPlayerRowZonesInsideRow: every click zone the mouse reads must
-// fall inside the row the view renders, in both density tiers.
+// fall inside the row the view renders, in both density tiers. The
+// controls row holds transport and modes; the seek bar has a line of
+// its own.
 func TestPlayerRowZonesInsideRow(t *testing.T) {
 	for _, size := range [][2]int{{200, 50}, {150, 40}, {120, 35}, {100, 28}, {80, 24}} {
 		w, h := size[0], size[1]
@@ -474,8 +476,15 @@ func TestPlayerRowZonesInsideRow(t *testing.T) {
 		m.position = 60
 		l := m.playerRowLayout()
 
-		if got := lipgloss.Width(l.row); got > w-6 {
-			t.Errorf("%dx%d: player row is %d cells, inner width is %d", w, h, got, w-6)
+		innerW := w - 6
+		if m.playerCoverSlot() {
+			innerW -= playerCoverCols + 2
+		}
+		if got := lipgloss.Width(l.controlsRow); got > innerW {
+			t.Errorf("%dx%d: controls row is %d cells, inner width is %d", w, h, got, innerW)
+		}
+		if got := lipgloss.Width(l.progressRow); got > innerW {
+			t.Errorf("%dx%d: progress row is %d cells, inner width is %d", w, h, got, innerW)
 		}
 		end := 3 + (w - 6)
 		for _, z := range []struct {
@@ -490,9 +499,10 @@ func TestPlayerRowZonesInsideRow(t *testing.T) {
 				t.Errorf("%dx%d: zone %s at x=%d outside content [3,%d]", w, h, z.name, z.x, end)
 			}
 		}
-		// Zones must be ordered and non-overlapping.
+		// Zones on the controls row must be ordered and non-overlapping;
+		// the bar lives on its own row and only needs to fit.
 		if !(l.prevEnd <= l.playEnd && l.playEnd <= l.transportEnd &&
-			l.transportEnd <= l.barStart && l.barStart+l.barWidth <= l.rightStart &&
+			l.transportEnd <= l.rightStart &&
 			l.rightStart <= l.shuffleEnd && l.shuffleEnd <= l.repeatStart &&
 			l.repeatEnd <= l.volStart && l.volStart < l.volEnd) {
 			t.Errorf("%dx%d: zones out of order: %+v", w, h, l)
@@ -611,7 +621,7 @@ func TestVolumeBarClickIsExact(t *testing.T) {
 		t.Fatal("full-width layout should carry a volume bar")
 	}
 	for cell := 0; cell < l.volBarCells; cell++ {
-		nm, _ := m.handlePlayerRowClick(l.volBarStart + cell)
+		nm, _ := m.handlePlayerRowClick(l.volBarStart+cell, false)
 		// The handler rounds up so the clicked cell crosses the fill
 		// threshold — 12.5 truncated to 12 would leave it unlit.
 		want := ((cell+1)*100 + l.volBarCells - 1) / l.volBarCells
@@ -625,7 +635,7 @@ func TestVolumeBarClickIsExact(t *testing.T) {
 		}
 	}
 	// One past the bar is the percentage text: it must do nothing.
-	nm, _ := m.handlePlayerRowClick(l.volBarEnd + 1)
+	nm, _ := m.handlePlayerRowClick(l.volBarEnd+1, false)
 	if nm.volume != m.volume {
 		t.Errorf("click on the percentage text changed the volume")
 	}

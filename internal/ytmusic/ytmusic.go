@@ -29,9 +29,14 @@ import (
 
 const (
 	baseURL = "https://music.youtube.com/youtubei/v1"
+	// webBaseURL is regular YouTube's InnerTube endpoint, needed where
+	// music.youtube.com rewrites responses (see albumAudioVideoIDs).
+	webBaseURL = "https://www.youtube.com/youtubei/v1"
 	// clientVersion is refreshed occasionally; old versions keep working
 	// for a long time.
 	clientVersion = "1.20250310.01.00"
+	// webClientVersion is the regular-YouTube WEB client's version.
+	webClientVersion = "2.20250310.01.00"
 	// songsFilterParams restricts /search to the Songs shelf
 	// (protobuf filter blob, verified against the live endpoint).
 	songsFilterParams = "EgWKAQIIAWoQEAMQBBAJEAoQBRAREBAQFQ%3D%3D"
@@ -159,16 +164,20 @@ func clientContext() map[string]interface{} {
 }
 
 func post(endpoint string, body map[string]interface{}) (interface{}, error) {
+	return postTo(baseURL, endpoint, body)
+}
+
+func postTo(base, endpoint string, body map[string]interface{}) (interface{}, error) {
 	payload, err := json.Marshal(body)
 	if err != nil {
 		return nil, fmt.Errorf("ytmusic %s: marshal: %w", endpoint, err)
 	}
-	req, err := http.NewRequest("POST", baseURL+"/"+endpoint+"?prettyPrint=false", bytes.NewReader(payload))
+	req, err := http.NewRequest("POST", base+"/"+endpoint+"?prettyPrint=false", bytes.NewReader(payload))
 	if err != nil {
 		return nil, fmt.Errorf("ytmusic %s: request: %w", endpoint, err)
 	}
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Origin", "https://music.youtube.com")
+	req.Header.Set("Origin", strings.TrimSuffix(base, "/youtubei/v1"))
 	req.Header.Set("User-Agent", "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36")
 
 	resp, err := httpClient.Do(req)
@@ -520,14 +529,15 @@ func AlbumTracks(browseID string) (Album, error) {
 	}
 
 	album := Album{BrowseID: browseID}
-	if h := findKey(root, "musicResponsiveHeaderRenderer"); h != nil {
-		album.Title = digString(h, "title", "runs", 0, "text")
-		album.Artist = digString(h, "straplineTextOne", "runs", 0, "text")
+	header := findKey(root, "musicResponsiveHeaderRenderer")
+	if header != nil {
+		album.Title = digString(header, "title", "runs", 0, "text")
+		album.Artist = digString(header, "straplineTextOne", "runs", 0, "text")
 		// subtitle runs read ["Album", " • ", "2015"] — the year is last.
-		if runs, _ := dig(h, "subtitle", "runs").([]interface{}); len(runs) > 0 {
+		if runs, _ := dig(header, "subtitle", "runs").([]interface{}); len(runs) > 0 {
 			album.Year = digString(runs[len(runs)-1], "text")
 		}
-		album.CoverURL = largestThumbnail(dig(h, "thumbnail", "musicThumbnailRenderer", "thumbnail", "thumbnails"))
+		album.CoverURL = largestThumbnail(dig(header, "thumbnail", "musicThumbnailRenderer", "thumbnail", "thumbnails"))
 	}
 
 	shelf := findKey(root, "musicShelfRenderer")
@@ -564,7 +574,95 @@ func AlbumTracks(browseID string) (Album, error) {
 	if len(album.Tracks) == 0 {
 		return album, fmt.Errorf("ytmusic album: no playable tracks found")
 	}
+
+	// The tracklist's videoIds point at the official music video for
+	// tracks that have one — a different recording (and length) than the
+	// album cut whose duration the shelf shows. The album's auto-generated
+	// OLAK5uy_ playlist carries the audio-only ids in album order, so swap
+	// those in. Any failure just keeps the shelf ids.
+	if pid := audioPlaylistID(header); pid != "" {
+		if ids, err := albumAudioVideoIDs(pid); err == nil && len(ids) == len(album.Tracks) {
+			for i := range album.Tracks {
+				album.Tracks[i].VideoID = ids[i]
+			}
+		}
+	}
 	return album, nil
+}
+
+// audioPlaylistID returns the album's auto-generated audio playlist id
+// (OLAK5uy_…) carried by the album header's play/shuffle buttons.
+// Scoped to the header because the full album page also lists related
+// albums, each with its own OLAK id.
+func audioPlaylistID(header interface{}) string {
+	var found string
+	var walk func(v interface{})
+	walk = func(v interface{}) {
+		if found != "" {
+			return
+		}
+		switch t := v.(type) {
+		case map[string]interface{}:
+			if s, ok := t["playlistId"].(string); ok && strings.HasPrefix(s, "OLAK5uy_") {
+				found = s
+				return
+			}
+			for _, vv := range t {
+				walk(vv)
+			}
+		case []interface{}:
+			for _, vv := range t {
+				walk(vv)
+			}
+		}
+	}
+	walk(header)
+	return found
+}
+
+// albumAudioVideoIDs fetches an album's OLAK5uy_ playlist and returns its
+// videoIds in album order. It must go through regular YouTube's WEB
+// client: music.youtube.com serves the same playlist with the
+// music-video ids swapped back in.
+func albumAudioVideoIDs(playlistID string) ([]string, error) {
+	root, err := postTo(webBaseURL, "browse", map[string]interface{}{
+		"context": map[string]interface{}{
+			"client": map[string]interface{}{
+				"clientName":    "WEB",
+				"clientVersion": webClientVersion,
+				"hl":            "en",
+			},
+		},
+		"browseId": "VL" + playlistID,
+	})
+	if err != nil {
+		return nil, err
+	}
+	// Playlist entries render as lockupViewModels whose contentId is the
+	// videoId. They are siblings in one contents array, so a depth-first
+	// walk sees them in playlist order.
+	var ids []string
+	var walk func(v interface{})
+	walk = func(v interface{}) {
+		switch t := v.(type) {
+		case map[string]interface{}:
+			if lv, ok := t["lockupViewModel"]; ok {
+				if id := digString(lv, "contentId"); IsVideoID(id) {
+					ids = append(ids, id)
+				}
+				return
+			}
+			for _, vv := range t {
+				walk(vv)
+			}
+		case []interface{}:
+			for _, vv := range t {
+				walk(vv)
+			}
+		}
+	}
+	walk(root)
+	return ids, nil
 }
 
 func parseAlbumItem(item interface{}) (Album, bool) {

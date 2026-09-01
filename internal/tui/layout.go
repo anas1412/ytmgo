@@ -44,15 +44,15 @@ func openInOS(path string) error {
 }
 
 // panelHeight returns how many terminal lines the panel area occupies.
-// Total layout: header(1) + panels(h) + player(5) + status(1) + help(1).
+// Total layout: header(1) + panels(h) + player(6) + status(1) + help(1).
 // lipgloss Height(N) renders N+2 lines (border adds 2), so panels(h) actually
 // consumes h+2 lines. To keep the total exactly m.height, we subtract 2.
-// The player box is five lines: border, title row, album row, one
-// combined progress-and-controls row, border — three content rows, so
-// the cover art on its left is a usable size.
+// The player box is six lines: border, title row, album row, controls
+// row, progress row, border — four content rows, so the cover art on
+// its left is album-strip size and the seek bar gets a line to itself.
 func (m Model) panelHeight() int {
-	// Fixed overhead: header(1) + status(1) + player(5) + help(1) + border(2) = 10
-	overhead := 10
+	// Fixed overhead: header(1) + status(1) + player(6) + help(1) + border(2) = 11
+	overhead := 11
 	h := m.height - overhead
 	if h < 1 {
 		h = 1
@@ -69,13 +69,18 @@ func (m Model) visibleItems() int {
 	// Closed: the panel is rendered with content height panelHeight-3,
 	// showing (h-1)/2 two-line rows. Open: the results sub-panel gets
 	// resultsH content rows on the same basis.
-	h := m.panelHeight() - 3
+	h := m.panelHeight() - 2
 	if npH > 0 {
 		h = resultsH
 	}
-	// An open album spends rows on its header strip before the list.
+	// An open album spends rows on its header strip before the list —
+	// and its tracks are one line each, not two.
 	if m.activePage == PageStream && m.openAlbum != nil {
-		h -= albumStripRows
+		n := h - albumStripRows - 1
+		if n < 1 {
+			n = 1
+		}
+		return n
 	}
 	n := (h - 1) / 2
 	if n < 1 {
@@ -91,10 +96,10 @@ func (m Model) visibleItems() int {
 // mouse hit-testing both derive from this, so they can never disagree.
 func (m Model) rightPanelSplit() (queueContentH, lyricsContentH int) {
 	if !m.lyricsVisible() {
-		return m.panelHeight() - 3, 0
+		return m.panelHeight() - 2, 0
 	}
-	total := m.panelHeight() - 6
-	lyricsContentH = total * 45 / 100
+	total := m.panelHeight() - 4
+	lyricsContentH = total * 55 / 100
 	if lyricsContentH < lyricsMinRows {
 		lyricsContentH = lyricsMinRows
 	}
@@ -120,7 +125,7 @@ const (
 // lyricsFits reports whether the right column can hold both the queue
 // and a usable lyrics pane.
 func (m Model) lyricsFits() bool {
-	return m.panelHeight()-6 >= lyricsMinRows+queueMinRows
+	return m.panelHeight()-4 >= lyricsMinRows+queueMinRows
 }
 
 // lyricsVisible mirrors npVisible: the user's toggle, gated by the page
@@ -146,13 +151,15 @@ func (m Model) leftPanelSplit() (resultsH, npH int) {
 	if !m.npVisible() {
 		return full, 0
 	}
-	// Two stacked sub-panels cost 6 lines of chrome, exactly as the
-	// queue and downloads pair does.
-	total := m.panelHeight() - 6
+	// Two stacked sub-panels cost 4 lines of chrome — each box is its
+	// content plus a title-bearing top border and a bottom border.
+	total := m.panelHeight() - 4
 	if total < npMinRows+resultsMinRows {
 		return full, 0
 	}
-	npH = total * 45 / 100
+	// A third shorter than it used to be: the spectrum reads the same
+	// at this height, and the rows above it are a results list.
+	npH = total * 30 / 100
 	if npH < npMinRows {
 		npH = npMinRows
 	}
@@ -165,7 +172,7 @@ func (m Model) leftPanelSplit() (resultsH, npH int) {
 // npFits reports whether the terminal is tall enough to open the
 // now-playing panel.
 func (m Model) npFits() bool {
-	return m.panelHeight()-6 >= npMinRows+resultsMinRows
+	return m.panelHeight()-4 >= npMinRows+resultsMinRows
 }
 
 // queueVisibleItems returns how many list rows fit in the queue
