@@ -44,14 +44,15 @@ func openInOS(path string) error {
 }
 
 // panelHeight returns how many terminal lines the panel area occupies.
-// Total layout: header(1) + panels(h) + player(4) + status(1) + help(1).
+// Total layout: header(1) + panels(h) + player(5) + status(1) + help(1).
 // lipgloss Height(N) renders N+2 lines (border adds 2), so panels(h) actually
 // consumes h+2 lines. To keep the total exactly m.height, we subtract 2.
-// The player box is four lines: border, title, one combined
-// progress-and-controls row, border.
+// The player box is five lines: border, title row, album row, one
+// combined progress-and-controls row, border — three content rows, so
+// the cover art on its left is a usable size.
 func (m Model) panelHeight() int {
-	// Fixed overhead: header(1) + status(1) + player(4) + help(1) + border(2) = 9
-	overhead := 9
+	// Fixed overhead: header(1) + status(1) + player(5) + help(1) + border(2) = 10
+	overhead := 10
 	h := m.height - overhead
 	if h < 1 {
 		h = 1

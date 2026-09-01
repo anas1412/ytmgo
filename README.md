@@ -95,7 +95,7 @@ System dependencies (mpv, yt-dlp, ffmpeg) are **not** touched — they may be us
   dark background. Then nine full schemes: gruvbox, nord, dracula, catppuccin, tokyo-night, rose-pine,
   everforest, solarized-light and latte. Set it in Settings; terminal and ytmgo leave your background
   (and any transparency) alone.
-- **Now playing panel** — Press `v` for album art beside a live spectrum, in a panel under your results so the list stays visible. Art renders at full resolution on kitty, as coloured half-blocks elsewhere.
+- **Now playing, everywhere** — Album art and the track's album sit in the player bar itself, on every page; `v` opens a live spectrum under your results. Art renders at full resolution on kitty, as coloured half-blocks elsewhere.
 - **Discord Rich Presence** — Show what you're listening to — track, artist, play status — live on your Discord profile.
 - **Static binary, no bloat** — Pure Go, no Electron, no browser engine. Starts instantly, sips RAM, gets out of your way.
 
@@ -247,11 +247,11 @@ Tab cycles focus through: search input → result list → queue panel → searc
 | `R` | Refresh recommendations |
 | `A` | Toggle search between songs and albums |
 | `a` | Queue every track of the open album |
-| `v` | Toggle the now-playing panel (art + spectrum) |
-| `y` | Toggle lyrics in the now-playing panel (wheel over the panel to scroll) |
-| `X` | Toggle the downloads panel (hidden until a download starts) |
+| `v` | Toggle the visualizer under the results list |
+| `y` | Toggle the lyrics pane under the queue (wheel over it to scroll) |
+| `X` | Jump to the Downloads page and back |
 | `U` | Check for updates / confirm install |
-| `1` … `5` | Switch page: Stream / Favorites / Library / History / Settings |
+| `1` … `6` | Switch page: Stream / Favorites / Library / History / Settings / Downloads |
 | `L` | Jump straight to the Library page |
 | `Ctrl+↑` / `Ctrl+↓` | Move item up/down in queue |
 | `o` | Open download directory |

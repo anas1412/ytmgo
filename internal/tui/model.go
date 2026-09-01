@@ -770,13 +770,11 @@ func (m Model) desiredCoverURL() string {
 	return ""
 }
 
-// refreshCoverCmd loads the art for desiredCoverURL when the cover
-// panel is showing and the art on screen belongs to something else.
+// refreshCoverCmd loads the art for desiredCoverURL when the art on
+// screen belongs to something else. The cover lives in the player bar,
+// so it is wanted whenever a track is current — no panel gates it.
 // Returns nil when there is nothing to do.
 func (m *Model) refreshCoverCmd() tea.Cmd {
-	if !m.npOn {
-		return nil
-	}
 	url := m.desiredCoverURL()
 	if url == "" {
 		m.coverImg = nil

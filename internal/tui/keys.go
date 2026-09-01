@@ -158,7 +158,7 @@ var Keys = KeyMap{
 	),
 	Visualizer: key.NewBinding(
 		key.WithKeys("v"),
-		key.WithHelp("v", "now playing"),
+		key.WithHelp("v", "visualizer"),
 	),
 	Lyrics: key.NewBinding(
 		key.WithKeys("y"),
@@ -266,6 +266,7 @@ func (k KeyMap) FullHelp() [][]key.Binding {
 			k.PageLibrary,
 			k.PageHistory,
 			k.PageSettings,
+			k.PageDownloads,
 			k.Recs,
 			k.Albums,
 			k.QueueAlbum,

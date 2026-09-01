@@ -114,6 +114,14 @@ func (m Model) npVisible() bool {
 	return m.npOn && m.activePage != PageSettings && m.npFits()
 }
 
+// coverOnScreen reports whether the player bar is showing album art.
+// The kitty image outlives the frame that drew it, so transitions of
+// this — reconciled once per message in Update — schedule the delete
+// and the re-send.
+func (m Model) coverOnScreen() bool {
+	return m.playerCoverSlot() && m.coverImg != nil
+}
+
 // syncNowPlaying starts or stops the spectrum so it runs exactly while
 // the panel is on screen, and takes the artwork with it. Called once
 // per message with the visibility from before the message was handled,
@@ -129,14 +137,7 @@ func (m *Model) syncNowPlaying(wasVisible bool) tea.Cmd {
 			m.viz = nil
 			m.vizFrame = nil
 		}
-		// Kitty images outlive the frame that drew them, so a panel
-		// going off screen must take its artwork with it.
-		m.coverClearN = coverSendFrames
-		m.coverSendN = 0
 		return nil
-	}
-	if m.coverImg != nil {
-		m.coverSendN = coverSendFrames // re-send: it was deleted on the way out
 	}
 	if !visualizer.Available() {
 		m.setStatus("Spectrum needs cava —  " + visualizer.InstallHint())

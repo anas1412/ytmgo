@@ -344,14 +344,14 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case "v":
-		// The now-playing panel: album art beside the spectrum, beneath
-		// the results, on every page that has a results list.
+		// The visualizer: the spectrum beneath the results, on every
+		// page that has a results list.
 		if m.activePage == PageSettings {
-			m.setStatus("The now-playing panel is not shown on the settings page")
+			m.setStatus("The visualizer is not shown on the settings page")
 			return m, nil
 		}
 		if !m.npOn && !m.npFits() {
-			m.setStatus("Terminal too short for the now-playing panel — make the window taller")
+			m.setStatus("Terminal too short for the visualizer — make the window taller")
 			return m, nil
 		}
 		// Only the flag is flipped here. Starting and stopping the
@@ -360,11 +360,11 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		// going off screen because the page changed.
 		m.npOn = !m.npOn
 		if m.npOn {
-			m.setStatus("Now playing panel on  ([v] hide)")
+			m.setStatus("Visualizer on  ([v] hide)")
 			m.clampSearchOffset()
 			return m, m.refreshCoverCmd()
 		}
-		m.setStatus("Now playing panel off")
+		m.setStatus("Visualizer off")
 		// The spectrum was clocking redraws; restart the ticker.
 		return m, m.resumePlayerTick()
 

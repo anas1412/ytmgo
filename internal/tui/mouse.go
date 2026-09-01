@@ -270,7 +270,7 @@ func (m Model) handleClick(x, y int) (Model, tea.Cmd) {
 		}
 
 		// ── Player row (transport + seek + modes + volume) ──
-		if y == panelsEnd+3 && m.width > 0 {
+		if y == panelsEnd+4 && m.width > 0 {
 			return m.handlePlayerRowClick(x)
 		}
 
@@ -379,10 +379,10 @@ func (m Model) handleClick(x, y int) (Model, tea.Cmd) {
 
 	// ── Player row (transport + seek bar + modes + volume) ──
 	// y layout: header(1) + panels(panelHeight) + status(1)
-	//   + playerBar: border(1) + nowPlaying(1) + combined row(1) + border(1)
+	//   + playerBar: border(1) + title(1) + album(1) + combined row(1) + border(1)
 	//   + help(1)
 	// Status is always rendered, so player starts at panelsEnd+1.
-	playerRowY := panelsEnd + 3
+	playerRowY := panelsEnd + 4
 	if y == playerRowY && m.width > 0 {
 		return m.handlePlayerRowClick(x)
 	}

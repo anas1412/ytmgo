@@ -55,6 +55,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// spectrum, the visibility is compared before and after and
 	// reconciled here, once.
 	wasVisible := m.npVisible()
+	wasCover := m.coverOnScreen()
 	updated, cmd := m.dispatch(msg)
 	next, ok := updated.(Model)
 	if !ok {
@@ -62,6 +63,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 	if sync := next.syncNowPlaying(wasVisible); sync != nil {
 		cmd = tea.Batch(cmd, sync)
+	}
+	// The cover in the player bar follows the same pattern: appearing
+	// owes the terminal a transmit, disappearing owes it a delete.
+	if now := next.coverOnScreen(); now != wasCover {
+		if now {
+			next.coverSendN = coverSendFrames
+		} else {
+			next.coverClearN = coverSendFrames
+			next.coverSendN = 0
+		}
 	}
 	return next, cmd
 }

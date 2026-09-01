@@ -203,9 +203,7 @@ func (m Model) renderPage() string {
 // renderSettingsPage renders the settings layout with a two-column panel:
 // left = settings list, right = keyboard shortcuts.
 func (m Model) renderSettingsPage() string {
-	// This page never shows the now-playing panel, so it is where a
-	// resident kitty image would otherwise stay drawn over the layout.
-	header := m.clearCoverImage() + m.renderHeader()
+	header := m.renderHeader()
 	panels := m.renderSettingsPanels()
 	status := m.renderStatus()
 	player := m.renderPlayerBar()
@@ -450,9 +448,6 @@ func (m Model) renderPanels() string {
 		Height(leftHeight).
 		Render(leftPanel)
 
-	// A closed panel must drop any resident image, or it stays on screen
-	// over whatever is drawn next.
-	leftPanel = m.clearCoverImage() + leftPanel
 	if npH > 0 {
 		npTitle := stylePanelTitle.Render(truncate(m.npPanelTitle(), titleW))
 		npPanel := lipgloss.JoinVertical(lipgloss.Top,
@@ -693,52 +688,15 @@ func (m Model) displayPosition() float64 {
 
 // npPanelTitle labels the now-playing panel with whatever is playing.
 func (m Model) npPanelTitle() string {
-	vHint := styleKeyHint.Render("[v]")
-	if t, ok := m.queue.Current(); ok && t.Title != "" {
-		return "NOW PLAYING  " + vHint + " hide  " + t.Title
-	}
-	return "NOW PLAYING  " + vHint + " hide"
+	return "VISUALIZER  " + styleKeyHint.Render("[v]") + " hide"
 }
 
-// renderNowPlayingPanel draws album art on the left and the spectrum on
-// the right. The art is square, so it only needs rows*CellAspect cells
-// of width — the rest goes to the bars, which want the space.
+// renderNowPlayingPanel is the visualizer: the spectrum, full width.
+// The album art lives in the player bar and the lyrics in their own
+// pane, so this panel is the bars and nothing else.
 func (m Model) renderNowPlayingPanel(width, height int) string {
-	innerW := max(1, width-2)
-	if height < 1 {
-		height = 1
-	}
-
-	coverCols, coverRows := 0, 0
-	if m.coverImg != nil {
-		coverCols, coverRows = coverFitCells(m.coverImg, innerW/2, height)
-	}
-
-	coverBlock := m.renderCoverBlock(coverCols, coverRows, height)
-	vizW := innerW - coverCols
-	if coverCols > 0 {
-		vizW-- // a column of breathing space between the two
-	}
-	// Lyrics live in their own pane under the queue, so this panel is
-	// always art beside spectrum.
-	vizBlock := m.renderSpectrum(max(0, vizW), height)
-
-	lines := make([]string, height)
-	for i := 0; i < height; i++ {
-		left, right := "", ""
-		if i < len(coverBlock) {
-			left = coverBlock[i]
-		}
-		left += coverart.Blank(coverCols - lipgloss.Width(left))
-		if coverCols > 0 {
-			left += " "
-		}
-		if i < len(vizBlock) {
-			right = vizBlock[i]
-		}
-		lines[i] = left + right
-	}
-	return padPanel(strings.Join(lines, "\n"), width, height)
+	rows := m.renderSpectrum(max(1, width-2), height)
+	return padPanel(strings.Join(rows, "\n"), width, height)
 }
 
 // coverRender memoises the drawn cover. Rebuilding it costs 11-17ms —
@@ -1712,13 +1670,17 @@ var styleTextDim lipgloss.Style
 // ─── Player Bar ────────────────────────────────────────────────────
 
 func (m Model) renderPlayerBar() string {
-	innerW := m.width - 6 // box width(m.width) - doubleBorder(2) - padding(4) = content width
+	fullW := m.width - 6 // box width(m.width) - doubleBorder(2) - padding(4)
+	innerW := fullW
+	if m.playerCoverSlot() {
+		innerW -= playerCoverCols + 2
+	}
 
 	nowPlayingIdx := m.queue.CurrentIndex()
 	tracks := m.queue.Tracks()
 
-	var nowPlaying string
-	if m.queue.Len() == 0 || nowPlayingIdx < 0 || nowPlayingIdx >= len(tracks) || m.playerState == player.StateStopped {
+	var nowPlaying, albumRow string
+	if !m.playerCoverSlot() || nowPlayingIdx >= len(tracks) {
 		msg := "Ready — search and add tracks"
 		if m.queue.Len() > 0 {
 			msg = "Playback finished"
@@ -1756,6 +1718,11 @@ func (m Model) renderPlayerBar() string {
 				}
 			}
 		}
+		// The middle row carries the album, which the title row has no
+		// room for. Blank when the source didn't say.
+		if t.Album != "" {
+			albumRow = styleTextDim.Render(truncate("○ "+t.Album, innerW))
+		}
 	}
 
 	// Transport, seek bar and modes share one row — the bar takes
@@ -1763,20 +1730,54 @@ func (m Model) renderPlayerBar() string {
 	// playerRowLayout, which the mouse reads too.
 	combined := m.playerRowLayout().row
 
-	// Clamp each row to the box's inner width: an overflowing row makes
-	// the whole join wider than the terminal, which wraps and shifts
-	// every mouse hit zone.
-	content := lipgloss.JoinVertical(lipgloss.Left,
+	rows := []string{
 		truncate(nowPlaying, max(1, innerW)),
-		truncate(combined, max(1, innerW)),
-	)
+		truncate(albumRow, max(1, innerW)),
+		truncate(combined, max(1, fullW)),
+	}
+
+	var content string
+	if m.playerCoverSlot() {
+		// Cover column left of all three rows. renderCoverBlock emits
+		// the kitty escapes (or half-block cells); a fixed-width slot
+		// keeps the text from shifting while the art loads.
+		cover := m.renderCoverBlock(m.playerCoverFit())
+		lines := make([]string, 3)
+		for i := 0; i < 3; i++ {
+			c := ""
+			if i < len(cover) {
+				c = cover[i]
+			}
+			pad := playerCoverCols - lipgloss.Width(c)
+			if pad > 0 {
+				c += strings.Repeat(" ", pad)
+			}
+			// The combined row measures its own inset, so it must not
+			// be prefixed twice — rows 0 and 1 are plain text and get
+			// the cover plus gap; row 2 already accounted for it in its
+			// zone arithmetic but still needs the visible cells.
+			lines[i] = c + "  " + rows[i]
+		}
+		content = strings.Join(lines, "\n")
+	} else {
+		content = strings.Join(rows, "\n")
+	}
 
 	boxStyle := stylePlayerBox
 	if m.playerState != player.StatePlaying {
 		boxStyle = stylePlayerBoxStopped
 	}
 
-	return boxStyle.Render(content)
+	// The delete escape rides on the player bar because the bar is on
+	// every page — a kitty image outlives the frame that drew it, and
+	// this is the one place guaranteed to still be rendering.
+	return m.clearCoverImage() + boxStyle.Render(content)
+}
+
+// playerCoverFit sizes the art for the player bar's fixed slot.
+func (m Model) playerCoverFit() (cols, rows, height int) {
+	c, r := coverFitCells(m.coverImg, playerCoverCols, 3)
+	return c, r, 3
 }
 
 // ─── Help Bar ──────────────────────────────────────────────────────

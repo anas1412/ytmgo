@@ -8,6 +8,7 @@ import (
 
 	"ytmgo/internal/coverart"
 	"ytmgo/internal/lyrics"
+	"ytmgo/internal/mpris"
 	"ytmgo/internal/player"
 	"ytmgo/internal/queue"
 	"ytmgo/internal/search"
@@ -82,7 +83,7 @@ func TestLayoutGeometry(t *testing.T) {
 			}
 		}
 		panelsEnd := clickPanelStartY + m.panelHeight()
-		if want := panelsEnd + 3; controlsRow != want {
+		if want := panelsEnd + 4; controlsRow != want {
 			t.Errorf("%dx%d: controls rendered on row %d, mouse handler expects %d", w, h, controlsRow, want)
 		}
 	}
@@ -138,7 +139,7 @@ func checkPanelGeometry(t *testing.T, m Model, w, h int, what string) {
 			break
 		}
 	}
-	if want := clickPanelStartY + m.panelHeight() + 3; controls != want {
+	if want := clickPanelStartY + m.panelHeight() + 4; controls != want {
 		t.Errorf("%s %dx%d: controls on row %d, mouse expects %d", what, w, h, controls, want)
 	}
 }
@@ -165,7 +166,7 @@ func TestLayoutGeometrySettingsPage(t *testing.T) {
 			break
 		}
 	}
-	if want := clickPanelStartY + m.panelHeight() + 3; controlsRow != want {
+	if want := clickPanelStartY + m.panelHeight() + 4; controlsRow != want {
 		t.Fatalf("settings page controls on row %d, mouse handler expects %d", controlsRow, want)
 	}
 }
@@ -261,7 +262,8 @@ func TestCoverEscapesSurviveDiscardedFrames(t *testing.T) {
 	}
 
 	m := worstCaseModel(t, 150, 40)
-	m.npOn = true
+	m.queue.SetCurrentIndex(0)
+	m.playerState = player.StatePlaying
 	m.coverImg = img
 	m.coverURL = "https://example/a.jpg"
 	m.coverSendN = coverSendFrames
@@ -289,9 +291,9 @@ func TestCoverEscapesSurviveDiscardedFrames(t *testing.T) {
 		t.Error("resident image is no longer being placed")
 	}
 
-	// Closing the panel must carry the delete, repeatedly, or the image
+	// Stopping playback must carry the delete, repeatedly, or the image
 	// stays on screen over whatever is drawn next.
-	m.npOn = false
+	m.playerState = player.StateStopped
 	m.coverClearN = coverSendFrames
 	for i := 0; i < 3; i++ {
 		if !strings.Contains(m.View(), "\x1b_Ga=d") {
@@ -315,7 +317,8 @@ func TestNewArtworkReplacesOld(t *testing.T) {
 
 	img := image.NewRGBA(image.Rect(0, 0, 64, 64))
 	m := worstCaseModel(t, 150, 40)
-	m.npOn = true
+	m.queue.SetCurrentIndex(0)
+	m.playerState = player.StatePlaying
 
 	nm, _ := m.Update(CoverLoadedMsg{URL: "https://example/second.jpg", Img: img})
 	m = nm.(Model)
@@ -418,31 +421,37 @@ func TestNowPlayingOnEveryPage(t *testing.T) {
 	}
 }
 
-// TestSettingsPageClearsCoverImage: a kitty image outlives the frame
-// that drew it, so stepping onto the page that cannot show the panel
-// must carry the delete — otherwise the artwork stays painted over it.
-func TestSettingsPageClearsCoverImage(t *testing.T) {
+// TestCoverFollowsPlayback: the art lives in the player bar, which is
+// on every page — so the settings page shows it too, and what removes
+// it is playback stopping, reconciled once per message in Update.
+func TestCoverFollowsPlayback(t *testing.T) {
 	t.Setenv("TMUX", "")
 	t.Setenv("KITTY_WINDOW_ID", "1")
 
 	m := worstCaseModel(t, 150, 40)
-	m.npOn = true
-	if !m.npVisible() {
-		t.Fatal("panel should be visible before the page switch")
-	}
+	m.queue.SetCurrentIndex(0)
+	m.playerState = player.StatePlaying
+	m.coverImg = image.NewRGBA(image.Rect(0, 0, 64, 64))
+	m.coverURL = "https://example/a.jpg"
+	m.coverSendN = coverSendFrames
 
-	wasVisible := m.npVisible()
 	m.switchPage(PageSettings)
-	m.syncNowPlaying(wasVisible)
+	if !strings.Contains(m.View(), "\x1b_Ga=p") {
+		t.Error("the settings page should still place the cover — the player bar is there too")
+	}
 
-	if m.npVisible() {
-		t.Error("panel must not be visible on the settings page")
+	// Stop playback through Update — the reconcile compares the model
+	// either side of the dispatch, so the change must happen inside it.
+	if !m.coverOnScreen() {
+		t.Fatal("cover should be on screen before the stop")
 	}
+	nm, _ := m.Update(MprisCmdMsg{Cmd: mpris.CmdStop})
+	m = nm.(Model)
 	if m.coverClearN <= 0 {
-		t.Fatal("leaving the panel did not schedule the image delete")
+		t.Fatal("stopping playback did not schedule the image delete")
 	}
-	if got := m.View(); !strings.Contains(got, coverart.KittyClear()) {
-		t.Error("settings page does not carry the delete escape")
+	if !strings.Contains(m.View(), coverart.KittyClear()) {
+		t.Error("the frame after stopping does not carry the delete escape")
 	}
 }
 

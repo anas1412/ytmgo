@@ -33,10 +33,29 @@ type playerRowLayout struct {
 	compact bool
 }
 
+// playerCoverCols is the width of the cover slot on the player bar's
+// left. Fixed, not fitted to the artwork, so the click zones and the
+// text never shift when the art changes shape or hasn't arrived yet.
+const playerCoverCols = 8
+
+// playerCoverSlot reports whether the player bar reserves its cover
+// column: whenever a current track exists, playing or paused, so the
+// bar does not reflow on pause or while the art loads.
+func (m Model) playerCoverSlot() bool {
+	idx := m.queue.CurrentIndex()
+	return m.queue.Len() > 0 && idx >= 0 && idx < m.queue.Len() &&
+		m.playerState != player.StateStopped
+}
+
 // playerRowLayout builds the combined row for the current model state.
 func (m Model) playerRowLayout() playerRowLayout {
-	const contentStartX = 3 // double border (1) + left padding (2)
+	contentStartX := 3 // double border (1) + left padding (2)
 	innerW := m.width - 6
+	if m.playerCoverSlot() {
+		// The cover column and its gap sit left of every content row.
+		contentStartX += playerCoverCols + 2
+		innerW -= playerCoverCols + 2
+	}
 	l := playerRowLayout{compact: innerW < 110, transportStart: contentStartX}
 
 	// ── Transport cluster ──
