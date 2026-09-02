@@ -314,14 +314,19 @@ func (m Model) renderSettingsPanels() string {
 
 func (m Model) renderHeader() string {
 	// Logo
-	// A wordmark, not an icon: at terminal font sizes the note glyph
-	// that used to lead this read as a rendering artifact rather than a
-	// mark. The accent bar carries the brand instead — a block, so it
-	// is the same width in every terminal, unlike the music, triangle
-	// and circle glyphs, which are East-Asian Ambiguous and double up
-	// wherever a terminal is configured for CJK.
-	logo := lipgloss.NewStyle().Foreground(colorAccent2).Render("▌") +
-		styleLogo.Render("ytmgo")
+	// A wordmark: the name in the accent, and nothing leading it.
+	//
+	// A block was tried in that position and made things worse in two
+	// ways. It sat in a different accent from the name and flush
+	// against it, so a coloured slab appeared to be touching the "y".
+	// And the width reasoning was backwards: U+258C is East-Asian
+	// Ambiguous and doubles on a terminal configured for CJK, while the
+	// note it replaced — U+266B — is Neutral and always one cell. A
+	// music player showing Japanese titles is exactly where that bites.
+	//
+	// The name alone has no width to get wrong, and leaves the bar
+	// beside the search field reading unambiguously as that field's.
+	logo := styleLogo.Render("ytmgo")
 
 	// Search input.
 	//
