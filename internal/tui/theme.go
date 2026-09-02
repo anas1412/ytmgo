@@ -131,14 +131,14 @@ func ThemeDesc(t Theme) string {
 	case ThemeTerminal:
 		return "your terminal's ANSI colours — matches whatever scheme it already runs"
 	default:
-		return string(t) + " — a full scheme, painted over your terminal's background"
+		return string(t) + " — a full scheme; a dark terminal's background shows through"
 	}
 }
 
-// paintBackground reports whether the active theme owns the backdrop. The
-// terminal-derived themes leave it alone so transparency survives; a
-// named scheme paints it, since its foregrounds assume its own
-// background and would otherwise be read against the wrong one.
+// paintBackground reports whether the active theme owns the backdrop.
+// Nothing paints it on a dark terminal, so transparency survives under
+// every theme. The fill exists only for a light terminal, where a named
+// scheme's pale foregrounds would otherwise be read against white.
 var paintBackground bool
 
 // detectedDark is the terminal's own background, sampled once before any
@@ -245,7 +245,12 @@ func ApplyTheme(t Theme) {
 	default:
 		for _, s := range schemes {
 			if s.name == t {
-				paintBackground = true
+				// Every named scheme is dark, so on a dark terminal its
+				// foregrounds already read correctly against the bare
+				// backdrop — leaving it unpainted is what lets the
+				// terminal's transparency show through the whole UI.
+				// A light terminal still needs the fill.
+				paintBackground = !detectedDark
 				setPalette(s.palette())
 				buildStyles()
 				return

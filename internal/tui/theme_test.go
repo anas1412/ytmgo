@@ -25,8 +25,8 @@ func TestSchemesAreDistinct(t *testing.T) {
 			t.Errorf("%s and %s render the same accent", sc.name, prev)
 		}
 		seen[k] = sc.name
-		if !paintBackground {
-			t.Errorf("%s is a named scheme but does not paint its background", sc.name)
+		if paintBackground != !detectedDark {
+			t.Errorf("%s: paints background = %v on a dark=%v terminal", sc.name, paintBackground, detectedDark)
 		}
 	}
 	for _, tt := range []Theme{ThemeTerminal, ThemeYtmgo} {
@@ -34,6 +34,45 @@ func TestSchemesAreDistinct(t *testing.T) {
 		if paintBackground {
 			t.Errorf("%s must leave the terminal background alone", tt)
 		}
+	}
+}
+
+// TestDarkTerminalKeepsTransparency: no theme may lay a backdrop on a
+// dark terminal, or its transparency is painted over. A light terminal
+// still gets the fill, since a dark scheme's pale text would otherwise
+// be read against white.
+func TestDarkTerminalKeepsTransparency(t *testing.T) {
+	defer func() { detectedDark = true; ApplyTheme(ThemeTerminal) }()
+
+	// A line shaped like lipgloss's output. paintBg is exercised
+	// directly because under `go test` lipgloss drops to the Ascii
+	// profile, so a rendered View carries no colour to look for.
+	const line = "\x1b[38;2;1;2;3mfoo\x1b[39m\x1b[49m bar"
+	m := Model{width: 40}
+
+	detectedDark = true
+	for _, th := range themeOrder {
+		ApplyTheme(th)
+		if paintBackground {
+			t.Errorf("%s paints over a dark terminal's transparency", th)
+		}
+		if got := m.paintBg(line); got != line {
+			t.Errorf("%s lays a backdrop on a dark terminal", th)
+		}
+	}
+
+	// A light terminal is the one case that still needs the fill, or a
+	// dark scheme's pale text lands on white.
+	detectedDark = false
+	painted := 0
+	for _, th := range themeOrder {
+		ApplyTheme(th)
+		if paintBackground {
+			painted++
+		}
+	}
+	if painted == 0 {
+		t.Error("no theme paints on a light terminal — pale text would be unreadable")
 	}
 }
 
@@ -112,8 +151,11 @@ func TestDefaultIsTerminal(t *testing.T) {
 // The logic is exercised directly rather than through View, because
 // under `go test` the output is not a TTY and lipgloss drops to the
 // Ascii profile, emitting no colour at all.
+// The fill only engages on a light terminal now — a dark one is left
+// bare so its transparency survives — so that is the case to exercise.
 func TestNamedSchemePaintsEveryLine(t *testing.T) {
-	defer ApplyTheme(ThemeTerminal)
+	defer func() { detectedDark = true; ApplyTheme(ThemeTerminal) }()
+	detectedDark = false
 	ApplyTheme(Theme("dracula"))
 
 	m := Model{width: 40}
