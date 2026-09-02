@@ -152,20 +152,26 @@ func TestNamedSchemePaintsEveryLine(t *testing.T) {
 // boundaries — so an input allowed to render wider than its box moved a
 // space-less query wholesale to a second line that Height(1) then threw
 // away, and the field showed its prompt and nothing else.
+// The box is sized to the terminal now, so this holds at every width.
 func TestSearchFieldFitsItsBox(t *testing.T) {
-	m := worstCaseModel(t, 200, 50)
-	boxContent := searchBoxWidth - 2*searchBoxPadding
+	for _, termW := range []int{80, 110, 152, 200, 400} {
+		m := worstCaseModel(t, termW, 40)
+		boxContent := searchBoxWidth(termW) - 2*searchBoxPadding
 
-	if m.searchInput.Width != searchInputWidth {
-		t.Errorf("input width is %d, want %d — something resized it past its box",
-			m.searchInput.Width, searchInputWidth)
-	}
-	for _, n := range []int{0, 5, 23, 40, 200} {
-		m.searchInput.SetValue(strings.Repeat("a", n))
-		if w := lipgloss.Width(m.searchInput.View()); w > boxContent {
-			t.Errorf("value of %d chars renders %d cells, box holds %d", n, w, boxContent)
+		if m.searchInput.Width != searchInputWidth(termW) {
+			t.Errorf("%d cols: input width is %d, want %d — the resize did not size it to its box",
+				termW, m.searchInput.Width, searchInputWidth(termW))
+		}
+		for _, n := range []int{0, 5, 23, 40, 200} {
+			m.searchInput.SetValue(strings.Repeat("a", n))
+			if w := lipgloss.Width(m.searchInput.View()); w > boxContent {
+				t.Errorf("%d cols: value of %d chars renders %d cells, box holds %d",
+					termW, n, w, boxContent)
+			}
 		}
 	}
+
+	m := worstCaseModel(t, 200, 50)
 
 	// A long query must still leave a usable header: the field keeps its
 	// size, the row stays one line, and the page tabs survive.

@@ -31,15 +31,39 @@ var (
 // its wrapper loses the text it renders past the edge — the field went
 // blank once the query passed the wrapper's width.
 const (
-	searchBoxWidth   = 28
+	searchBoxMin     = 28
+	searchBoxMax     = 60
 	searchBoxPadding = 1 // each side
 	// A textinput renders its Width plus three cells: the "> " prompt
 	// and one for the cursor. Measured, not assumed — guessing here is
 	// what produced a field that wrapped and then swallowed itself.
 	searchInputChrome = 3
-	// searchInputWidth leaves the rendered input exactly filling the box.
-	searchInputWidth = searchBoxWidth - 2*searchBoxPadding - searchInputChrome
 )
+
+// searchBoxWidth is the field's width for a given terminal width. It
+// takes a third of the row, which leaves the page tabs and the focus
+// hint their space at every size, and is clamped so it neither shrinks
+// below something typeable nor runs the width of a wide terminal.
+//
+// The rendered input must fill this exactly: a fixed lipgloss width
+// wraps rather than truncates, so an input rendering wider than its box
+// loses the text it renders past the edge.
+func searchBoxWidth(termW int) int {
+	w := termW / 3
+	if w < searchBoxMin {
+		w = searchBoxMin
+	}
+	if w > searchBoxMax {
+		w = searchBoxMax
+	}
+	return w
+}
+
+// searchInputWidth is what the textinput may render into, for a box
+// sized to the given terminal width.
+func searchInputWidth(termW int) int {
+	return searchBoxWidth(termW) - 2*searchBoxPadding - searchInputChrome
+}
 
 // buildInlineStyles is the view-local half of buildStyles.
 func buildInlineStyles() {
@@ -77,16 +101,16 @@ func buildInlineStyles() {
 	// prints them as literal text. The underline affordance for no-fill
 	// themes lives on the textinput's own styles below, which are applied
 	// to plain text runs.
+	// No Width here: the box is sized to the terminal at render time,
+	// and these styles are rebuilt only when the theme changes.
 	styleSearchBox = well(lipgloss.NewStyle().
 		Foreground(colorText).
 		Padding(0, searchBoxPadding).
-		Width(searchBoxWidth).
 		Height(1))
 
 	styleSearchBoxFocused = well(lipgloss.NewStyle().
 		Foreground(colorAccent2).
 		Padding(0, searchBoxPadding).
-		Width(searchBoxWidth).
 		Height(1))
 
 	// Panel empty state
@@ -326,12 +350,13 @@ func (m Model) renderHeader() string {
 	// wraps on word boundaries — a long query is one unbroken token with
 	// nowhere to break, so the whole thing moved to a second line that
 	// Height(1) then discarded, leaving a field showing only its prompt.
-	inner := truncate(m.searchInput.View(), searchBoxWidth-2*searchBoxPadding)
+	boxW := searchBoxWidth(m.width)
+	inner := truncate(m.searchInput.View(), boxW-2*searchBoxPadding)
 	var searchView string
 	if m.searchFocused {
-		searchView = styleSearchBoxFocused.Render(inner)
+		searchView = styleSearchBoxFocused.Width(boxW).Render(inner)
 	} else {
-		searchView = styleSearchBox.Render(inner)
+		searchView = styleSearchBox.Width(boxW).Render(inner)
 	}
 	if paintBackground {
 		// One pass over the finished field, so the whole well is a
@@ -342,12 +367,17 @@ func (m Model) renderHeader() string {
 	// A bar marks where the field begins — brighter when it has focus.
 	// Themes that paint a fill already show the field's extent, so the
 	// bar is for the two that do not.
+	//
+	// The same glyph the panels use for their sides, not a left-edge
+	// eighth block: both sit in column zero, but an eighth block hugs
+	// the left of its cell while a box-drawing rule is centred in it,
+	// so the two lines were a couple of pixels apart down the screen.
 	if !paintBackground {
 		barColor := colorBorder
 		if m.searchFocused {
 			barColor = colorAccent2
 		}
-		searchView = lipgloss.NewStyle().Foreground(barColor).Render("▏") + searchView
+		searchView = lipgloss.NewStyle().Foreground(barColor).Render("│") + searchView
 	}
 
 	// Build page tabs (right side) with inline key hints matching [h] / [l] style

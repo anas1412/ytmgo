@@ -65,10 +65,12 @@ func buildStyles() {
 
 		// ─── Header ─────────────────────────────────────────────────────────
 
+	// No left padding: the header sat one column in from the panels
+	// below it, so the search field and the panel borders did not share
+	// an edge.
 	styleHeader = lipgloss.NewStyle().
 		Foreground(colorHeader).
-		Bold(true).
-		PaddingLeft(1)
+		Bold(true)
 
 	styleLogo = lipgloss.NewStyle().
 		Foreground(colorAccent).

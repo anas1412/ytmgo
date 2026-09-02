@@ -105,15 +105,17 @@ func (m Model) dispatch(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.ready = true
 		}
 
-		// The search field's width is fixed by its wrapper, not by the
-		// terminal: the header also carries the logo, the focus hint and
-		// five page tabs, so the field cannot have the row. It used to be
-		// resized to the full header here while the wrapper stayed at
-		// searchBoxWidth, and the input then rendered several times wider
-		// than the box it sat in. A fixed lipgloss width wraps rather
-		// than truncates, and wraps on word boundaries, so a query with
-		// no spaces in it moved wholesale to a second line that Height(1)
-		// discarded — the field showed its prompt and nothing else.
+		// Keep the input's width in step with the box the header draws
+		// around it. Both come from searchBoxWidth, which is the whole
+		// point: this was once resized to the full header while the
+		// wrapper stayed fixed, and an input rendering wider than its
+		// box loses the text past the edge — a lipgloss width wraps
+		// rather than truncates, and wraps on word boundaries, so a
+		// query with no spaces moved wholesale onto a second line that
+		// Height(1) discarded. The field showed its prompt and nothing
+		// else.
+		m.searchInput.Width = searchInputWidth(m.width)
+		m.settingsEditInput.Width = searchInputWidth(m.width)
 		return m, nil
 
 	// ── Mouse events ─────────────────────────────────────────────

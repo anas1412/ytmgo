@@ -470,7 +470,9 @@ func InitialModel() Model {
 	ti.TextStyle = textinputStyle
 	ti.PlaceholderStyle = textinputPlaceholder
 	ti.CharLimit = 80
-	ti.Width = searchInputWidth
+	// A starting value only: the first WindowSizeMsg sizes this to the
+	// real terminal, and every resize after it.
+	ti.Width = searchInputWidth(searchBoxMin * 3)
 
 	sti := textinput.New()
 	sti.Placeholder = ""
