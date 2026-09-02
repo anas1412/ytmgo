@@ -53,22 +53,26 @@ func KittySupported() bool {
 }
 
 // transmitCache memoises the encoded transmit, so emitting it across a
-// few frames costs one encode rather than several.
+// few frames costs one encode rather than several. One entry per image
+// id: the player cover and the album cover are on screen together, and
+// a single shared slot made each lookup evict the other, re-encoding
+// both on every frame that carried them.
+type transmitEntry struct{ key, esc string }
+
 var (
 	transmitMu    sync.Mutex
-	transmitKey   string
-	transmitValue string
+	transmitCache = map[int]transmitEntry{}
 )
 
 // KittyTransmitCached is KittyTransmitID memoised on the artwork, size
 // and image id.
 func KittyTransmitCached(img image.Image, key string, cols, rows, id int) (string, error) {
-	full := fmt.Sprintf("%s|%d|%d|%d", key, cols, rows, id)
+	full := fmt.Sprintf("%s|%d|%d", key, cols, rows)
 	transmitMu.Lock()
-	if transmitKey == full {
-		v := transmitValue
+	if e, ok := transmitCache[id]; ok && e.key == full {
+		esc := e.esc
 		transmitMu.Unlock()
-		return v, nil
+		return esc, nil
 	}
 	transmitMu.Unlock()
 
@@ -77,7 +81,7 @@ func KittyTransmitCached(img image.Image, key string, cols, rows, id int) (strin
 		return "", err
 	}
 	transmitMu.Lock()
-	transmitKey, transmitValue = full, esc
+	transmitCache[id] = transmitEntry{key: full, esc: esc}
 	transmitMu.Unlock()
 	return esc, nil
 }

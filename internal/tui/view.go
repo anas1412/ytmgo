@@ -776,6 +776,20 @@ type artRenderCache struct {
 
 var coverRender, albumArtRender artRenderCache
 
+// kittyResident records, per image id, the artwork the terminal is
+// actually holding — same key as the transmit. It is written when a
+// frame emits the transmit and dropped when one emits the delete, which
+// ties the send to real renders.
+//
+// The sendN countdowns cannot do that on their own: they tick once per
+// message, while View runs only at flush time, so a busy Update loop
+// (the spectrum's frames plus the 50ms progress tick) exhausts the
+// three owed frames before any of them is rendered. The placement then
+// referenced an image the terminal had never received, and the slot
+// went blank — reliably, since the cover loads exactly when playback
+// starts and the message storm begins.
+var kittyResident = map[int]string{}
+
 // renderArtBlock returns an image's rows, vertically centred in height.
 // Uses kitty's graphics protocol where available (under the given image
 // id) and half-blocks otherwise. sendN>0 means Update still owes the
@@ -792,10 +806,16 @@ func renderArtBlock(img image.Image, url string, cols, rows, height, sendN, kitt
 
 	if coverart.KittySupported() {
 		esc := ""
-		if sendN > 0 {
-			// The encode is cached, so repeating it costs nothing.
+		key := fmt.Sprintf("%s|%d|%d", url, cols, rows)
+		// Send while Update still owes frames, and whenever the terminal
+		// is not already holding this artwork — the latter is what makes
+		// it reliable, since it survives however many messages passed
+		// before this frame was rendered. The encode is cached per image
+		// id, so repeating it costs nothing.
+		if sendN > 0 || kittyResident[kittyID] != key {
 			if t, err := coverart.KittyTransmitCached(img, url, cols, rows, kittyID); err == nil {
 				esc = t
+				kittyResident[kittyID] = key
 			}
 		}
 		esc += coverart.KittyDisplayID(cols, rows, kittyID)
@@ -851,9 +871,11 @@ func (m Model) clearCoverImage() string {
 	esc := ""
 	if m.coverClearN > 0 {
 		esc += coverart.KittyClear()
+		delete(kittyResident, coverart.CoverImageID)
 	}
 	if m.albumArtClearN > 0 {
 		esc += coverart.KittyClearID(coverart.AlbumImageID)
+		delete(kittyResident, coverart.AlbumImageID)
 	}
 	return esc
 }
@@ -1866,6 +1888,11 @@ var styleTextDim lipgloss.Style
 // ─── Player Bar ────────────────────────────────────────────────────
 
 func (m Model) renderPlayerBar() string {
+	// Taken first because it is emitted first: the delete drops the
+	// resident record, so the cover column below re-establishes the
+	// image in the same frame rather than being skipped as resident.
+	clear := m.clearCoverImage()
+
 	fullW := m.width - 6 // box width(m.width) - doubleBorder(2) - padding(4)
 	innerW := fullW
 	if m.playerCoverSlot() {
@@ -1966,7 +1993,7 @@ func (m Model) renderPlayerBar() string {
 	// The delete escape rides on the player bar because the bar is on
 	// every page — a kitty image outlives the frame that drew it, and
 	// this is the one place guaranteed to still be rendering.
-	return m.clearCoverImage() + boxStyle.Render(content)
+	return clear + boxStyle.Render(content)
 }
 
 // playerCoverFit sizes the art for the player bar's fixed slot.

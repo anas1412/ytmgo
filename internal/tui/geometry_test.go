@@ -363,6 +363,54 @@ func TestCoverFollowsTrackWithAlbumOpen(t *testing.T) {
 	}
 }
 
+// TestTransmitSurvivesMessageStorm: the transmit countdown ticks once
+// per message while View runs only at flush time, so the spectrum's
+// frames plus the 50ms progress tick can exhaust the owed frames before
+// any is rendered. The frame then placed an image the terminal never
+// received and the cover slot went blank. The send must therefore also
+// key off what the terminal is actually holding — while still not
+// re-sending once it holds the right artwork.
+func TestTransmitSurvivesMessageStorm(t *testing.T) {
+	t.Setenv("TMUX", "")
+	t.Setenv("KITTY_WINDOW_ID", "1")
+	kittyResident = map[int]string{}
+
+	img := image.NewRGBA(image.Rect(0, 0, 64, 64))
+	m := worstCaseModel(t, 150, 40)
+	m.queue.SetCurrentIndex(0)
+	m.queue.UpdateTrack("sZxzPcT1Meg", func(tr *queue.Track) {
+		tr.CoverURL = "https://example/cover.jpg"
+	})
+	m.playerState = player.StatePlaying
+
+	nm, _ := m.Update(CoverLoadedMsg{URL: "https://example/cover.jpg", Img: img})
+	m = nm.(Model)
+
+	// Messages keep arriving; nothing is flushed in between.
+	for i := 0; i < 4; i++ {
+		nm, _ = m.Update(playerTickMsg{})
+		m = nm.(Model)
+	}
+	if m.coverSendN != 0 {
+		t.Fatalf("expected the countdown to be spent, got %d", m.coverSendN)
+	}
+	frame := m.View()
+	if !strings.Contains(frame, "\x1b_Ga=t,f=100,i=1337") {
+		t.Error("first flushed frame must carry the transmit, or it places an image the terminal lacks")
+	}
+
+	// Once the terminal holds it, the payload must not ride every frame.
+	for i := 0; i < 3; i++ {
+		nm, _ = m.Update(playerTickMsg{})
+		m = nm.(Model)
+	}
+	if steady := m.View(); strings.Contains(steady, "\x1b_Ga=t,f=100,i=1337") {
+		t.Error("re-transmitting resident artwork on every frame")
+	} else if !strings.Contains(steady, "a=p,i=1337") {
+		t.Error("resident image is no longer being placed")
+	}
+}
+
 // TestLayoutGeometryDownloadsPage: downloads render as a full page now,
 // held to the same contract as every other page.
 func TestLayoutGeometryDownloadsPage(t *testing.T) {
