@@ -314,19 +314,10 @@ func (m Model) renderSettingsPanels() string {
 
 func (m Model) renderHeader() string {
 	// Logo
-	// A wordmark: the name in the accent, and nothing leading it.
-	//
-	// A block was tried in that position and made things worse in two
-	// ways. It sat in a different accent from the name and flush
-	// against it, so a coloured slab appeared to be touching the "y".
-	// And the width reasoning was backwards: U+258C is East-Asian
-	// Ambiguous and doubles on a terminal configured for CJK, while the
-	// note it replaced — U+266B — is Neutral and always one cell. A
-	// music player showing Japanese titles is exactly where that bites.
-	//
-	// The name alone has no width to get wrong, and leaves the bar
-	// beside the search field reading unambiguously as that field's.
-	logo := styleLogo.Render("ytmgo")
+	// No wordmark up here: it sits with the version in the help bar,
+	// and the columns it used go to the search field and the tabs. The
+	// header opens straight onto the field it exists to hold.
+	logo := ""
 
 	// Search input.
 	//
@@ -395,9 +386,7 @@ func (m Model) renderHeader() string {
 	tabHint := m.hints(styleKeyHint.Render("[tab]") + styleTextDim.Render(" cycle"))
 	// [v] used to sit here too; it lives in the help bar now, next to
 	// [X], so the two panel toggles are advertised together in one place.
-	// The logo is a wordmark, the field is a control — give them enough
-	// air not to read as one run of text.
-	left := lipgloss.JoinHorizontal(lipgloss.Center, logo, "     ", searchView, "  ", tabHint)
+	left := lipgloss.JoinHorizontal(lipgloss.Center, logo, searchView, "  ", tabHint)
 
 	gap := m.width - lipgloss.Width(left) - lipgloss.Width(tabsStr) - 2
 	if gap < 1 {
@@ -1968,14 +1957,20 @@ func (m Model) renderHelpBar() string {
 	innerWidth := width - 2*margin
 
 	// Left: version or update status
+	// The wordmark leads the version rather than sitting in the header:
+	// the terminal's own title bar already names the app up there, and
+	// this line is where the app identifies itself anyway. It goes on
+	// the left, not the far right — the right end of this bar ends in
+	// "q quit", and the way out should stay the last thing on it.
+	mark := styleLogo.Render("ytmgo") + " "
 	var left string
 	switch m.updateAvailable {
 	case "":
-		left = styleVersion.Render("⋯ " + ver.Version)
+		left = mark + styleVersion.Render(ver.Version)
 	case "latest":
-		left = styleVersion.Render("✓ " + ver.Version + " — up to date")
+		left = mark + styleVersion.Render(ver.Version+" — up to date")
 	default:
-		left = styleUpdateAvail.Render("⬆  Update " + ver.Version + " → " + m.updateAvailable + " — press U")
+		left = mark + styleUpdateAvail.Render("⬆  Update "+ver.Version+" → "+m.updateAvailable+" — press U")
 	}
 
 	// Right: help shortcuts

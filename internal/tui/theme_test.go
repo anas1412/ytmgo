@@ -167,15 +167,19 @@ func TestSearchFieldFitsItsBox(t *testing.T) {
 		}
 	}
 
-	// A long query must still leave a visible header: the field keeps its
-	// size and the row keeps the logo and the tabs.
+	// A long query must still leave a usable header: the field keeps its
+	// size, the row stays one line, and the page tabs survive.
 	m.searchInput.SetValue(strings.Repeat("z", 120))
 	header := m.renderHeader()
 	if strings.Contains(header, "\n") {
 		t.Error("header wrapped to a second line")
 	}
-	if !strings.Contains(header, "ytmgo") {
-		t.Error("header lost its logo to the search field")
+	if !strings.Contains(header, "Settings") {
+		t.Error("header lost its page tabs to the search field")
+	}
+	// The wordmark lives in the help bar now, not the header.
+	if !strings.Contains(m.renderHelpBar(), "ytmgo") {
+		t.Error("help bar is not carrying the wordmark")
 	}
 }
 
