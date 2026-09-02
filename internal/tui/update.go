@@ -275,6 +275,12 @@ func (m Model) dispatch(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case CoverLoadedMsg:
+		// Loads race: a track change can have a second fetch in flight
+		// before the first lands. Only the art the bar wants now may
+		// settle, or a slow older load would overwrite a newer one.
+		if msg.URL != m.desiredCoverURL() {
+			return m, nil
+		}
 		m.coverLoading = false
 		if msg.Err != nil {
 			m.coverErr = msg.Err.Error()

@@ -270,10 +270,10 @@ type Model struct {
 	albumTracks    []search.Result // tracks of openAlbum, as playable results
 	isLoadingAlbum bool
 	albumSeq       int // bumped per AlbumTracks fetch; stale responses dropped
-	// albumCoverURL, when set, takes over the now-playing panel's art
-	// slot for the duration of an album preview: browsing an album
-	// should show that album's cover, not whatever happens to be
-	// playing. Cleared on leaving the album view.
+	// albumCoverURL is the open album's cover URL, kept while an album
+	// preview is open or loading. It marks the album view as active and
+	// feeds the cover along when a track's album is opened from a list.
+	// Cleared on leaving the album view.
 	albumCoverURL          string
 	showingRecommendations bool
 	// recsLoaded records that a recommendations fetch has come back, so
@@ -775,13 +775,12 @@ func (m *Model) updateDiscordRPC() {
 	discordrpc.Update(t, m.playerState, m.position)
 }
 
-// desiredCoverURL returns what the now-playing panel's art slot should
-// show right now. While an album is open for preview its own cover
-// takes the slot; otherwise it is the playing track's art.
+// desiredCoverURL returns what the player bar's art slot should show
+// right now: the playing track's art. An open album's cover has its own
+// slot in the album header strip, so it no longer takes over this one —
+// that override predates the strip and left the bar stuck on the album's
+// art (never following track changes) while an album was open.
 func (m Model) desiredCoverURL() string {
-	if m.albumCoverURL != "" {
-		return m.albumCoverURL
-	}
 	if t, ok := m.queue.Current(); ok {
 		return t.CoverURL
 	}

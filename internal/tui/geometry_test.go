@@ -327,6 +327,11 @@ func TestNewArtworkReplacesOld(t *testing.T) {
 	m := worstCaseModel(t, 150, 40)
 	m.queue.SetCurrentIndex(0)
 	m.playerState = player.StatePlaying
+	// The load must match the art the bar wants right now — stale
+	// arrivals (an older fetch landing after a track change) are dropped.
+	m.queue.UpdateTrack("sZxzPcT1Meg", func(tr *queue.Track) {
+		tr.CoverURL = "https://example/second.jpg"
+	})
 
 	nm, _ := m.Update(CoverLoadedMsg{URL: "https://example/second.jpg", Img: img})
 	m = nm.(Model)
@@ -339,6 +344,22 @@ func TestNewArtworkReplacesOld(t *testing.T) {
 	frame := m.View()
 	if !strings.Contains(frame, "\x1b_Ga=d") || !strings.Contains(frame, "\x1b_Ga=t") {
 		t.Error("frame should both drop the old image and send the new one")
+	}
+}
+
+// TestCoverFollowsTrackWithAlbumOpen: an open album preview must not pin
+// the player bar's art. The bar follows the playing track — the open
+// album's cover has its own slot in the album header strip — or a track
+// change while browsing an album leaves the bar stuck on the album art.
+func TestCoverFollowsTrackWithAlbumOpen(t *testing.T) {
+	m := worstCaseModel(t, 150, 40)
+	m.queue.SetCurrentIndex(0)
+	m.queue.UpdateTrack("sZxzPcT1Meg", func(tr *queue.Track) {
+		tr.CoverURL = "https://example/track.jpg"
+	})
+	m.albumCoverURL = "https://example/album.jpg"
+	if got := m.desiredCoverURL(); got != "https://example/track.jpg" {
+		t.Fatalf("desiredCoverURL = %q, want the playing track's art", got)
 	}
 }
 

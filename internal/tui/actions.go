@@ -70,11 +70,9 @@ func (m *Model) activateSelection() tea.Cmd {
 				a := m.albums[m.searchCursor]
 				m.isLoadingAlbum = true
 				m.albumSeq++
-				// Show the album's cover in the now-playing panel
-				// while its tracklist loads.
 				m.albumCoverURL = a.CoverURL
 				m.setStatus("Opening " + a.Title + "…")
-				return tea.Batch(openAlbumCmd(a, m.albumSeq), m.refreshCoverCmd())
+				return openAlbumCmd(a, m.albumSeq)
 			}
 			return nil
 		}
@@ -158,10 +156,9 @@ func (m *Model) syncNowPlaying(wasVisible bool) tea.Cmd {
 	return vizFrameCmd(m.viz)
 }
 
-// leaveAlbumView drops any open album preview — tracklist and cover
-// override — so the now-playing panel falls back to the playing track's
-// art. Returns the cover-refresh command to attach (nil when nothing
-// was open).
+// leaveAlbumView drops any open album preview — tracklist and cover.
+// Returns a cover-refresh command that retries the playing track's art
+// if an earlier load failed (nil when nothing was open or needed).
 func (m *Model) leaveAlbumView() tea.Cmd {
 	if m.openAlbum == nil && !m.isLoadingAlbum && m.albumCoverURL == "" {
 		return nil
@@ -256,15 +253,15 @@ func (m *Model) openAlbumOfSelected() tea.Cmd {
 	m.isLoadingAlbum = true
 	m.albumSeq++
 	m.resetStreamCursor()
-	// The song's own thumbnail is the album's art: show it right away,
-	// the fetched album page refines it in handleAlbumTracks.
+	// The song's own thumbnail is the album's art; the fetched album
+	// page refines it in handleAlbumTracks.
 	m.albumCoverURL = cover
 	if name != "" {
 		say("Opening “" + name + "”…")
 	} else {
 		say("Opening album…")
 	}
-	return tea.Batch(openAlbumCmd(ytmusic.Album{BrowseID: id}, m.albumSeq), m.refreshCoverCmd())
+	return openAlbumCmd(ytmusic.Album{BrowseID: id}, m.albumSeq)
 }
 
 // nextTrack advances the queue and plays the next track. It uses Skip,
