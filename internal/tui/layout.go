@@ -9,9 +9,17 @@ import (
 )
 
 // ensurePlayer creates the player if it doesn't exist yet.
+//
+// A fresh player starts at its own default level, so the saved volume
+// has to be handed over here — before the first Play spawns mpv, which
+// takes its starting --volume from the player's own field. Without this
+// the bar showed the saved level while mpv played at its default, and
+// only pressing +/- (which does reach the player) brought the two into
+// line.
 func (m *Model) ensurePlayer() {
 	if m.player == nil {
 		m.player = player.New()
+		m.player.SetVolume(m.volume)
 	}
 }
 

@@ -144,6 +144,17 @@ func TestStaleSearchResultsDropped(t *testing.T) {
 	}
 }
 
+// TestEnsurePlayerCarriesSavedVolume: the saved level must reach the
+// player when it is created, or mpv spawns at its own default and the
+// bar's percentage is a lie until the user presses +/-.
+func TestEnsurePlayerCarriesSavedVolume(t *testing.T) {
+	m := Model{volume: 37}
+	m.ensurePlayer()
+	if got := m.player.Volume(); got != 37 {
+		t.Fatalf("player volume = %d, want the saved 37", got)
+	}
+}
+
 // TestSettingDefsInvariants makes sure every settings row declares the
 // handlers its kind requires, so a future row can't reintroduce the
 // silent index-mismatch class of bug.
