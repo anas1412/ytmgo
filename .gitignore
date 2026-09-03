@@ -33,3 +33,8 @@ Thumbs.db
 
 notes.txt
 plan.md
+node_modules/
+docs/.vitepress/dist/
+docs/.vitepress/cache/
+docs/public/install.sh
+docs/public/uninstall.sh

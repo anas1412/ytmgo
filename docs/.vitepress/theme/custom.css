@@ -1,0 +1,46 @@
+/* ytmgo's own palette, mapped onto VitePress's theme variables — the
+   violet and mint the TUI uses, so the site and the app read as one
+   thing. Values come from the app's `ytmgo` theme in internal/tui. */
+
+:root {
+  --vp-c-brand-1: #8b5cf6;
+  --vp-c-brand-2: #7c3aed;
+  --vp-c-brand-3: #6d28d9;
+  --vp-c-brand-soft: rgba(124, 58, 237, 0.14);
+
+  --vp-c-tip-1: #06d6a0;
+  --vp-c-tip-soft: rgba(6, 214, 160, 0.14);
+
+  /* The wordmark is one colour. A gradient across five letters reads as
+     a effect rather than a mark, and the app's own logo is solid. */
+  --vp-home-hero-name-color: #8b5cf6;
+
+  /* No glow behind the logo: the icon carries its own violet and mint,
+     and a blurred blob under it muddied both. */
+  --vp-home-hero-image-background-image: none;
+  --vp-home-hero-image-filter: none;
+}
+
+.dark {
+  --vp-c-bg: #0a0a0f;
+  --vp-c-bg-alt: #0d0d12;
+  --vp-c-bg-soft: #111118;
+  --vp-c-divider: #2a2a3e;
+
+  --vp-c-brand-1: #a78bfa;
+  --vp-c-brand-2: #8b5cf6;
+  --vp-c-brand-3: #7c3aed;
+}
+
+/* The terminal captures are the point of the page — let them sit on the
+   dark ground they were shot against rather than a themed panel. */
+.vp-doc img[src*='ytmgo.png'] {
+  border-radius: 10px;
+  border: 1px solid var(--vp-c-divider);
+}
+
+/* Key names in the bindings tables read as keys, not as code spans. */
+.vp-doc td > code:only-child {
+  font-weight: 600;
+  color: var(--vp-c-brand-1);
+}

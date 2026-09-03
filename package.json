@@ -1,0 +1,17 @@
+{
+  "name": "ytmgo-docs",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "docs:dev": "cp install.sh uninstall.sh docs/public/ && vitepress dev docs",
+    "docs:build": "cp install.sh uninstall.sh docs/public/ && vitepress build docs",
+    "docs:preview": "vitepress preview docs"
+  },
+  "devDependencies": {
+    "lucide-static": "^1.40.0",
+    "vitepress": "^1.6.4"
+  },
+  "allowScripts": {
+    "esbuild@0.21.5": true
+  }
+}

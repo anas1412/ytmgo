@@ -12,12 +12,14 @@ A terminal-based YouTube Music client written in Go. Search music, download audi
 
 ---
 
+Full documentation: **https://anas1412.github.io/ytmgo/**
+
 ## Install
 
 ### One-liner (Linux / macOS)
 
 ```bash
-curl -fsSL https://anas1412.github.io/ytmgo/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/anas1412/ytmgo/main/install.sh | bash
 ```
 
 It detects your system automatically:
