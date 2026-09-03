@@ -44,3 +44,111 @@
   font-weight: 600;
   color: var(--vp-c-brand-1);
 }
+
+/* The hero's image slot is built for a logo: a fixed square around
+   320px, centred in its half of the row. A 1200x656 terminal capture
+   needs the width instead, so the hero becomes a wider two-column
+   layout and the image fills its side rather than being letterboxed
+   inside a square. */
+@media (min-width: 960px) {
+  .VPHero .container {
+    max-width: 1280px;
+  }
+
+  .VPHero .main {
+    max-width: 460px;
+  }
+
+  .VPHero .image {
+    flex-grow: 1;
+    min-width: 0;
+  }
+
+  .VPHero .image-container {
+    width: 100%;
+    height: auto;
+    max-width: none;
+    max-height: none;
+    transform: none;      /* the default nudges it up and left */
+    padding: 0;
+    margin: 0;
+  }
+
+  .VPHero .image-bg {
+    display: none;        /* the blurred blob behind the logo */
+  }
+}
+
+/* At every width the capture flows in the layout rather than being
+   absolutely centred in a fixed-size box, which is how the default
+   positions a square logo. The container has to give up its fixed
+   height to match, or the image sits at the top of an empty 320px box
+   and collides with the nav on a phone. */
+.VPHero .image-container {
+  height: auto;
+}
+
+.VPHero .image-src {
+  position: static;
+  width: 100%;
+  max-width: 100%;
+  max-height: none;
+  border-radius: 10px;
+  border: 1px solid var(--vp-c-divider);
+  box-shadow: 0 16px 44px -14px rgb(0 0 0 / 60%);
+  transform: none;
+  cursor: zoom-in;
+  transition: border-color 0.2s;
+}
+
+/* Below the two-column breakpoint the image stacks above the text, so
+   it needs its own breathing room instead of the offsets the default
+   layout applies to a logo. */
+@media (max-width: 959px) {
+  .VPHero .image {
+    margin: 0 auto 32px;
+    max-width: 560px;
+    padding: 0 12px;
+  }
+
+  .VPHero .image-bg {
+    display: none;
+  }
+}
+
+.VPHero .image-src:hover {
+  border-color: var(--vp-c-brand-1);
+}
+
+/* ── Lightbox ──────────────────────────────────────────────────────
+   Click the capture to read it at full size. Plain DOM, no library:
+   one overlay, dismissed by clicking it or pressing Escape. */
+.ytmgo-lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4vmin;
+  background: rgb(0 0 0 / 82%);
+  backdrop-filter: blur(4px);
+  cursor: zoom-out;
+  animation: ytmgo-fade 0.18s ease-out;
+}
+
+.ytmgo-lightbox img {
+  max-width: 100%;
+  max-height: 100%;
+  border-radius: 8px;
+  box-shadow: 0 24px 70px -20px rgb(0 0 0 / 80%);
+}
+
+@keyframes ytmgo-fade {
+  from { opacity: 0 }
+  to   { opacity: 1 }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ytmgo-lightbox { animation: none }
+}

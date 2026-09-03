@@ -18,7 +18,7 @@ export default defineConfig({
     ['meta', { property: 'og:description', content: 'Search, download, queue, and play music, all from the keyboard, inside your terminal.' }],
     ['meta', { property: 'og:image', content: 'https://raw.githubusercontent.com/anas1412/ytmgo/main/ytmgo.png' }],
     ['meta', { property: 'og:image:width', content: '1200' }],
-    ['meta', { property: 'og:image:height', content: '656' }],
+    ['meta', { property: 'og:image:height', content: '631' }],
     ['meta', { name: 'twitter:card', content: 'summary_large_image' }],
     ['meta', { name: 'twitter:image', content: 'https://raw.githubusercontent.com/anas1412/ytmgo/main/ytmgo.png' }],
   ],

@@ -6,8 +6,8 @@ hero:
   text: Your music. Your terminal.
   tagline: Search, download, queue, and play music, all from the keyboard, inside your terminal. No browser, no bloat, no nonsense.
   image:
-    src: /ytmgo-icon.png
-    alt: ytmgo
+    src: https://raw.githubusercontent.com/anas1412/ytmgo/main/ytmgo.png
+    alt: ytmgo running in a terminal
   actions:
     - theme: brand
       text: Install
@@ -53,12 +53,6 @@ features:
     title: Eleven themes
     details: Borrow your terminal's own colours, use ytmgo's, or pick a full scheme such as gruvbox, nord, dracula or catppuccin.
 ---
-
-<div style="max-width:1152px;margin:64px auto 0;padding:0 24px">
-
-![ytmgo running in a terminal](https://raw.githubusercontent.com/anas1412/ytmgo/main/ytmgo.png)
-
-</div>
 
 ## Install in one line
 
