@@ -3,7 +3,7 @@ layout: home
 
 hero:
   name: ytmgo
-  text: Your music. Your terminal.
+  text: YouTube Music built with Go, in your terminal
   tagline: Search, download, queue, and play music, all from the keyboard, inside your terminal. No browser, no bloat, no nonsense.
   image:
     src: https://raw.githubusercontent.com/anas1412/ytmgo/main/ytmgo.png
