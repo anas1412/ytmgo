@@ -3,7 +3,9 @@ layout: home
 
 hero:
   name: ytmgo
-  text: YouTube Music built with Go, in your terminal
+  # VitePress renders this with v-html, so the break is explicit rather
+  # than left to wherever the column happens to run out.
+  text: YouTube Music built with Go<br>in your terminal
   tagline: Search, download, queue, and play music, all from the keyboard, inside your terminal. No browser, no bloat, no nonsense.
   image:
     src: https://raw.githubusercontent.com/anas1412/ytmgo/main/ytmgo.png

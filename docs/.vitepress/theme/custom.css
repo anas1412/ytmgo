@@ -152,3 +152,28 @@
 @media (prefers-reduced-motion: reduce) {
   .ytmgo-lightbox { animation: none }
 }
+
+/* The headline is a sentence, not a two-word slogan, so it wants a size
+   below the default's 56px. Set here rather than left to clamp, because
+   the line break is explicit and the type should not reflow into three
+   lines at an awkward width. */
+.VPHero .text {
+  /* 24px is the largest that still fits "YouTube Music built with Go"
+     on one line at 375px, which is what keeps the headline to the two
+     lines the <br> asks for instead of three. Measured, not guessed. */
+  font-size: 24px;
+  line-height: 1.3;
+  max-width: none;
+}
+
+@media (min-width: 640px) {
+  .VPHero .text {
+    font-size: 34px;
+  }
+}
+
+@media (min-width: 960px) {
+  .VPHero .text {
+    font-size: 40px;
+  }
+}
