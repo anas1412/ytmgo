@@ -34,7 +34,7 @@ var (
 	stylePlayerBox, stylePlayerBoxStopped, styleNowTitle            lipgloss.Style
 	styleNowIndicator, styleTime, styleCtrlBtn                      lipgloss.Style
 	styleCtrlBtnActive, styleModeActive, styleModeInactive          lipgloss.Style
-	styleModeFlash, styleVolumeLabel, styleCtrlSep                  lipgloss.Style
+	styleVolumeLabel, styleCtrlSep                                  lipgloss.Style
 	styleDownloadLabel, styleDoneLabel, styleErrorLabel             lipgloss.Style
 	stylePanelTitle, styleNavTab, styleNavTabActive                 lipgloss.Style
 	styleSettingsLabel, styleSettingsValue, styleSettingsDesc       lipgloss.Style
@@ -124,13 +124,6 @@ func buildStyles() {
 
 	styleModeInactive = lipgloss.NewStyle().
 		Foreground(colorTextDim)
-
-	// Mode flash — used for ~250ms after the user presses `s` or `r`,
-	// so the SHFL / REPT label briefly pops to confirm the keypress
-	// in the bar itself (not only via the status row).
-	styleModeFlash = lipgloss.NewStyle().
-		Foreground(colorTitle).
-		Bold(true)
 
 	// Volume bar
 	styleVolumeLabel = lipgloss.NewStyle().

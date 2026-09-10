@@ -721,27 +721,21 @@ func TestModeClicksHitTheirOwnLabel(t *testing.T) {
 	// settings and queue hang off the model as pointers, so the clicked
 	// copy and this one share them: snapshot the values, don't diff models.
 	auto, shuf := m.settings.AutoplayEnabled, m.queue.IsShuffle()
-	nm, _ := m.handlePlayerRowClick(l.rightStart, false)
+	m.handlePlayerRowClick(l.rightStart, false)
 	if m.settings.AutoplayEnabled == auto {
 		t.Errorf("click at the start of the right cluster did not toggle autoplay")
 	}
 	if m.queue.IsShuffle() != shuf {
 		t.Errorf("click on the autoplay label toggled shuffle")
 	}
-	if nm.modeFlashTarget != "autoplay" {
-		t.Errorf("clicked autoplay flashed %q", nm.modeFlashTarget)
-	}
 
 	auto, shuf = m.settings.AutoplayEnabled, m.queue.IsShuffle()
-	nm, _ = m.handlePlayerRowClick(l.shuffleEnd-1, false)
+	m.handlePlayerRowClick(l.shuffleEnd-1, false)
 	if m.queue.IsShuffle() == shuf {
 		t.Errorf("click on the shuffle label did not toggle shuffle")
 	}
 	if m.settings.AutoplayEnabled != auto {
 		t.Errorf("click on the shuffle label toggled autoplay")
-	}
-	if nm.modeFlashTarget != "shuffle" {
-		t.Errorf("clicked shuffle flashed %q", nm.modeFlashTarget)
 	}
 }
 

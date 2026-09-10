@@ -3,7 +3,6 @@ package tui
 import (
 	"fmt"
 	"strings"
-	"time"
 
 	"ytmgo/internal/player"
 
@@ -101,12 +100,8 @@ func (m Model) playerRowLayout() playerRowLayout {
 	transport := prevGroup + "  " + playGroup + "  " + nextGroup
 
 	// ── Right cluster ──
-	flashActive := time.Now().Before(m.modeFlashUntil)
-
 	autoStyle := styleModeInactive
-	if flashActive && m.modeFlashTarget == "autoplay" {
-		autoStyle = styleModeFlash
-	} else if m.settings.AutoplayEnabled {
+	if m.settings.AutoplayEnabled {
 		autoStyle = styleModeActive
 	}
 	autoTxt := "∞ AUTO"
@@ -116,9 +111,7 @@ func (m Model) playerRowLayout() playerRowLayout {
 	autoLabel := hint("[a]") + autoStyle.Render(autoTxt)
 
 	shuffleStyle := styleModeInactive
-	if flashActive && m.modeFlashTarget == "shuffle" {
-		shuffleStyle = styleModeFlash
-	} else if m.queue.IsShuffle() {
+	if m.queue.IsShuffle() {
 		shuffleStyle = styleModeActive
 	}
 	shuffleTxt := "⇄ SHFL"
@@ -138,9 +131,7 @@ func (m Model) playerRowLayout() playerRowLayout {
 		repeatTxt, repeatOn = "↻ OFF", false
 	}
 	repeatStyle := styleModeInactive
-	if flashActive && m.modeFlashTarget == "repeat" {
-		repeatStyle = styleModeFlash
-	} else if repeatOn {
+	if repeatOn {
 		repeatStyle = styleModeActive
 	}
 	repeatLabel := hint("[r]") + repeatStyle.Render(repeatTxt)

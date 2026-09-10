@@ -324,15 +324,6 @@ type Model struct {
 	lastPosition   float64
 	lastPositionAt time.Time
 
-	// Mode-toggle flash: for a short window after the user presses `s` or
-	// `r`, the SHFL / REPT labels render in a brighter style so the
-	// keypress feels acknowledged. Decays naturally as time passes.
-	// modeFlashUntil and modeFlashTarget coordinate the brief bright
-	// flash on the mode label (SHFL or REPT) after pressing `s`/`r`.
-	// Only the label matching modeFlashTarget lights up — the other
-	// stays at its normal active/inactive style.
-	modeFlashUntil  time.Time
-	modeFlashTarget string // "shuffle", "repeat", or ""
 	// Channel-listener guards. positionCmd/endedCmd/playerTickCmd each
 	// keep exactly one listener alive on the persistent player's
 	// channels; without these flags every Play would stack another
