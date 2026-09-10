@@ -240,10 +240,19 @@ func sgrColor(c lipgloss.TerminalColor, layer int) string {
 		return ""
 	}
 	r, g, b, _ := c.RGBA()
-	// Truncate, exactly as lipgloss does when it emits the same colour.
-	// Rounding here is arguably more accurate and is the wrong call: it
-	// put this one higher than lipgloss's own padding in a channel, and
-	// two shades of the "same" colour met mid-fill.
+	// RGBA has already rounded each channel to 16 bits, so >>8 hands
+	// back the scheme's hex byte exactly. That is deliberately NOT what
+	// lipgloss emits: termenv truncates uint8(f.R*255) off a float, so
+	// it lands one shade low on 25 of the 103 scheme colours (#2d353b
+	// goes out as 44;52;59, this as 45;53;59).
+	//
+	// The difference is invisible today because sgrColor is the only
+	// thing that paints these colours as a background — nothing renders
+	// colorBg or colorBgHover through a lipgloss Background, so the two
+	// encodings never meet in a fill. Give a style one and they will,
+	// and a run will change shade mid-line; TestNoBackgroundSeam pins
+	// that. Match termenv's truncation there rather than here — this
+	// value is the accurate one.
 	return fmt.Sprintf("\x1b[%d;2;%d;%d;%dm", layer, r>>8, g>>8, b>>8)
 }
 
