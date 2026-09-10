@@ -1,13 +1,23 @@
 name: ci
 
 # Format check, vet, and tests on every push and pull request.
-# Network-dependent tests (YouTube Music API, D-Bus, mpv) skip
-# themselves when their dependency is unavailable on the runner.
+#
+# The gate runs with -short, which skips the tests that call YouTube
+# Music and LRCLIB. Those are worth having — they are how API drift gets
+# noticed — but they are not this repo's code, and an outage at either
+# service used to fail the build and block a release tag.
+#
+# So they run in their own job instead, which is allowed to fail: it
+# reports drift without holding anything up. The nightly schedule means
+# breakage still surfaces within a day even if nobody pushes.
 
 on:
   push:
     branches: ["**"]
   pull_request:
+  schedule:
+    - cron: "17 5 * * *"
+  workflow_dispatch:
 
 jobs:
   test:
@@ -35,4 +45,30 @@ jobs:
         run: go vet ./...
 
       - name: go test
+        run: go test ./... -short -count=1 -timeout 300s
+
+  # The live tests, against the real YouTube Music and LRCLIB. Not a
+  # gate: continue-on-error keeps a third-party outage from failing the
+  # run, while the job's own annotation still shows what broke.
+  live:
+    name: live API tests
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version: "1.22"
+
+      - name: Install mpv (player integration test)
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends mpv
+
+      # The whole suite, not a -run filter: two network tests are named
+      # for what they check rather than for being live
+      # (TestRecommendationsStayRelated, TestFallsBackWhenLRCLIBIsDown),
+      # and a name filter would strand them between the two jobs.
+      - name: go test (live)
         run: go test ./... -count=1 -timeout 300s

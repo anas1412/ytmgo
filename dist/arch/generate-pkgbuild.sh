@@ -68,6 +68,9 @@ package() {
   cd "\$srcdir/\$pkgname-\$pkgver"
   install -Dm755 ytmgo "\$pkgdir/usr/bin/ytmgo"
   install -Dm644 ytmgo-icon.png "\$pkgdir/usr/share/pixmaps/ytmgo.png"
+  # MIT carries its own copyright line, so Arch wants the text shipped
+  # rather than pointed at /usr/share/licenses/common.
+  install -Dm644 LICENSE "\$pkgdir/usr/share/licenses/\$pkgname/LICENSE"
   install -Dm644 /dev/stdin "\$pkgdir/usr/share/applications/ytmgo.desktop" <<EOF
 [Desktop Entry]
 Type=Application

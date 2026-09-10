@@ -289,4 +289,4 @@ Tab cycles focus through: search input → result list → queue panel → searc
 
 ## License
 
-MIT
+MIT — see [LICENSE](LICENSE).

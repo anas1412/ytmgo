@@ -1,225 +1,122 @@
 # Backlog
 
-> Feature proposals and enhancements for ytmgo, ordered by priority tier.
-> Items marked **MVP** are considered essential before a 1.0 release.
+> What is built, what is not, and what is next. Statuses here are checked
+> against the code, not against memory — the previous version of this file
+> had shipped features listed as not started.
 
 ---
 
-## Tier 1 — High Priority
+## Shipped
 
-### User Authentication & Account Linking
-**Status:** ❌ Not started  
-**Effort:** Medium  
-**Depends on:** None  
+Everything below is in main and working.
 
-Integrate Google OAuth to sign in with a YouTube Music / Google account. This unlocks access to the user's personal library — liked songs, uploaded tracks, subscriptions, and watch-history-based recommendations — rather than relying solely on anonymous search.
-
-- OAuth token storage (encrypted, locally persisted)
-- Authenticated API requests to YouTube Music endpoints
-- Graceful degradation when offline or unauthenticated
-
----
-
-### Playlist Management
-**Status:** ❌ Not started  
-**Effort:** Large  
-**Depends on:** User Authentication & Account Linking  
-
-Full CRUD lifecycle for playlists sourced from the user's YouTube Music account:
-
-- **List** — browse owned and subscribed playlists in a dedicated panel
-- **View** — drill into a playlist to see its tracks with metadata (duration, artist, album art fallback)
-- **Create** — new empty playlist with a title and optional description
-- **Edit** — rename, reorder tracks via drag or keyboard (Ctrl+↑/↓), add/remove items
-- **Delete** — remove a playlist with confirmation
-- **Import** — parse external playlist formats (M3U, CSV, YouTube Music share URLs) into a new playlist
-- **Export** — serialize a playlist to M3U or JSON for backup or sharing
-
-UI considerations:
-- Dedicated "Playlists" view accessible from the Library page (tab `2`)
-- Right-panel detail view when a playlist is selected
-- Queue integration: "Add entire playlist to queue" action
+| Feature | Where |
+|---|---|
+| **Search** — songs and albums, straight against YouTube Music's own API, no key or login | `internal/ytmusic` |
+| **Playback** — mpv under the hood, queue with shuffle and repeat OFF / ONE / ALL | `internal/player`, `internal/queue` |
+| **Autoplay radio** — when the queue runs dry, enqueues what YouTube Music would play next | `internal/ytmusic`, `[c]` on the player bar |
+| **Downloads** — one key per track, whole albums into numbered folders, on their own page | `internal/downloader` |
+| **Library** — everything already on disk, filterable | `internal/library` |
+| **Favourites and play history** — both persisted | `favorites`, `play_history` tables |
+| **Queue recovery** — the queue comes back on restart | `db.LoadQueue` |
+| **Synced lyrics** — LRCLIB, following the song, cached locally | `internal/lyrics` |
+| **Album previews** — tracklist, cover art, queue or download the lot | `internal/tui` |
+| **MPRIS** — media keys and desktop widgets; silently absent without a session bus | `internal/mpris` |
+| **Discord Rich Presence** — now-playing, toggleable | `internal/discordrpc` |
+| **Spectrum visualiser** — via cava, optional | `internal/visualizer` |
+| **Eleven themes** — the terminal's own colours, ytmgo's, and nine full schemes | `internal/tui/theme.go` |
+| **Full mouse support** — tabs, lists, seek bar, volume, transport, mode toggles | `internal/tui/mouse.go` |
+| **Album art in the terminal** — kitty graphics where available | `internal/coverart` |
 
 ---
 
-### Radio / Autoplay Mode
-**Status:** 🟢 Active  
-**Effort:** Medium  
-**Depends on:** Player module (existing)  
+## Before 1.0
 
-When the queue is exhausted, the application automatically enqueues suggested tracks based on recent listening history.
+Small, and all of it is about not making promises we have to break later.
 
-- Fetches TIDAL recommendations when queue runs dry
-- Explicit opt-in: Settings page toggle (default: ON)
-- Repeat modes (OFF / ONE / ALL) compose naturally: autoplay only kicks in when ALL is OFF and queue is truly exhausted
-- Status bar shows "Autoplay fetching suggestions…" while loading
-- Does not interrupt if user manually adds tracks before suggestions arrive
+### Downloader test coverage
+**Status:** ❌ Not started · **Effort:** Small
 
----
+The downloader is 5.8% covered across 527 lines, and it is the part that
+writes to disk and shells out to yt-dlp. The pure logic — filename
+sanitising, progress parsing, queue transitions — can be tested without
+running anything.
 
-### Discord Rich Presence
-**Status:** ✅ Done  
-**Effort:** Small  
-**Depends on:** Player module (existing), optional: Presence image assets  
+### Search history
+**Status:** ❌ Not started · **Effort:** Small
 
-Expose now-playing state to Discord via the Discord RPC protocol so friends can see what you're listening to:
-
-- **Large image** — album art or ytmgo icon as the "cover"
-- **First line** — track title
-- **Second line** — artist name
-- **Elapsed time** — live playback progress
-- **Buttons** — "Listen Along" or project link
-- **Disconnect** — clear presence when playback stops or ytmgo exits
-- **Configurable** — toggle in Settings, with an option to hide track metadata for privacy
+Recent queries, for re-running one without retyping. The only piece of
+the original persistence plan still missing; the other four shipped.
 
 ---
 
-## Tier 2 — Medium Priority
+## After 1.0
 
-### Mixes Management
-**Status:** ❌ Not started  
-**Effort:** Medium  
-**Depends on:** User Authentication & Account Linking  
+### User authentication
+**Status:** ❌ Not started · **Effort:** Medium
 
-YouTube Music generates auto-updating "mixes" for genres, moods, and artists. Surface these in the TUI:
+Google OAuth, to reach a personal library: liked songs, uploads,
+subscriptions, history-based recommendations. Everything today is
+anonymous, which is a feature — no login, no key, nothing to leak — so
+this has to stay strictly optional, with the anonymous path unaffected.
 
-- **List** — fetch and display available mixes from the user's account
-- **Play** — enqueue an entire mix as a starting point
-- **Refresh** — regenerate a mix to get fresh suggestions (analogous to `R` for recommendations)
-- **Save / unsave** — add a mix to a "Saved mixes" collection for quick access
-- **Detail view** — show which tracks are in the current mix iteration
-- **Visual grouping** — distinct icon or label to differentiate mixes from regular playlists
+Blocks playlists and mixes below.
 
----
+### Playlist management
+**Status:** ❌ Not started · **Effort:** Large · **Needs:** authentication
 
-### Library Persistence & Local State
-**Status:** ❌ Not started  
-**Effort:** Medium  
-**Depends on:** None  
+List, view, create, rename, reorder, delete. Import from M3U, CSV or a
+share URL; export to M3U or JSON. "Queue whole playlist" as an action.
 
-Persist application state across sessions so restarting ytmgo feels seamless:
+### Mixes
+**Status:** ❌ Not started · **Effort:** Medium · **Needs:** authentication
 
-- **Play history** — last N played tracks with timestamps, stored in a local SQLite or JSON store
-- **Queue recovery** — optionally restore the previous queue on startup
-- **Favorites** — allow marking tracks / albums / artists as favorites locally (not synced to YouTube)
-- **Search history** — recent queries for quick re-search
+YouTube Music's auto-updating genre, mood and artist mixes: list, play,
+refresh, save.
 
-Storage choice: embed a lightweight store (BoltDB, SQLite via CGO-free driver, or a plain JSON file). JSON is simplest for a v1; structured DB for v2.
+### Search filters
+**Status:** ❌ Not started · **Effort:** Small
 
----
+`type:` (songs / albums / artists / playlists), sort order, upload-date
+range. The albums toggle (`A`) is the only filter today.
 
-### MPRIS Integration
-**Status:** ❌ Not started  
-**Effort:** Small  
-**Depends on:** Player module (existing)  
+### Custom theme files
+**Status:** ❌ Not started · **Effort:** Medium
 
-Implement the MPRIS D-Bus interface (media-player2 specification) so ytmgo appears as a media player in the Linux desktop ecosystem:
+Eleven built-in themes ship. This is the next step: a TOML or YAML file
+defining the same colour roles, live-reloaded on change. The roles are
+already named in `scheme` in `internal/tui/theme.go`, so the shape of the
+file is decided — it needs loading, validation, and a contrast check so a
+hand-written theme cannot make its own selected rows unreadable.
 
-- **Controls** — play/pause, next, previous, seek, volume from any MPRIS client (media keys, GNOME lock screen, KDE plasma, etc.)
-- **Metadata** — expose track title, artist, album art URL, duration
-- **Playback status** — report Playing / Paused / Stopped accurately
-- **Loop / shuffle** — reflect current repeat and shuffle state
-- **Desktop notification** — optional song-change notification via MPRIS events
+### Keybinding customisation
+**Status:** ❌ Not started · **Effort:** Small
 
----
+Bindings in a user-editable config, with conflict warnings at startup.
+Today's bindings become the shipped defaults.
 
-### Search Filters & Advanced Querying
-**Status:** ❌ Not started  
-**Effort:** Small  
-**Depends on:** None  
+### Last.fm scrobbling
+**Status:** ❌ Not started · **Effort:** Small
 
-Enhance the search panel with scoped and filtered queries:
+Scrobble on track change, periodic "now playing", account linking in
+settings.
 
-- **Type filter** — restrict search to Songs / Albums / Artists / Playlists / Videos
-- **Sort** — relevance, date, view count, rating
-- **Date range** — filter by upload date (last hour, day, week, year)
-- **Inline hints** — show available filter syntax in the search input placeholder (like `type:album`)
+### Queue export / import
+**Status:** ❌ Not started · **Effort:** Small
 
----
+Save and restore the current queue as M3U or JSON. Independent of
+playlists — needs no account.
 
-### Custom Theming System
-**Status:** ❌ Not started  
-**Effort:** Medium  
-**Depends on:** None  
+### Equalizer
+**Status:** ❌ Not started · **Effort:** Large
 
-Allow users to define custom color schemes and layout preferences:
+Through mpv's audio filter chain: presets, per-band adjustment,
+persistence.
 
-- **Theme file** — load a TOML or YAML config specifying Lipgloss color values for each component (header, panels, borders, progress bar, etc.)
-- **Built-in presets** — ship 2–3 curated themes (catppuccin, dracula, gruvbox)
-- **Live reload** — re-apply theme on file change without restart
-- **Settings UI** — theme selector dropdown in the Settings page
+### Podcasts
+**Status:** ❌ Not started · **Effort:** Large · **Needs:** authentication
 
----
-
-## Tier 3 — Backlog / Future Consideration
-
-### Last.fm Scrobbling
-**Status:** ❌ Not started  
-**Effort:** Small  
-**Depends on:** Library Persistence & Local State  
-
-Authenticate with Last.fm and automatically scrobble played tracks:
-
-- Handshake via Last.fm API (API key + session)
-- Scrobble on track change (or after 50% play duration per Last.fm rules)
-- "Now Playing" periodic update
-- Configurable: enable/disable, account linking from Settings UI
-
----
-
-### Podcast Support
-**Status:** ❌ Not started  
-**Effort:** Large  
-**Depends on:** User Authentication & Account Linking, possibly a dedicated download pipeline  
-
-YouTube Music hosts podcasts natively. Surface them in the TUI:
-
-- **Browse** — discover podcasts via search with a `type:podcast` filter
-- **Subscribe** — manage podcast subscriptions synced with the user's account
-- **Episodes** — list episodes with publish date, duration, and play-progress tracking
-- **Download management** — batch download episodes for offline listening
-- **Playback** — resume from last position per episode
-- **UI** — distinct iconography and a "Podcasts" section on the Library page
----
-
-### Equalizer & Audio Pipeline
-**Status:** ❌ Not started  
-**Effort:** Large  
-**Depends on:** Player module (existing), mpv configuration  
-
-Leverage mpv's built-in audio filter chain to expose an equalizer:
-
-- **Equalizer presets** — Flat, Bass boost, Vocal, Classical, Rock, Jazz, Custom
-- **Real-time adjustment** — keybindings or slider in the TUI to adjust gain per band
-- **Persistence** — selected preset survives restart
-- **Settings UI** — a dedicated equalizer view with per-band +/- controls
-
----
-
-### Export / Import Queue
-**Status:** ❌ Not started  
-**Effort:** Small  
-**Depends on:** None  
-
-Allow the user to save and restore the current queue as a portable file:
-
-- **Export** — serialize current queue (tracks + ordering) to M3U or JSON
-- **Import** — load a queue from file, appending or replacing the current queue
-- **Share format** — M3U is widely supported by other media players
-
----
-
-### Keyboard Shortcut Customization
-**Status:** ❌ Not started  
-**Effort:** Small  
-**Depends on:** None  
-
-Move all keybindings into a user-editable config so power users can remap to their preference:
-
-- **Config file** — TOML map of action → key(s)
-- **Validation** — warn on startup if a binding conflicts with an existing one
-- **Defaults** — ship the current bindings as the default config
-- **Settings UI** — read-only listing that points to the config file path
+Browse, subscribe, episode lists with per-episode resume, batch download.
 
 ---
 
@@ -227,12 +124,8 @@ Move all keybindings into a user-editable config so power users can remap to the
 
 | Status | Meaning |
 |--------|---------|
-| 🟢 Active | Being worked on this cycle |
-| 🔵 Ready | Spec is complete, can be picked up |
+| 🟢 Active | Being worked on now |
+| 🔵 Ready | Specced, can be picked up |
 | ❌ Not started | No work has begun |
 | 🟡 Blocked | Waiting on a dependency |
-| ✅ Done | Delivered, in main |
-
----
-
-*Last updated: 2026-06-06*
+| ✅ Done | In main — see the Shipped table |
