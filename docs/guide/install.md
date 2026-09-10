@@ -84,6 +84,21 @@ Arch that runs your AUR helper; elsewhere it re-runs the installer.
 
 Or just run the one-liner again; it replaces the existing install.
 
+## Where your data lives
+
+Everything ytmgo keeps between runs sits in one directory:
+
+| Platform | Directory |
+|---|---|
+| Linux | `$XDG_DATA_HOME/ytmgo`, or `~/.local/share/ytmgo` |
+| macOS | `~/Library/Application Support/ytmgo` |
+
+It holds `ytmgo.db` — settings, favourites, play history and the saved
+queue — plus `downloads/` and a log.
+
+Before v1 the database was in `~/.config/ytmgo`. It moves itself the
+first time a v1 build starts; nothing to do, and nothing is lost.
+
 ## Uninstalling
 
 ```bash

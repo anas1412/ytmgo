@@ -8,22 +8,25 @@ import (
 	"os"
 	"path/filepath"
 
+	"ytmgo/internal/settings"
 	"ytmgo/internal/tui"
 	"ytmgo/internal/version"
 
 	tea "github.com/charmbracelet/bubbletea"
 )
 
-// setupLogging routes the default logger to ~/.config/ytmgo/ytmgo.log.
+// setupLogging routes the default logger to ytmgo.log in the data dir.
 // The default destination is stderr, which corrupts the TUI while the
 // alternate screen is active; when no log file can be opened, discard.
 func setupLogging() *os.File {
 	log.SetOutput(io.Discard)
-	home, err := os.UserHomeDir()
+	// Beside the database, under the platform data dir — a log is state,
+	// not configuration, and it used to land in a literal ~/.config.
+	base, err := settings.UserDataDir()
 	if err != nil {
 		return nil
 	}
-	dir := filepath.Join(home, ".config", "ytmgo")
+	dir := filepath.Join(base, "ytmgo")
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return nil
 	}

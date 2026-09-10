@@ -56,7 +56,7 @@ curl -fsSL https://anas1412.github.io/ytmgo/uninstall.sh | bash
 Prompts you with three confirmations:
 
 1. **Remove binary** — deletes `~/.local/bin/ytmgo` (or `/usr/local/bin/ytmgo`)
-2. **Remove user data** — deletes `~/.config/ytmgo/` (settings, favorites, play history, queue)
+2. **Remove user data** — deletes the database in `~/.local/share/ytmgo/` (settings, favorites, play history, queue)
 3. **Remove downloads** — deletes `~/.local/share/ytmgo/downloads/` (all your downloaded files)
 
 ### Flags

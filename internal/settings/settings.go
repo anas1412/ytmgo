@@ -116,8 +116,13 @@ func (s *Settings) ResolveDownloadDir() string {
 	return dir
 }
 
-// userDataDir returns the platform base directory for app data (NOT
-// configuration — that lives beside the database in ~/.config/ytmgo).
+// UserDataDir returns the platform base directory for everything ytmgo
+// keeps between runs: the database, the log, and downloads. Exported so
+// the db package resolves the same base rather than keeping a second
+// copy of the platform rules that could drift from this one.
+func UserDataDir() (string, error) { return userDataDir() }
+
+// userDataDir returns the platform base directory for app data.
 func userDataDir() (string, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {

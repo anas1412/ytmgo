@@ -21,18 +21,74 @@ type DB struct {
 	*sql.DB
 }
 
-// dbPath returns the path to the SQLite database file, creating the
-// config directory if necessary.
-func dbPath() (string, error) {
+// legacyDir is where everything lived before v1: a literal ~/.config,
+// ignoring XDG_CONFIG_HOME, and holding a database rather than any
+// configuration. Kept only so an existing install can be moved out of
+// it once.
+func legacyDir() (string, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return "", fmt.Errorf("cannot determine home dir: %w", err)
 	}
-	dir := filepath.Join(home, ".config", "ytmgo")
-	if err := os.MkdirAll(dir, 0755); err != nil {
-		return "", fmt.Errorf("cannot create config dir %s: %w", dir, err)
+	return filepath.Join(home, ".config", "ytmgo"), nil
+}
+
+// dbPath returns the path to the SQLite database file, creating its
+// directory and moving any pre-v1 database into it.
+//
+// The database is state, not configuration, so it belongs under the
+// platform data dir — XDG_DATA_HOME on Linux, Application Support on
+// macOS — beside the downloads that already live there.
+func dbPath() (string, error) {
+	base, err := settings.UserDataDir()
+	if err != nil {
+		return "", fmt.Errorf("cannot determine data dir: %w", err)
 	}
-	return filepath.Join(dir, "ytmgo.db"), nil
+	dir := filepath.Join(base, "ytmgo")
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return "", fmt.Errorf("cannot create data dir %s: %w", dir, err)
+	}
+	path := filepath.Join(dir, "ytmgo.db")
+
+	if old, err := legacyDir(); err == nil {
+		if err := migrateLegacyDB(filepath.Join(old, "ytmgo.db"), path); err != nil {
+			// Better a database in the old place than none at all: an
+			// upgrade that cannot move the file must still open it.
+			return filepath.Join(old, "ytmgo.db"), nil
+		}
+	}
+	return path, nil
+}
+
+// migrateLegacyDB moves a pre-v1 database to its new home. Does nothing
+// when there is already one at the destination, or nothing to move.
+func migrateLegacyDB(oldPath, newPath string) error {
+	if _, err := os.Stat(newPath); err == nil {
+		return nil // already migrated, or a fresh install
+	}
+	if _, err := os.Stat(oldPath); err != nil {
+		return nil // nothing to move
+	}
+
+	// Fold the write-ahead log back into the main file first. The
+	// database runs in WAL mode, so recent writes live in a -wal
+	// sidecar; moving only the .db and leaving that behind silently
+	// discards them.
+	if db, err := sql.Open("sqlite", oldPath+"?_pragma=busy_timeout(5000)"); err == nil {
+		_, cerr := db.Exec("PRAGMA wal_checkpoint(TRUNCATE)")
+		db.Close()
+		if cerr != nil {
+			return fmt.Errorf("cannot checkpoint %s: %w", oldPath, cerr)
+		}
+	}
+
+	if err := os.Rename(oldPath, newPath); err != nil {
+		return fmt.Errorf("cannot move %s to %s: %w", oldPath, newPath, err)
+	}
+	// Checkpointed, so these hold nothing the moved file does not.
+	os.Remove(oldPath + "-wal")
+	os.Remove(oldPath + "-shm")
+	return nil
 }
 
 // schema contains the DDL statements executed on database open.
@@ -116,7 +172,12 @@ func Open() (*DB, error) {
 	if err != nil {
 		return nil, fmt.Errorf("db: %w", err)
 	}
+	return openAt(path)
+}
 
+// openAt is Open against a given file, so the path resolution and the
+// migration can be exercised without moving the caller's real database.
+func openAt(path string) (*DB, error) {
 	dsn := path + "?_pragma=journal_mode(WAL)&_pragma=foreign_keys(1)&_pragma=busy_timeout(5000)&_txlock=immediate"
 	db, err := sql.Open("sqlite", dsn)
 	if err != nil {

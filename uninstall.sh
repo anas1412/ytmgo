@@ -16,7 +16,7 @@
 #
 # What this removes:
 #   1. The ytmgo binary (~/.local/bin/ytmgo or /usr/local/bin/ytmgo)
-#   2. The config database (~/.config/ytmgo/ytmgo.db)       ← skipped with --keep-user-data
+#   2. The database (~/.local/share/ytmgo/ytmgo.db)         ← skipped with --keep-user-data
 #   3. Downloaded tracks (~/.local/share/ytmgo/downloads/)  ← skipped with --keep-downloads
 #
 # System dependencies (mpv, yt-dlp, ffmpeg) are NOT removed — they
@@ -134,20 +134,33 @@ if ask "Remove the desktop entry and icon?" true; then
   fi
 fi
 
-# ─── 2. Remove config directory (DB with settings/favorites/history) ──
-CONFIG_DIR="$HOME/.config/ytmgo"
+# ─── 2. Remove the database (settings/favorites/history/queue) ────────
+# The data dir also holds downloads, which are step 3 and a separate
+# question — so this removes the database and log by name, never the
+# directory. ~/.config/ytmgo is where both lived before v1.
+DATA_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/ytmgo"
+if [ "$(uname -s)" = "Darwin" ]; then
+  DATA_DIR="$HOME/Library/Application Support/ytmgo"
+fi
+LEGACY_DIR="$HOME/.config/ytmgo"
+
 if [ "$KEEP_USER_DATA" = true ]; then
   warn "Skipping user data removal (--keep-user-data was passed)."
-elif [ -d "$CONFIG_DIR" ]; then
+elif [ -f "$DATA_DIR/ytmgo.db" ] || [ -d "$LEGACY_DIR" ]; then
   if ask "Remove user data — settings, favorites, play history?" false; then
-    info "Removing config & data: $CONFIG_DIR"
-    rm -rf "$CONFIG_DIR"
-    success "Removed config (settings, favorites, play history)"
+    for f in "$DATA_DIR/ytmgo.db" "$DATA_DIR/ytmgo.db-wal" "$DATA_DIR/ytmgo.db-shm" "$DATA_DIR/ytmgo.log"; do
+      [ -e "$f" ] && info "Removing $f" && rm -f "$f"
+    done
+    if [ -d "$LEGACY_DIR" ]; then
+      info "Removing pre-v1 data: $LEGACY_DIR"
+      rm -rf "$LEGACY_DIR"
+    fi
+    success "Removed user data (settings, favorites, play history)"
   else
     warn "Skipping user data removal."
   fi
 else
-  warn "No config directory found at $CONFIG_DIR"
+  warn "No user data found."
 fi
 
 # ─── 3. Remove downloads ─────────────────────────────────────────────
@@ -155,7 +168,7 @@ REMOVE_DOWNLOADS=false
 
 if [ "$KEEP_DOWNLOADS" = true ]; then
   warn "Skipping download removal (--keep-downloads was passed)."
-elif [ -d "$HOME/.local/share/ytmgo" ] || [ -d "$HOME/Library/Application Support/ytmgo" ] || { [ -n "${XDG_DATA_HOME:-}" ] && [ -d "$XDG_DATA_HOME/ytmgo" ]; }; then
+elif [ -d "$HOME/.local/share/ytmgo/downloads" ] || [ -d "$HOME/Library/Application Support/ytmgo/downloads" ] || { [ -n "${XDG_DATA_HOME:-}" ] && [ -d "$XDG_DATA_HOME/ytmgo/downloads" ]; }; then
   if ask "Remove downloaded audio files?" false; then
     REMOVE_DOWNLOADS=true
   else
@@ -166,26 +179,30 @@ else
 fi
 
 if [ "$REMOVE_DOWNLOADS" = true ]; then
-  # Default Linux data location
-  if [ -d "$HOME/.local/share/ytmgo" ]; then
-    info "Removing downloads: $HOME/.local/share/ytmgo"
-    rm -rf "$HOME/.local/share/ytmgo"
-    success "Removed downloaded tracks"
-  fi
-  # XDG_DATA_HOME override
-  if [ -n "${XDG_DATA_HOME:-}" ] && [ -d "$XDG_DATA_HOME/ytmgo" ]; then
-    info "Removing downloads: $XDG_DATA_HOME/ytmgo"
-    rm -rf "$XDG_DATA_HOME/ytmgo"
-    success "Removed downloaded tracks"
-  fi
-  # macOS default
-  MACOS_DIR="$HOME/Library/Application Support/ytmgo"
-  if [ -d "$MACOS_DIR" ]; then
-    info "Removing downloads: $MACOS_DIR"
-    rm -rf "$MACOS_DIR"
-    success "Removed downloaded tracks"
-  fi
+  # Only the downloads subdirectory. The database sits beside it, and
+  # whether that goes was a separate question in step 2.
+  for d in \
+    "$HOME/.local/share/ytmgo/downloads" \
+    "${XDG_DATA_HOME:+$XDG_DATA_HOME/ytmgo/downloads}" \
+    "$HOME/Library/Application Support/ytmgo/downloads"
+  do
+    [ -n "$d" ] || continue
+    if [ -d "$d" ]; then
+      info "Removing downloads: $d"
+      rm -rf "$d"
+      success "Removed downloaded tracks"
+    fi
+  done
 fi
+
+# Tidy up a ytmgo data directory that both steps have now emptied.
+for d in \
+  "$HOME/.local/share/ytmgo" \
+  "${XDG_DATA_HOME:+$XDG_DATA_HOME/ytmgo}" \
+  "$HOME/Library/Application Support/ytmgo"
+do
+  [ -n "$d" ] && [ -d "$d" ] && rmdir "$d" 2>/dev/null || true
+done
 
 # ─── Done ─────────────────────────────────────────────────────────────
 echo ""
