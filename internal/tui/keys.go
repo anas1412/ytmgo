@@ -120,7 +120,7 @@ var Keys = KeyMap{
 	),
 	Autoplay: key.NewBinding(
 		key.WithKeys("c"),
-		key.WithHelp("c", "autoplay (continuous)"),
+		key.WithHelp("c", "autoplay"),
 	),
 	Shuffle: key.NewBinding(
 		key.WithKeys("s"),

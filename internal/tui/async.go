@@ -261,7 +261,12 @@ func (m Model) handleSettingsSaved(msg SettingsSavedMsg) (tea.Model, tea.Cmd) {
 	if msg.Error != nil {
 		m.err = msg.Error
 		m.setStatus("Failed to save settings: " + msg.Error.Error())
-	} else {
+	} else if m.activePage == PageSettings {
+		// Only the settings editor needs this: there, the saved row is
+		// the whole feedback. Everywhere else the action that triggered
+		// the save has already said what it did ("Autoplay: ON",
+		// "Volume: 80%", "Key hints hidden") and this generic line, put
+		// on screen a moment later, erased it.
 		m.setStatus("Settings saved")
 	}
 	return m, nil
