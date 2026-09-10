@@ -108,7 +108,7 @@ func (m Model) playerRowLayout() playerRowLayout {
 	if l.compact {
 		autoTxt = "∞"
 	}
-	autoLabel := hint("[a]") + autoStyle.Render(autoTxt)
+	autoLabel := hint("[c]") + autoStyle.Render(autoTxt)
 
 	shuffleStyle := styleModeInactive
 	if m.queue.IsShuffle() {

@@ -739,31 +739,29 @@ func TestModeClicksHitTheirOwnLabel(t *testing.T) {
 	}
 }
 
-// TestAutoplayKeyYieldsToTheOpenAlbum: [a] was already "queue the whole
-// album" and keeps that job while an album is open; everywhere else it
-// toggles autoplay, which is what the player bar's [a] hint promises.
-func TestAutoplayKeyYieldsToTheOpenAlbum(t *testing.T) {
+// TestAutoplayKeyIsItsOwn: [c] toggles autoplay, which is what the
+// player bar's [c] hint promises, and it does not disturb [a] — that
+// key belongs to the open album's "queue the lot".
+func TestAutoplayKeyIsItsOwn(t *testing.T) {
 	m := worstCaseModel(t, 150, 40)
-	press := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'a'}}
 
 	auto := m.settings.AutoplayEnabled
-	nm, _ := m.handleKey(press)
+	nm, _ := m.handleKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'c'}})
 	m = nm.(Model)
 	if m.settings.AutoplayEnabled == auto {
-		t.Errorf("[a] with no album open did not toggle autoplay")
+		t.Errorf("[c] did not toggle autoplay")
 	}
 
-	// With an album open the key belongs to the album again.
 	m.openAlbum = &ytmusic.Album{Title: "Test"}
 	m.albumTracks = []search.Result{{Title: "One", Uploader: "Someone"}}
 	auto, before := m.settings.AutoplayEnabled, m.queue.Len()
-	nm, _ = m.handleKey(press)
+	nm, _ = m.handleKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'a'}})
 	m = nm.(Model)
-	if m.settings.AutoplayEnabled != auto {
-		t.Errorf("[a] over an open album toggled autoplay instead of queueing it")
-	}
 	if m.queue.Len() != before+1 {
 		t.Errorf("[a] over an open album queued %d tracks, want 1", m.queue.Len()-before)
+	}
+	if m.settings.AutoplayEnabled != auto {
+		t.Errorf("[a] toggled autoplay")
 	}
 }
 

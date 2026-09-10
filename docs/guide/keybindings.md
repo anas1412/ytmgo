@@ -32,7 +32,7 @@ Press `?` at any time to open Settings, which lists the full set.
 | `h` / `Ctrl+B` | Seek backward 5s |
 | `+` / `=` | Volume up |
 | `-` / `_` | Volume down |
-| `a` | Toggle autoplay (unless an album is open, see below) |
+| `c` | Toggle autoplay (continuous play) |
 | `s` | Toggle shuffle |
 | `r` | Cycle repeat: off → one → all |
 
@@ -56,7 +56,7 @@ move on. `n` always advances, even with repeat-one enabled.
 | `R` | Refresh recommendations |
 | `A` | Switch searching between songs and albums |
 | `i` | Open the album the selected track belongs to |
-| `a` | Queue every track of the open album (while one is open) |
+| `a` | Queue every track of the open album |
 | `f` | Toggle favourite on the selected track |
 | `C` | Clear play history (History page) |
 

@@ -119,8 +119,8 @@ var Keys = KeyMap{
 		key.WithHelp("f", "toggle favorite"),
 	),
 	Autoplay: key.NewBinding(
-		key.WithKeys("a"),
-		key.WithHelp("a", "autoplay"),
+		key.WithKeys("c"),
+		key.WithHelp("c", "autoplay (continuous)"),
 	),
 	Shuffle: key.NewBinding(
 		key.WithKeys("s"),

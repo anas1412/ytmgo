@@ -250,14 +250,14 @@ Tab cycles focus through: search input → result list → queue panel → searc
 | `D` | Clear entire queue |
 | `C` | Clear play history (History page) |
 | `f` | Toggle favorite on selected track |
-| `a` | Toggle autoplay (unless an album is open, see below) |
+| `c` | Toggle autoplay (continuous play) |
 | `s` | Toggle shuffle |
 | `r` | Cycle repeat: OFF → ONE → ALL |
 | `x` | Download selected track |
 | `i` | Open the album of the selected track |
 | `R` | Refresh recommendations |
 | `A` | Toggle search between songs and albums |
-| `a` | Queue every track of the open album (while one is open) |
+| `a` | Queue every track of the open album |
 | `v` | Toggle the visualizer under the results list |
 | `y` | Toggle the lyrics pane under the queue (wheel over it to scroll) |
 | `X` | Jump to the Downloads page and back |
