@@ -678,9 +678,10 @@ func TestAlbumClickMatchesRow(t *testing.T) {
 }
 
 // TestVolumeBarClickIsExact: clicking cell i of the volume bar must
-// fill the bar exactly through cell i. The old zone ran through the
-// percentage text after the bar, so its divisor was wider than the bar
-// itself and the mapping drifted rightward.
+// leave the playhead on cell i — what you point at is where the head
+// lands, at every cell including both ends. The old zone ran through
+// the percentage text after the bar, so its divisor was wider than the
+// bar itself and the mapping drifted rightward.
 func TestVolumeBarClickIsExact(t *testing.T) {
 	m := worstCaseModel(t, 150, 40)
 	m.queue.SetCurrentIndex(0)
@@ -690,23 +691,38 @@ func TestVolumeBarClickIsExact(t *testing.T) {
 	if l.volBarCells == 0 {
 		t.Fatal("full-width layout should carry a volume bar")
 	}
+	// headCell reads the rendered bar rather than re-deriving the fill
+	// rule: the click maths and the renderer must agree on the real
+	// output, which is the whole point of the check.
+	headCell := func(vol int) int {
+		// By rune, not byte: the fill glyph is three bytes wide.
+		for i, r := range []rune(renderSeekBar(float64(vol), l.volBarCells)) {
+			if r == '●' {
+				return i
+			}
+		}
+		return -1
+	}
 	for cell := 0; cell < l.volBarCells; cell++ {
 		nm, _ := m.handlePlayerRowClick(l.volBarStart+cell, false)
-		// The handler rounds up so the clicked cell crosses the fill
-		// threshold — 12.5 truncated to 12 would leave it unlit.
-		want := ((cell+1)*100 + l.volBarCells - 1) / l.volBarCells
-		if nm.volume != want {
-			t.Errorf("click on cell %d set volume %d, want %d", cell, nm.volume, want)
-		}
-		// And the rendered bar must show exactly cell+1 filled cells.
-		filled := int(float64(nm.volume) / 100.0 * float64(l.volBarCells))
-		if filled != cell+1 {
-			t.Errorf("cell %d: volume %d renders %d filled cells, want %d", cell, nm.volume, filled, cell+1)
+		if got := headCell(nm.volume); got != cell {
+			t.Errorf("click on cell %d set volume %d, whose playhead sits on cell %d", cell, nm.volume, got)
 		}
 	}
+	// Both ends of the range must be reachable, or the bar cannot mute
+	// or max out by mouse at all.
+	nm, _ := m.handlePlayerRowClick(l.volBarStart, false)
+	if nm.volume != 0 {
+		t.Errorf("click on the first cell set volume %d, want 0", nm.volume)
+	}
+	nm, _ = m.handlePlayerRowClick(l.volBarEnd-1, false)
+	if nm.volume != 100 {
+		t.Errorf("click on the last cell set volume %d, want 100", nm.volume)
+	}
 	// One past the bar is the percentage text: it must do nothing.
-	nm, _ := m.handlePlayerRowClick(l.volBarEnd+1, false)
-	if nm.volume != m.volume {
+	before := nm.volume
+	nm, _ = nm.handlePlayerRowClick(l.volBarEnd+1, false)
+	if nm.volume != before {
 		t.Errorf("click on the percentage text changed the volume")
 	}
 }

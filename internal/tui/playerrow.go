@@ -145,8 +145,13 @@ func (m Model) playerRowLayout() playerRowLayout {
 	}
 	volMid := fmt.Sprintf("%d%%", m.volume)
 	if !l.compact {
-		l.volBarCells = 8
-		volMid = renderVolumeBar(m.volume, l.volBarCells) + " " + volMid
+		// Drawn by the seek bar's own renderer, so the two bars on the
+		// player read as one control language: fill, a playhead where
+		// the level sits, dotted track for the rest. Wide enough that
+		// the head has somewhere to travel — every cell is a click
+		// target, so the width is also the mouse's resolution.
+		l.volBarCells = 20
+		volMid = renderSeekBar(float64(m.volume), l.volBarCells) + " " + volMid
 	}
 	volLabel := volDown + " " + volMid + " " + volUp
 	right := autoLabel + "  " + shuffleLabel + "  " + repeatLabel + "  " + volLabel

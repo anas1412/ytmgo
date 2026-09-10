@@ -237,8 +237,6 @@ func buildStyles() {
 
 		// renderProgressBar draws a proportional bar using solid fill blocks.
 
-		// renderVolumeBar draws a block-style volume indicator.
-
 		// ─── Visualizer ─────────────────────────────────────────────────────
 		// Bars run cool at the base to hot at the peak.
 
@@ -285,27 +283,6 @@ func renderProgressBar(pct float64, width int) string {
 			bar.WriteString(lipgloss.NewStyle().Foreground(colorBarFill).Render(barCharFull))
 		} else {
 			bar.WriteString(lipgloss.NewStyle().Foreground(colorBarEmpty).Render(barCharEmpty))
-		}
-	}
-	return bar.String()
-}
-func renderVolumeBar(vol int, width int) string {
-	if width <= 0 {
-		return ""
-	}
-	// Use finer granularity: each block = 2 units for better precision
-	blocks := float64(width)
-	filled := int(float64(vol) / 100.0 * blocks)
-	if filled > width {
-		filled = width
-	}
-
-	var bar strings.Builder
-	for i := 0; i < width; i++ {
-		if i < filled {
-			bar.WriteString(lipgloss.NewStyle().Foreground(colorAccent2).Render("█"))
-		} else {
-			bar.WriteString(lipgloss.NewStyle().Foreground(colorBarEmpty).Render("░"))
 		}
 	}
 	return bar.String()
