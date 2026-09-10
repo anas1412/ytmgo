@@ -113,7 +113,7 @@ func (m Model) playerRowLayout() playerRowLayout {
 	if l.compact {
 		autoTxt = "∞"
 	}
-	autoLabel := autoStyle.Render(autoTxt)
+	autoLabel := hint("[a]") + autoStyle.Render(autoTxt)
 
 	shuffleStyle := styleModeInactive
 	if flashActive && m.modeFlashTarget == "shuffle" {

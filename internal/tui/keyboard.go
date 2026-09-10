@@ -341,7 +341,9 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.setStatus(fmt.Sprintf("Queued %d tracks from %s", len(m.albumTracks), m.openAlbum.Title))
 			return m, tea.Batch(cmd, saveQueueCmd(m.db, m.queue))
 		}
-		return m, nil
+		// No album open, so the key is free: toggle autoplay, matching
+		// [s] and [r] on the player bar's mode cluster.
+		return m, m.toggleAutoplayAction()
 
 	case "v":
 		// The visualizer: the spectrum beneath the results, on every

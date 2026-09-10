@@ -32,6 +32,7 @@ Press `?` at any time to open Settings, which lists the full set.
 | `h` / `Ctrl+B` | Seek backward 5s |
 | `+` / `=` | Volume up |
 | `-` / `_` | Volume down |
+| `a` | Toggle autoplay (unless an album is open, see below) |
 | `s` | Toggle shuffle |
 | `r` | Cycle repeat: off → one → all |
 
@@ -55,7 +56,7 @@ move on. `n` always advances, even with repeat-one enabled.
 | `R` | Refresh recommendations |
 | `A` | Switch searching between songs and albums |
 | `i` | Open the album the selected track belongs to |
-| `a` | Queue every track of the open album |
+| `a` | Queue every track of the open album (while one is open) |
 | `f` | Toggle favourite on the selected track |
 | `C` | Clear play history (History page) |
 
@@ -83,7 +84,7 @@ The mouse works throughout, which is unusual for a terminal app:
 - Click a **page tab** in the header to switch pages
 - Click a **track** to select it, double-click to play it
 - Click the **seek bar** to jump to that point in the song
-- Click **prev / play / next**, the shuffle and repeat labels, or anywhere on the **volume bar**
+- Click **prev / play / next**, the autoplay, shuffle and repeat labels, or anywhere on the **volume bar**
 - **Scroll** any list, or the lyrics pane, with the wheel
 
 Your keyboard's media keys and your desktop's media widget also control

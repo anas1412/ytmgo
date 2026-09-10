@@ -227,7 +227,7 @@ the rest of the album.
 
 Tab cycles focus through: search input → result list → queue panel → search input — and the focused panel's border glows violet.
 
-**Mouse support** — Click header tabs to switch pages, click list items to select, double-click to activate, click the progress bar to seek, and click the controls row to play/pause, adjust volume, or toggle shuffle/repeat.
+**Mouse support** — Click header tabs to switch pages, click list items to select, double-click to activate, click the progress bar to seek, and click the controls row to play/pause, adjust volume, or toggle autoplay, shuffle or repeat.
 
 **Media keys** — On Linux your keyboard's media keys control ytmgo directly, and it shows up in your desktop's media widget.
 
@@ -250,13 +250,14 @@ Tab cycles focus through: search input → result list → queue panel → searc
 | `D` | Clear entire queue |
 | `C` | Clear play history (History page) |
 | `f` | Toggle favorite on selected track |
+| `a` | Toggle autoplay (unless an album is open, see below) |
 | `s` | Toggle shuffle |
 | `r` | Cycle repeat: OFF → ONE → ALL |
 | `x` | Download selected track |
 | `i` | Open the album of the selected track |
 | `R` | Refresh recommendations |
 | `A` | Toggle search between songs and albums |
-| `a` | Queue every track of the open album |
+| `a` | Queue every track of the open album (while one is open) |
 | `v` | Toggle the visualizer under the results list |
 | `y` | Toggle the lyrics pane under the queue (wheel over it to scroll) |
 | `X` | Jump to the Downloads page and back |

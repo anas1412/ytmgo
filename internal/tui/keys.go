@@ -21,6 +21,7 @@ type KeyMap struct {
 	VolumeDown    key.Binding
 	Delete        key.Binding
 	Favorite      key.Binding
+	Autoplay      key.Binding
 	Shuffle       key.Binding
 	Repeat        key.Binding
 	ClearQueue    key.Binding
@@ -116,6 +117,10 @@ var Keys = KeyMap{
 	Favorite: key.NewBinding(
 		key.WithKeys("f"),
 		key.WithHelp("f", "toggle favorite"),
+	),
+	Autoplay: key.NewBinding(
+		key.WithKeys("a"),
+		key.WithHelp("a", "autoplay"),
 	),
 	Shuffle: key.NewBinding(
 		key.WithKeys("s"),
@@ -254,6 +259,7 @@ func (k KeyMap) FullHelp() [][]key.Binding {
 		{
 			k.VolumeUp,
 			k.VolumeDown,
+			k.Autoplay,
 			k.Shuffle,
 			k.Repeat,
 		},
