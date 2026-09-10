@@ -449,7 +449,9 @@ func (m Model) handlePlayerRowClick(x int, seekRow bool) (Model, tea.Cmd) {
 	// ── Modes and volume ──
 	if x >= l.rightStart && x < l.volEnd {
 		switch {
-		case x < l.shuffleEnd:
+		case x < l.autoEnd:
+			return m, m.toggleAutoplayAction()
+		case x >= l.shuffleStart && x < l.shuffleEnd:
 			return m, m.toggleShuffleAction()
 		case x >= l.repeatStart && x < l.repeatEnd:
 			return m, m.cycleRepeatAction()

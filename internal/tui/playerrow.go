@@ -28,9 +28,10 @@ type playerRowLayout struct {
 
 	// Right cluster: modes and volume. volBarStart/volBarEnd bound the
 	// volume bar's actual cells — not the percentage text after it.
-	rightStart, shuffleEnd, repeatStart, repeatEnd int
-	volStart, volDownEnd, volUpStart, volEnd       int
-	volBarStart, volBarEnd, volBarCells            int
+	rightStart, autoEnd, shuffleStart, shuffleEnd int
+	repeatStart, repeatEnd                        int
+	volStart, volDownEnd, volUpStart, volEnd      int
+	volBarStart, volBarEnd, volBarCells           int
 
 	// compact drops the button words, the [h]/[l] hints and the volume
 	// bar so the row still fits a narrow terminal.
@@ -101,6 +102,19 @@ func (m Model) playerRowLayout() playerRowLayout {
 
 	// ── Right cluster ──
 	flashActive := time.Now().Before(m.modeFlashUntil)
+
+	autoStyle := styleModeInactive
+	if flashActive && m.modeFlashTarget == "autoplay" {
+		autoStyle = styleModeFlash
+	} else if m.settings.AutoplayEnabled {
+		autoStyle = styleModeActive
+	}
+	autoTxt := "∞ AUTO"
+	if l.compact {
+		autoTxt = "∞"
+	}
+	autoLabel := autoStyle.Render(autoTxt)
+
 	shuffleStyle := styleModeInactive
 	if flashActive && m.modeFlashTarget == "shuffle" {
 		shuffleStyle = styleModeFlash
@@ -144,7 +158,7 @@ func (m Model) playerRowLayout() playerRowLayout {
 		volMid = renderVolumeBar(m.volume, l.volBarCells) + " " + volMid
 	}
 	volLabel := volDown + " " + volMid + " " + volUp
-	right := shuffleLabel + "  " + repeatLabel + "  " + volLabel
+	right := autoLabel + "  " + shuffleLabel + "  " + repeatLabel + "  " + volLabel
 	rightW := lipgloss.Width(right)
 
 	// ── Controls row: transport left, modes and volume flush right ──
@@ -187,7 +201,9 @@ func (m Model) playerRowLayout() playerRowLayout {
 		renderSeekBar(displayPct, l.barWidth) + " " +
 		styleTime.Render(tot) + lPart
 
-	l.shuffleEnd = l.rightStart + lipgloss.Width(shuffleLabel)
+	l.autoEnd = l.rightStart + lipgloss.Width(autoLabel)
+	l.shuffleStart = l.autoEnd + 2
+	l.shuffleEnd = l.shuffleStart + lipgloss.Width(shuffleLabel)
 	l.repeatStart = l.shuffleEnd + 2
 	l.repeatEnd = l.repeatStart + lipgloss.Width(repeatLabel)
 	l.volStart = l.repeatEnd + 2

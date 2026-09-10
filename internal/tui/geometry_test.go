@@ -572,7 +572,8 @@ func TestPlayerRowZonesInsideRow(t *testing.T) {
 		// the bar lives on its own row and only needs to fit.
 		if !(l.prevEnd <= l.playEnd && l.playEnd <= l.transportEnd &&
 			l.transportEnd <= l.rightStart &&
-			l.rightStart <= l.shuffleEnd && l.shuffleEnd <= l.repeatStart &&
+			l.rightStart <= l.autoEnd && l.autoEnd <= l.shuffleStart &&
+			l.shuffleStart <= l.shuffleEnd && l.shuffleEnd <= l.repeatStart &&
 			l.repeatEnd <= l.volStart && l.volStart < l.volEnd) {
 			t.Errorf("%dx%d: zones out of order: %+v", w, h, l)
 		}
@@ -707,6 +708,40 @@ func TestVolumeBarClickIsExact(t *testing.T) {
 	nm, _ := m.handlePlayerRowClick(l.volBarEnd+1, false)
 	if nm.volume != m.volume {
 		t.Errorf("click on the percentage text changed the volume")
+	}
+}
+
+// TestModeClicksHitTheirOwnLabel: autoplay sits left of shuffle in the
+// right cluster, so the shuffle zone must no longer start at the edge of
+// the cluster — otherwise it swallows every autoplay click.
+func TestModeClicksHitTheirOwnLabel(t *testing.T) {
+	m := worstCaseModel(t, 150, 40)
+	l := m.playerRowLayout()
+
+	// settings and queue hang off the model as pointers, so the clicked
+	// copy and this one share them: snapshot the values, don't diff models.
+	auto, shuf := m.settings.AutoplayEnabled, m.queue.IsShuffle()
+	nm, _ := m.handlePlayerRowClick(l.rightStart, false)
+	if m.settings.AutoplayEnabled == auto {
+		t.Errorf("click at the start of the right cluster did not toggle autoplay")
+	}
+	if m.queue.IsShuffle() != shuf {
+		t.Errorf("click on the autoplay label toggled shuffle")
+	}
+	if nm.modeFlashTarget != "autoplay" {
+		t.Errorf("clicked autoplay flashed %q", nm.modeFlashTarget)
+	}
+
+	auto, shuf = m.settings.AutoplayEnabled, m.queue.IsShuffle()
+	nm, _ = m.handlePlayerRowClick(l.shuffleEnd-1, false)
+	if m.queue.IsShuffle() == shuf {
+		t.Errorf("click on the shuffle label did not toggle shuffle")
+	}
+	if m.settings.AutoplayEnabled != auto {
+		t.Errorf("click on the shuffle label toggled autoplay")
+	}
+	if nm.modeFlashTarget != "shuffle" {
+		t.Errorf("clicked shuffle flashed %q", nm.modeFlashTarget)
 	}
 }
 

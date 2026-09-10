@@ -341,6 +341,20 @@ func (m *Model) resumePlayerTick() tea.Cmd {
 }
 
 // toggleShuffleAction toggles shuffle with the SHFL label flash.
+// toggleAutoplayAction flips the same setting the Settings page owns,
+// so the two stay one value rather than two.
+func (m *Model) toggleAutoplayAction() tea.Cmd {
+	m.settings.AutoplayEnabled = !m.settings.AutoplayEnabled
+	m.modeFlashTarget = "autoplay"
+	m.modeFlashUntil = time.Now().Add(250 * time.Millisecond)
+	if m.settings.AutoplayEnabled {
+		m.setStatus("Autoplay: ON")
+	} else {
+		m.setStatus("Autoplay: OFF")
+	}
+	return saveSettingsCmd(m.db, m.settings)
+}
+
 func (m *Model) toggleShuffleAction() tea.Cmd {
 	m.queue.ToggleShuffle()
 	m.modeFlashTarget = "shuffle"
