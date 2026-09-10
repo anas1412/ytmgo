@@ -21,8 +21,8 @@ import (
 // ─── Extra inline styles (beyond what styles.go provides) ──────────
 
 var (
-	styleApp, styleSearchBox, styleSearchBoxFocused lipgloss.Style
-	styleEmpty, styleSearchLabel                    lipgloss.Style
+	styleSearchBox, styleSearchBoxFocused lipgloss.Style
+	styleEmpty                            lipgloss.Style
 )
 
 // The search field's wrapper is a fixed width, and the textinput inside
@@ -90,10 +90,6 @@ func buildInlineStyles() {
 		Italic(true))
 	styleTextDim = lipgloss.NewStyle().Foreground(colorTextDim)
 
-	// App background
-	styleApp = lipgloss.NewStyle().
-		Background(colorBg)
-
 	// Search input wrapper - inline style (no border, stays on 1 line).
 	// Never underline THIS style: its content is the textinput's render,
 	// which already carries ANSI sequences, and lipgloss underlines by
@@ -119,11 +115,6 @@ func buildInlineStyles() {
 		PaddingLeft(2).
 		PaddingTop(1).
 		Italic(true)
-
-	// Header search label
-	styleSearchLabel = lipgloss.NewStyle().
-		Foreground(colorTextMid).
-		PaddingLeft(1)
 }
 
 // ─── textinput styling (referenced from model.go) ──────────────────
