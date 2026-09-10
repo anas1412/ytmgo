@@ -19,6 +19,7 @@ var (
 	colorPlaying, colorDownload, colorDone    lipgloss.TerminalColor
 	colorError, colorWarning, colorTitle      lipgloss.TerminalColor
 	colorHeader, colorBarFill, colorBarEmpty  lipgloss.TerminalColor
+	colorOnAccent                             lipgloss.TerminalColor
 )
 
 // Progress bar characters

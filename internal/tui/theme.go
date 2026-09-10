@@ -1,6 +1,11 @@
 package tui
 
-import "github.com/charmbracelet/lipgloss"
+import (
+	"math"
+	"strconv"
+
+	"github.com/charmbracelet/lipgloss"
+)
 
 // Theme names the palette the UI draws with.
 //
@@ -155,6 +160,71 @@ type palette struct {
 	playing, download, done         lipgloss.TerminalColor
 	errColor, warning, header       lipgloss.TerminalColor
 	barFill, barEmpty               lipgloss.TerminalColor
+
+	// onAccent is text written on top of the accent — the selected row's
+	// fill. Every other colour here was chosen to read against the
+	// background, and a pastel accent is nowhere near it: on the cursor
+	// row the title was landing at 1.6:1 and, while playing, at 1.0:1.
+	onAccent lipgloss.TerminalColor
+}
+
+// srgbLuminance is the WCAG relative luminance of a "#rrggbb" string.
+// Parsed here rather than read back from lipgloss, whose colours do not
+// resolve to RGB without a renderer.
+func srgbLuminance(hex string) float64 {
+	v := func(i int) float64 {
+		n, err := strconv.ParseInt(hex[i:i+2], 16, 0)
+		if err != nil {
+			return 0
+		}
+		c := float64(n) / 255.0
+		if c <= 0.04045 {
+			return c / 12.92
+		}
+		return math.Pow((c+0.055)/1.055, 2.4)
+	}
+	return 0.2126*v(1) + 0.7152*v(3) + 0.0722*v(5)
+}
+
+// contrastRatio is the WCAG ratio between two "#rrggbb" colours: 1 for
+// identical, 21 for black on white.
+func contrastRatio(fg, bg string) float64 {
+	a, b := srgbLuminance(fg), srgbLuminance(bg)
+	if a < b {
+		a, b = b, a
+	}
+	return (a + 0.05) / (b + 0.05)
+}
+
+// readableOn returns whichever candidate stands out most against bg.
+// A scheme's accent may be a pale pastel or a deep violet, so which of
+// its own colours reads on it is a per-scheme answer, not a constant.
+func readableOn(bg string, candidates ...string) string {
+	best, bestRatio := candidates[0], 0.0
+	for _, c := range candidates {
+		if r := contrastRatio(c, bg); r > bestRatio {
+			best, bestRatio = c, r
+		}
+	}
+	return best
+}
+
+// minSelectedContrast is the floor the cursor row's text must clear
+// against the accent behind it. WCAG asks 4.5 for body text; the row is
+// bold, and 4.5 is what actually reads in a terminal.
+const minSelectedContrast = 4.5
+
+// onAccentFor picks what to write on a scheme's selection fill: one of
+// the scheme's own ends when it reads there, and plain black or white
+// when neither does. Solarized-light needs the fallback — its violet
+// sits mid-luminance, so its own paper and ink both stop short of the
+// floor and only an extreme clears it.
+func onAccentFor(s scheme) string {
+	own := readableOn(s.primary, s.bg, s.title)
+	if contrastRatio(own, s.primary) >= minSelectedContrast {
+		return own
+	}
+	return readableOn(s.primary, "#000000", "#ffffff")
 }
 
 // palette expands a scheme's roles into every colour the UI draws with.
@@ -168,6 +238,7 @@ func (s scheme) palette() palette {
 		playing: c(s.active), download: c(s.warn), done: c(s.active),
 		errColor: c(s.danger), warning: c(s.warn), header: c(s.primary),
 		barFill: c(s.primary), barEmpty: c(s.border),
+		onAccent: c(onAccentFor(s)),
 	}
 }
 
@@ -198,9 +269,12 @@ func adaptive() palette {
 		done:      c("#047857", "#06d6a0"),
 		errColor:  c("#be123c", "#f72585"),
 		warning:   c("#b45309", "#f4a261"),
-		header:    c("#6d28d9", "#7c3aed"),
-		barFill:   c("#6d28d9", "#7c3aed"),
-		barEmpty:  c("#d4d2dd", "#2a2a3e"),
+		// The accent is a deep violet in both variants, so white reads
+		// on it either way — 8.0:1 light, 6.7:1 dark.
+		onAccent: c("#ffffff", "#ffffff"),
+		header:   c("#6d28d9", "#7c3aed"),
+		barFill:  c("#6d28d9", "#7c3aed"),
+		barEmpty: c("#d4d2dd", "#2a2a3e"),
 	}
 }
 
@@ -217,6 +291,11 @@ func terminalScheme() palette {
 		playing: a("6"), download: a("3"), done: a("2"),
 		errColor: a("1"), warning: a("3"), header: a("5"),
 		barFill: a("5"), barEmpty: a("8"),
+		// The terminal owns these slots, so nothing here can be
+		// measured. Slot 0 is black in every convention, light schemes
+		// included, which makes it the safe partner for a chromatic
+		// magenta selection — the terminal's own reverse video.
+		onAccent: a("0"),
 	}
 }
 
@@ -230,6 +309,7 @@ func setPalette(p palette) {
 	colorPlaying, colorDownload, colorDone = p.playing, p.download, p.done
 	colorError, colorWarning, colorHeader = p.errColor, p.warning, p.header
 	colorBarFill, colorBarEmpty = p.barFill, p.barEmpty
+	colorOnAccent = p.onAccent
 }
 
 // ApplyTheme installs a theme and rebuilds every style against it.

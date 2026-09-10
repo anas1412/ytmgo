@@ -1223,8 +1223,8 @@ func renderAlbumTrackLine(prefix, title, byline, right string, isSelected bool, 
 	var bg lipgloss.Style
 	if isSelected {
 		bg = lipgloss.NewStyle().Background(colorAccent).Width(width)
-		titleStyle = lipgloss.NewStyle().Foreground(colorTitle).Bold(true)
-		byStyle = lipgloss.NewStyle().Foreground(colorBgHover)
+		titleStyle = lipgloss.NewStyle().Foreground(colorOnAccent).Bold(true)
+		byStyle = lipgloss.NewStyle().Foreground(colorOnAccent)
 		rightStyle = byStyle
 	} else {
 		bg = lipgloss.NewStyle().Width(width)
@@ -1631,14 +1631,16 @@ func renderListItemBlock(line, info string, isSelected, isPlaying bool, width in
 	var infoStyle lipgloss.Style
 
 	if isSelected {
+		// Everything on the cursor row is written in the one colour
+		// measured to read against the accent fill. It used to use the
+		// title colour, and the playing colour on the playing row, both
+		// of which were chosen against the panel background instead —
+		// on the accent they came out at 1.0–2.4:1 and vanished. The
+		// row keeps saying which track is playing through the ▶ in its
+		// prefix, so the colour was never carrying that alone.
 		bgStyle = lipgloss.NewStyle().Background(colorAccent).Width(width)
-		titleStyle = lipgloss.NewStyle().Foreground(colorTitle).Bold(true)
-		if isPlaying {
-			// Cursor on the playing row: the highlight must not erase
-			// which track is playing.
-			titleStyle = lipgloss.NewStyle().Foreground(colorPlaying).Bold(true)
-		}
-		infoStyle = lipgloss.NewStyle().Foreground(colorBgHover)
+		titleStyle = lipgloss.NewStyle().Foreground(colorOnAccent).Bold(true)
+		infoStyle = lipgloss.NewStyle().Foreground(colorOnAccent)
 	} else {
 		bgStyle = lipgloss.NewStyle().Width(width)
 		if isPlaying {
