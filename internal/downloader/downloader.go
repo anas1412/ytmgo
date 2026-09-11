@@ -16,6 +16,7 @@ import (
 	"syscall"
 	"time"
 
+	"ytmgo/internal/ytdlp"
 	"ytmgo/internal/ytresolve"
 )
 
@@ -346,7 +347,7 @@ func (d *Downloader) runJob(job *Job, outDir string) {
 		videoURL,
 	}
 
-	cmd := pgidCommand(d.ctx, "yt-dlp", args...)
+	cmd := pgidCommand(d.ctx, ytdlp.Path(), args...)
 
 	// yt-dlp writes progress to stdout (stderr carries only warnings and
 	// errors), so the percentage must be parsed from stdout.

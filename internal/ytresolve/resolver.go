@@ -11,6 +11,8 @@ import (
 	"strings"
 	"syscall"
 	"time"
+
+	"ytmgo/internal/ytdlp"
 )
 
 // resolveTimeout bounds one yt-dlp search. Without it a wedged yt-dlp
@@ -45,7 +47,7 @@ func Resolve(artist, title string) (*Result, error) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), resolveTimeout)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, "yt-dlp", args...)
+	cmd := exec.CommandContext(ctx, ytdlp.Path(), args...)
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	cmd.Cancel = func() error {
 		return syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)

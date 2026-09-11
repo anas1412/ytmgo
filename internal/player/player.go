@@ -26,6 +26,8 @@ import (
 	"path/filepath"
 	"sync"
 	"time"
+
+	"ytmgo/internal/ytdlp"
 )
 
 type State int
@@ -236,6 +238,14 @@ func (p *Player) ensureRunning() error {
 		fmt.Sprintf("--input-ipc-server=%s", p.socketPath),
 		"--quiet",
 		"--really-quiet",
+	}
+	// mpv resolves yt-dlp for its own ytdl_hook, off PATH, which is how
+	// a stale packaged copy still broke playback even when ytmgo's own
+	// calls used the good one. Point the hook at the same binary.
+	// Only when ytmgo has a copy of its own: otherwise mpv's default is
+	// already whatever PATH offers, and overriding adds nothing.
+	if ytdlp.Bundled() {
+		args = append(args, "--script-opts=ytdl_hook-ytdl_path="+ytdlp.Path())
 	}
 	// Test hook: lets integration tests run without an audio device
 	// (YTMGO_MPV_AO=null).

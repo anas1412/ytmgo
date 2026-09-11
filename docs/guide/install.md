@@ -57,8 +57,11 @@ silence.
 
 So the installer fetches yt-dlp from its own releases, next to the
 ytmgo binary. That copy self-updates with `yt-dlp -U`; a packaged one
-refuses to. If you already have a packaged yt-dlp earlier on your PATH,
-the installer says so — remove it, or put the install directory first.
+refuses to.
+
+You do not have to do anything about a yt-dlp you already have. ytmgo
+runs its own copy by absolute path and tells mpv's stream hook to use
+the same one, so whatever your PATH order is, the current yt-dlp wins.
 :::
 
 ## Supported systems

@@ -319,15 +319,14 @@ install_ytdlp() {
   success "Installed yt-dlp ($("$dest" --version 2>/dev/null || echo 'version unknown'))"
 }
 
-# A distro-managed yt-dlp earlier on PATH would win over ours, and be
-# the stale one. Say so rather than leaving it to be discovered later.
+# A packaged yt-dlp earlier on PATH used to matter: it would win, and
+# it is the stale one. ytmgo now runs the copy beside its own binary by
+# absolute path, and tells mpv's ytdl_hook to do the same, so PATH order
+# no longer decides. Worth a note, not a warning.
 if command -v yt-dlp >/dev/null 2>&1; then
   existing=$(command -v yt-dlp)
   if [ "$existing" != "$INSTALL_DIR/yt-dlp" ]; then
-    warn "A packaged yt-dlp is already on PATH at $existing."
-    warn "It cannot self-update and is usually the reason nothing plays."
-    warn "Installing the upstream build to $INSTALL_DIR/yt-dlp — make sure"
-    warn "$INSTALL_DIR comes first on your PATH, or remove the packaged one."
+    info "A packaged yt-dlp exists at $existing; ytmgo will use its own copy instead."
   fi
 fi
 install_ytdlp || warn "Continuing without yt-dlp — downloads and playback will not work until it is installed."
