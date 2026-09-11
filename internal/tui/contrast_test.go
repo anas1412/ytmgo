@@ -106,3 +106,45 @@ func TestReportSelectedContrast(t *testing.T) {
 			contrastRatio(sc.active, sc.primary))
 	}
 }
+
+// TestSelectedRowIsHighlightedToTheEnd: the cursor row's highlight has
+// to reach the duration on the right, in every theme. Each inner Render
+// ends in a reset that clears the background too, so relying on one
+// outer Background painted the title and nothing after it — the
+// duration sat on the panel's own colour, unreadable.
+func TestSelectedRowIsHighlightedToTheEnd(t *testing.T) {
+	old := lipgloss.ColorProfile()
+	lipgloss.SetColorProfile(termenv.TrueColor)
+	defer lipgloss.SetColorProfile(old)
+	defer ApplyTheme(ThemeTerminal)
+
+	bgParams := func(c lipgloss.TerminalColor) string {
+		r := lipgloss.NewStyle().Background(c).Render("x")
+		return strings.Trim(r[:strings.Index(r, "x")], "\x1b[m")
+	}
+
+	for _, th := range themeOrder {
+		ApplyTheme(th)
+		row := renderAlbumTrackLine("001. ", "A Song", " · Someone", "4:39", true, 60)
+		want := bgParams(colorAccent)
+
+		// The duration is the last thing on the row; the background has
+		// to still be set where it starts.
+		i := strings.LastIndex(row, "4:39")
+		if i < 0 {
+			t.Errorf("%s: the duration is missing from the row", th)
+			continue
+		}
+		// Not "somewhere before" — the title supplies that whatever
+		// happens. The background must still be set after the last
+		// reset preceding the duration, which is what a span-by-span
+		// background gives and a single outer one does not.
+		before := row[:i]
+		if r := strings.LastIndex(before, "\x1b[0m"); r >= 0 {
+			before = before[r:]
+		}
+		if !strings.Contains(before, want) {
+			t.Errorf("%s: the highlight is reset before the duration — it sits on the panel colour", th)
+		}
+	}
+}

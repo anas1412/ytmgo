@@ -177,6 +177,7 @@ func openArtistCmd(browseID string, seq int) tea.Cmd {
 				CoverURL:       cover,
 				AlbumBrowseID:  t.AlbumBrowseID,
 				ArtistBrowseID: a.BrowseID,
+				Plays:          t.Plays,
 			})
 		}
 		return ArtistLoadedMsg{Artist: a, Songs: songs, Seq: seq}

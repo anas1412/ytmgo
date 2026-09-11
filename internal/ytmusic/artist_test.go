@@ -1,6 +1,9 @@
 package ytmusic
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 // TestLiveArtist: an artist page must come back with a name, a
 // discography whose ids AlbumTracks can actually open, and the full top
@@ -74,4 +77,35 @@ func TestLiveArtistDiscographyOpens(t *testing.T) {
 		t.Errorf("%q opened with no tracks", alb.Title)
 	}
 	t.Logf("opened %q — %d tracks", alb.Title, len(alb.Tracks))
+}
+
+// TestLiveArtistSongColumns: an artist's top songs carry the play count
+// in column 2 and the album in column 3. Reading 2 as the album put
+// "1.2B plays" where the release name belongs — visible on the player
+// bar under the track title.
+func TestLiveArtistSongColumns(t *testing.T) {
+	if testing.Short() {
+		t.Skip("short mode: skipping network test")
+	}
+	a, err := Artist("UCRr1xG_2WIDs18a6cIiCxeA")
+	if err != nil || len(a.TopSongs) == 0 {
+		t.Fatalf("Artist: %v (%d songs)", err, len(a.TopSongs))
+	}
+	withPlays, albumLooksLikePlays := 0, 0
+	for _, s := range a.TopSongs {
+		if s.Plays != "" {
+			withPlays++
+		}
+		if strings.HasSuffix(s.Album, " plays") {
+			albumLooksLikePlays++
+		}
+	}
+	t.Logf("%d of %d songs carry a play count; first: plays=%q album=%q",
+		withPlays, len(a.TopSongs), a.TopSongs[0].Plays, a.TopSongs[0].Album)
+	if withPlays == 0 {
+		t.Error("no song carried a play count")
+	}
+	if albumLooksLikePlays > 0 {
+		t.Errorf("%d songs have a play count sitting in the album field", albumLooksLikePlays)
+	}
 }

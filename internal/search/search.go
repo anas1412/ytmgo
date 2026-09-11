@@ -21,6 +21,7 @@ type Result struct {
 	CoverURL       string // album art URL (empty if unavailable)
 	AlbumBrowseID  string // album page id (MPREb_…); empty when unknown
 	ArtistBrowseID string // artist page id (UC…); empty when unknown
+	Plays          string // play count as rendered; only artist top songs carry it
 }
 
 // ToTrack converts a search Result to a queue.Track.

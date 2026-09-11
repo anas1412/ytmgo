@@ -54,8 +54,11 @@ type Track struct {
 	// ArtistBrowseID is the UC… channel id Artist takes. Empty when the
 	// byline names an artist YouTube Music has no page for.
 	ArtistBrowseID string
-	Duration       int // seconds
-	CoverURL       string
+	// Plays is the play count as YouTube renders it ("1.2B plays"),
+	// carried only by an artist's top songs.
+	Plays    string
+	Duration int // seconds
+	CoverURL string
 }
 
 // WatchURL returns the playable URL for a videoId. mpv resolves it via
@@ -855,7 +858,12 @@ func parseSongRows(root interface{}, artist string) []Track {
 				"text", "runs", 0, "text"),
 			Artist: digString(item, "flexColumns", 1, "musicResponsiveListItemFlexColumnRenderer",
 				"text", "runs", 0, "text"),
-			Album: digString(item, "flexColumns", 2, "musicResponsiveListItemFlexColumnRenderer",
+			// Column 2 is the play count and column 3 the album. Reading
+			// 2 as the album put "1.2B plays" where the release name
+			// belongs, including on the player bar.
+			Plays: digString(item, "flexColumns", 2, "musicResponsiveListItemFlexColumnRenderer",
+				"text", "runs", 0, "text"),
+			Album: digString(item, "flexColumns", 3, "musicResponsiveListItemFlexColumnRenderer",
 				"text", "runs", 0, "text"),
 			Duration: parseClock(digString(item, "fixedColumns", 0,
 				"musicResponsiveListItemFixedColumnRenderer", "text", "runs", 0, "text")),

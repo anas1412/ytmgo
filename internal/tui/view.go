@@ -1243,7 +1243,13 @@ func (m Model) renderAlbumTracks(width, height int) string {
 		if m.favoriteSet[r.ID] {
 			heart = "♥ "
 		}
+		// Play count ahead of the runtime, which is what the shelf is
+		// ordered by — "1.2B plays  5:38". Dropped on a narrow panel:
+		// the title is worth more than the number.
 		right := heart + formatDuration(r.Duration)
+		if r.Plays != "" && rowW >= 60 {
+			right = heart + r.Plays + "   " + formatDuration(r.Duration)
+		}
 
 		title := r.Title
 		var byline string
@@ -1312,12 +1318,20 @@ func renderAlbumTrackLine(prefix, title, byline, right string, isSelected bool, 
 	titleStyle := lipgloss.NewStyle().Foreground(colorText)
 	byStyle := lipgloss.NewStyle().Foreground(colorTextDim)
 	rightStyle := lipgloss.NewStyle().Foreground(colorTextDim)
+	gapStyle := lipgloss.NewStyle()
 	var bg lipgloss.Style
 	if isSelected {
+		// Every span carries the background, not just the wrapper.
+		// Each inner Render ends in a reset that clears the background
+		// as well as the colour, so a single outer Background painted
+		// the first span and nothing after it: the highlight stopped at
+		// the end of the title and the duration sat unreadable on the
+		// panel's own colour, on every theme.
 		bg = lipgloss.NewStyle().Background(colorAccent).Width(width)
-		titleStyle = lipgloss.NewStyle().Foreground(colorOnAccent).Bold(true)
-		byStyle = lipgloss.NewStyle().Foreground(colorOnAccent)
+		titleStyle = lipgloss.NewStyle().Foreground(colorOnAccent).Background(colorAccent).Bold(true)
+		byStyle = lipgloss.NewStyle().Foreground(colorOnAccent).Background(colorAccent)
 		rightStyle = byStyle
+		gapStyle = lipgloss.NewStyle().Background(colorAccent)
 	} else {
 		bg = lipgloss.NewStyle().Width(width)
 	}
@@ -1326,7 +1340,7 @@ func renderAlbumTrackLine(prefix, title, byline, right string, isSelected bool, 
 	if gap < 1 {
 		gap = 1
 	}
-	return bg.Render(truncate(left+strings.Repeat(" ", gap)+rightStyle.Render(right), width))
+	return bg.Render(truncate(left+gapStyle.Render(strings.Repeat(" ", gap))+rightStyle.Render(right), width))
 }
 
 // padPanel pads rendered rows to the panel's full width and height so
