@@ -1,7 +1,10 @@
 package tui
 
 import (
+	"strings"
 	"testing"
+
+	"ytmgo/internal/settings"
 
 	tea "github.com/charmbracelet/bubbletea"
 )
@@ -59,5 +62,39 @@ func TestKeyTogglesStillPersist(t *testing.T) {
 	}
 	if nm.(Model).settings.ShowHints {
 		t.Error("z did not flip the hints")
+	}
+}
+
+// The mode names say what you get. "Hybrid" named the implementation,
+// and the thing a reader actually needs to know — does this keep the
+// track on disk — was not in any of the three words.
+func TestPlaybackModeLabelsSayWhatHappens(t *testing.T) {
+	for _, tc := range []struct {
+		mode int
+		want string
+	}{
+		{settings.PlaybackStream, "nothing is saved"},
+		{settings.PlaybackHybrid, "Download while playing"},
+		{settings.PlaybackOffline, "Download first"},
+	} {
+		got := settings.PlaybackModeLabel(tc.mode)
+		if !strings.Contains(got, tc.want) {
+			t.Errorf("mode %d reads %q, want it to mention %q", tc.mode, got, tc.want)
+		}
+	}
+	// An unrecognised value used to read "Hybrid" — the one mode that
+	// writes files — while the default is to write none.
+	if got := settings.PlaybackModeLabel(99); got != settings.PlaybackModeLabel(settings.PlaybackStream) {
+		t.Errorf("an unknown mode reads %q, want the default's label", got)
+	}
+	// Each mode is distinct on the page, or cycling looks like nothing
+	// happened.
+	seen := map[string]bool{}
+	for _, mode := range []int{settings.PlaybackStream, settings.PlaybackHybrid, settings.PlaybackOffline} {
+		l := settings.PlaybackModeLabel(mode)
+		if seen[l] {
+			t.Errorf("two modes both read %q", l)
+		}
+		seen[l] = true
 	}
 }

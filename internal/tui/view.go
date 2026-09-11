@@ -1100,6 +1100,10 @@ func (m Model) browseStrip(rowW int, tracks []search.Result) []string {
 		third = fmt.Sprintf("%d %s · %s", len(tracks), trackWord, formatTotalDuration(total))
 		switch {
 		case onArtistSongs:
+			// No total runtime: an album's is real — that is how long
+			// the record is — but nobody sits through a chart of an
+			// artist's most-played, so the number means nothing here.
+			third = fmt.Sprintf("%d %s", len(tracks), trackWord)
 			third += "  ·  [A] releases · [esc] back"
 		case m.openArtist != nil:
 			// An album sitting inside an artist page: esc steps back

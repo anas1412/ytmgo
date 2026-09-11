@@ -281,7 +281,7 @@ the rest of the album.
 | 1 | Press `Tab` to focus the search input |
 | 2 | Type a query and press `Enter` |
 | 3 | Browse results in the left panel (`↑↓` / `jk`) |
-| 4 | Press `Enter` on a result: adds to queue, plays when idle (downloads too in Hybrid/Offline mode) |
+| 4 | Press `Enter` on a result: adds to queue, plays when idle (also downloads it, if you set playback to download) |
 | 5 | `Tab` to the queue panel, select a track, press `Enter` to play |
 | 6 | Control playback with keys (see below) |
 

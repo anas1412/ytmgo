@@ -160,3 +160,52 @@ func TestBrowseStripLabelsEachLevel(t *testing.T) {
 	}
 	t.Logf("album %q rows carry plays, e.g. %q", m.openAlbum.Title, m.albumTracks[0].Plays)
 }
+
+// An album's total runtime is how long the record is. An artist's top
+// songs are a chart, not a sitting, so the same number there means
+// nothing — it is on the album strip only.
+func TestOnlyAlbumsShowATotalRuntime(t *testing.T) {
+	if testing.Short() {
+		t.Skip("short mode: skipping network test")
+	}
+	m := worstCaseModel(t, 150, 40)
+	msg := openArtistCmd("UCRr1xG_2WIDs18a6cIiCxeA", m.artistSeq+1)()
+	m.artistSeq++
+	nm, _ := m.handleArtistLoaded(msg.(ArtistLoadedMsg))
+	m = nm.(Model)
+
+	songs := strings.Join(m.browseStrip(120, m.streamTracks()), "\n")
+	total := formatTotalDuration(func() (n int) {
+		for _, r := range m.streamTracks() {
+			n += r.Duration
+		}
+		return
+	}())
+	if strings.Contains(songs, total) {
+		t.Errorf("the top-songs strip still shows a total runtime (%s):\n%s", total, songs)
+	}
+	if !strings.Contains(songs, "top tracks") {
+		t.Errorf("the count went with it:\n%s", songs)
+	}
+
+	// The album inside still has one.
+	nm, _ = m.handleKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'A'}})
+	m = nm.(Model)
+	nm, cmd := m.handleKey(tea.KeyMsg{Type: tea.KeyEnter})
+	m = nm.(Model)
+	am, ok := cmd().(AlbumTracksMsg)
+	if !ok {
+		t.Fatalf("opening a release produced %T", cmd())
+	}
+	nm, _ = m.handleAlbumTracks(am)
+	m = nm.(Model)
+
+	albTotal := 0
+	for _, r := range m.albumTracks {
+		albTotal += r.Duration
+	}
+	strip := strings.Join(m.browseStrip(120, m.streamTracks()), "\n")
+	if want := formatTotalDuration(albTotal); !strings.Contains(strip, want) {
+		t.Errorf("the album strip lost its runtime (%s):\n%s", want, strip)
+	}
+}

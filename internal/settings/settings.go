@@ -95,17 +95,18 @@ func DownloadFormatHint(f string) string {
 	}
 }
 
-// PlaybackModeLabel returns a human-readable label for the playback mode.
+// PlaybackModeLabel returns a human-readable label for the playback
+// mode. The labels say what you get rather than what the code does:
+// "Hybrid" named the implementation and left the reader to guess, and
+// the guess that matters is whether a track is kept on disk.
 func PlaybackModeLabel(mode int) string {
 	switch mode {
-	case PlaybackStream:
-		return "Stream"
 	case PlaybackHybrid:
-		return "Hybrid"
+		return "Download while playing"
 	case PlaybackOffline:
-		return "Offline"
-	default:
-		return "Hybrid"
+		return "Download first, then play"
+	default: // PlaybackStream, and anything unrecognised
+		return "Stream only — nothing is saved"
 	}
 }
 

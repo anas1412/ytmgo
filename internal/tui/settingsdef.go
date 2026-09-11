@@ -44,7 +44,7 @@ var settingDefs = []settingDef{
 		label: "Playback Mode",
 		kind:  settingCycle,
 		value: func(m *Model) string { return settings.PlaybackModeLabel(m.settings.PlaybackMode) },
-		desc:  staticDesc("Stream (online) · Hybrid (play+download) · Offline (download first)"),
+		desc:  staticDesc("Whether playing a track also downloads it — download first is for connections too poor to stream"),
 		activate: func(m *Model) tea.Cmd {
 			m.settings.PlaybackMode = (m.settings.PlaybackMode + 1) % 3
 			return saveSettingsCmd(m.db, m.settings)
