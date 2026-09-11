@@ -620,10 +620,11 @@ func (m Model) handleArtistLoaded(msg ArtistLoadedMsg) (tea.Model, tea.Cmd) {
 	// the first thing wanted is something to play. Unless there are
 	// none, in which case the releases are all there is to show.
 	m.artistShowsAlbums = len(msg.Songs) == 0
-	m.albumTracks = msg.Songs
-	m.albums = a.Albums
+	m.artistSongs = msg.Songs
+	m.artistArtURL = a.ThumbURL
 	// Leaving any open album behind: the artist replaces it.
 	m.openAlbum = nil
+	m.albumTracks = nil
 	m.albumMode = m.artistShowsAlbums
 	m.resetStreamCursor()
 	m.setStatus(fmt.Sprintf("%s — %d songs, %d releases  ([A] switch · [esc] back)",
@@ -632,8 +633,15 @@ func (m Model) handleArtistLoaded(msg ArtistLoadedMsg) (tea.Model, tea.Cmd) {
 	// The artist's photo goes through the album-art pipeline: the strip
 	// draws it from the same field, and bumping albumSeq keeps the
 	// transmit/delete bookkeeping that pipeline already does.
+	//
+	// The old image is dropped first. It belongs to whatever was open
+	// before, and leaving it up means the artist's name sits over the
+	// last album's cover until the fetch lands — or for good, if it
+	// never does.
 	var cmds []tea.Cmd
-	if a.ThumbURL != "" && a.ThumbURL != m.albumArtURL {
+	if a.ThumbURL != m.albumArtURL {
+		m.albumArtImg = nil
+		m.albumArtURL = ""
 		m.albumSeq++
 		if c := loadAlbumArtCmd(a.ThumbURL, m.albumSeq); c != nil {
 			cmds = append(cmds, c)

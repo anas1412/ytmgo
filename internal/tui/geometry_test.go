@@ -1056,7 +1056,7 @@ func artistModel(t *testing.T, w, h int, showAlbums bool) Model {
 	m.albumMode = showAlbums
 	if !showAlbums {
 		for i := 0; i < 100; i++ {
-			m.albumTracks = append(m.albumTracks, search.Result{
+			m.artistSongs = append(m.artistSongs, search.Result{
 				ID: "sZxzPcT1Meg", Title: "ラブ・ストーリーは突然に - " + long,
 				Uploader: long, Duration: 214,
 			})
@@ -1095,7 +1095,7 @@ func TestArtistListSourceFollowsTheMode(t *testing.T) {
 	if !m.streamShowsTracks() {
 		t.Error("songs mode does not read the track list")
 	}
-	if got, want := m.streamListLen(), len(m.albumTracks); got != want {
+	if got, want := m.streamListLen(), len(m.artistSongs); got != want {
 		t.Errorf("songs mode lists %d rows, want %d", got, want)
 	}
 
@@ -1103,7 +1103,7 @@ func TestArtistListSourceFollowsTheMode(t *testing.T) {
 	if m.streamShowsTracks() {
 		t.Error("releases mode still reads the track list")
 	}
-	if got, want := m.streamListLen(), len(m.albums); got != want {
+	if got, want := m.streamListLen(), len(m.streamAlbums()); got != want {
 		t.Errorf("releases mode lists %d rows, want %d", got, want)
 	}
 }

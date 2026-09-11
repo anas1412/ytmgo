@@ -277,14 +277,17 @@ type Model struct {
 	albumMode  bool            // search returns albums instead of songs
 	albums     []ytmusic.Album // album search results (cached across A toggles)
 	albumQuery string          // query behind m.albums, so toggling back doesn't refetch
-	// openArtist is set while an artist page is open. Its top songs go
-	// into albumTracks and its releases into albums, so the artist view
-	// renders through the same list code as everything else — the only
-	// difference is which of the two artistShowsAlbums picks.
+	// openArtist is set while an artist page is open. The songs and the
+	// cover are the artist's own fields rather than the album view's:
+	// opening an album from an artist page and backing out of it runs
+	// leaveAlbumView, which nils albumTracks and clears the cover, so
+	// sharing them made the artist vanish on the way back.
 	openArtist        *ytmusic.ArtistPage
 	artistShowsAlbums bool
 	isLoadingArtist   bool
-	artistSeq         int // bumped per fetch; stale responses dropped
+	artistSeq         int             // bumped per fetch; stale responses dropped
+	artistSongs       []search.Result // top songs, as playable results
+	artistArtURL      string          // artist photo, reloaded when an album closes
 
 	openAlbum      *ytmusic.Album  // non-nil: showing this album's tracks
 	albumTracks    []search.Result // tracks of openAlbum, as playable results
@@ -701,12 +704,31 @@ func (m Model) streamShowsTracks() bool {
 	return m.openAlbum != nil || (m.openArtist != nil && !m.artistShowsAlbums)
 }
 
+// streamTracks is the track list on screen: an album's tracklist when
+// one is open — including an album opened from an artist page — and
+// otherwise the artist's top songs.
+func (m Model) streamTracks() []search.Result {
+	if m.openAlbum != nil {
+		return m.albumTracks
+	}
+	return m.artistSongs
+}
+
+// streamAlbums is the release grid on screen: an artist's discography
+// while their page is open, and the album search results otherwise.
+func (m Model) streamAlbums() []ytmusic.Album {
+	if m.openArtist != nil && m.openAlbum == nil {
+		return m.openArtist.Albums
+	}
+	return m.albums
+}
+
 func (m Model) streamListLen() int {
 	switch {
 	case m.streamShowsTracks():
-		return len(m.albumTracks)
+		return len(m.streamTracks())
 	case m.albumMode:
-		return len(m.albums)
+		return len(m.streamAlbums())
 	default:
 		return len(m.results)
 	}

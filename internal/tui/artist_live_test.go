@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"image"
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
@@ -35,7 +36,7 @@ func TestLiveArtistPageRenders(t *testing.T) {
 	if m.openArtist == nil {
 		t.Fatal("the artist page did not open")
 	}
-	t.Logf("%s — %d songs, %d releases", m.openArtist.Name, len(m.albumTracks), len(m.albums))
+	t.Logf("%s — %d songs, %d releases", m.openArtist.Name, len(m.artistSongs), len(m.streamAlbums()))
 
 	// Songs mode: the frame names the artist and lists their songs.
 	frame := m.View()
@@ -45,8 +46,11 @@ func TestLiveArtistPageRenders(t *testing.T) {
 	if !strings.Contains(frame, "TOP SONGS") {
 		t.Error("the panel title does not say what is listed")
 	}
-	if len(m.albumTracks) > 0 && !strings.Contains(frame, m.albumTracks[0].Title) {
-		t.Errorf("the first song %q is not on screen", m.albumTracks[0].Title)
+	if len(m.artistSongs) == 0 {
+		t.Fatal("the artist page loaded no songs")
+	}
+	if !strings.Contains(frame, m.artistSongs[0].Title) {
+		t.Errorf("the first song %q is not on screen", m.artistSongs[0].Title)
 	}
 
 	// Releases mode.
@@ -56,8 +60,17 @@ func TestLiveArtistPageRenders(t *testing.T) {
 	if !strings.Contains(frame, "RELEASES") {
 		t.Error("A did not switch the panel to releases")
 	}
-	if len(m.albums) > 0 && !strings.Contains(frame, m.albums[0].Title) {
-		t.Errorf("the first release %q is not on screen", m.albums[0].Title)
+	albums := m.streamAlbums()
+	if len(albums) == 0 {
+		t.Fatal("the artist page loaded no releases")
+	}
+	if !strings.Contains(frame, albums[0].Title) {
+		t.Errorf("the first release %q is not on screen", albums[0].Title)
+	}
+	// The header has to survive the switch — a grid of albums with no
+	// name on it says nothing about whose they are.
+	if !strings.Contains(frame, m.openArtist.Name) {
+		t.Error("the releases view dropped the artist's name")
 	}
 
 	// Every line still fits, in both modes.
@@ -73,3 +86,114 @@ func TestLiveArtistPageRenders(t *testing.T) {
 }
 
 func lineWidth(s string) int { return lipgloss.Width(s) }
+
+// TestLiveArtistAlbumRoundTrip: opening a release from an artist page
+// and pressing esc must land back on that artist with everything
+// intact. It did not — the artist borrowed the album view's fields, and
+// leaving an album nils them, so the artist came back empty.
+func TestLiveArtistAlbumRoundTrip(t *testing.T) {
+	if testing.Short() {
+		t.Skip("short mode: skipping network test")
+	}
+	m := worstCaseModel(t, 150, 40)
+	msg := openArtistCmd("UCRr1xG_2WIDs18a6cIiCxeA", m.artistSeq+1)()
+	m.artistSeq++
+	nm, _ := m.handleArtistLoaded(msg.(ArtistLoadedMsg))
+	m = nm.(Model)
+
+	songsBefore := len(m.artistSongs)
+	releases := len(m.streamAlbums())
+	name := m.openArtist.Name
+	if songsBefore == 0 || releases == 0 {
+		t.Fatalf("artist loaded with %d songs and %d releases", songsBefore, releases)
+	}
+
+	// Switch to releases and open the first one.
+	nm, _ = m.handleKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'A'}})
+	m = nm.(Model)
+	nm, cmd := m.handleKey(tea.KeyMsg{Type: tea.KeyEnter})
+	m = nm.(Model)
+	if cmd == nil {
+		t.Fatal("enter on a release did not open it")
+	}
+	am, ok := cmd().(AlbumTracksMsg)
+	if !ok {
+		t.Fatalf("opening a release produced %T", cmd())
+	}
+	nm, _ = m.handleAlbumTracks(am)
+	m = nm.(Model)
+	if m.openAlbum == nil {
+		t.Fatal("the release did not open")
+	}
+	if m.openArtist == nil {
+		t.Fatal("opening a release lost the artist underneath it")
+	}
+	t.Logf("opened %q from %s", m.openAlbum.Title, name)
+
+	// esc: back to the artist, not out of everything.
+	nm, _ = m.handleKey(tea.KeyMsg{Type: tea.KeyEsc})
+	m = nm.(Model)
+	if m.openAlbum != nil {
+		t.Error("esc did not close the release")
+	}
+	if m.openArtist == nil {
+		t.Fatal("esc left the artist page as well as the release")
+	}
+	if got := len(m.artistSongs); got != songsBefore {
+		t.Errorf("the artist came back with %d songs, had %d", got, songsBefore)
+	}
+	if got := len(m.streamAlbums()); got != releases {
+		t.Errorf("the artist came back with %d releases, had %d", got, releases)
+	}
+	if !strings.Contains(m.View(), name) {
+		t.Error("the artist's name is not on screen after backing out")
+	}
+	// And the switch still works after the round trip.
+	nm, _ = m.handleKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'A'}})
+	if got := nm.(Model); len(got.streamTracks()) != songsBefore {
+		t.Errorf("A after the round trip listed %d songs, want %d", len(got.streamTracks()), songsBefore)
+	}
+}
+
+// TestLiveArtistCoverIsItsOwn: opening an artist must not leave the
+// previous album's cover under their name, and must load theirs.
+func TestLiveArtistCoverIsItsOwn(t *testing.T) {
+	if testing.Short() {
+		t.Skip("short mode: skipping network test")
+	}
+	m := worstCaseModel(t, 150, 40)
+	// Pretend an album was open, with its art on screen.
+	m.albumArtURL = "https://example/previous-album.jpg"
+	m.albumArtImg = image.NewRGBA(image.Rect(0, 0, 544, 544))
+
+	msg := openArtistCmd("UCRr1xG_2WIDs18a6cIiCxeA", m.artistSeq+1)()
+	m.artistSeq++
+	nm, cmd := m.handleArtistLoaded(msg.(ArtistLoadedMsg))
+	m = nm.(Model)
+
+	if m.albumArtImg != nil {
+		t.Error("the previous album's cover is still on screen under the artist")
+	}
+	if m.artistArtURL == "" {
+		t.Fatal("the artist page carried no photo")
+	}
+	if cmd == nil {
+		t.Fatal("no fetch was started for the artist's photo")
+	}
+	// And it really loads.
+	art, ok := cmd().(AlbumArtLoadedMsg)
+	if !ok {
+		t.Fatalf("the art fetch produced %T", cmd())
+	}
+	if art.Err != nil {
+		t.Fatalf("loading %s: %v", m.artistArtURL, art.Err)
+	}
+	if art.URL != m.artistArtURL {
+		t.Errorf("loaded %q, want the artist's own %q", art.URL, m.artistArtURL)
+	}
+	if art.Seq != m.albumSeq {
+		t.Errorf("art seq %d will be dropped by the handler, which wants %d", art.Seq, m.albumSeq)
+	}
+	b := art.Img.Bounds()
+	t.Logf("artist photo %dx%d", b.Dx(), b.Dy())
+}

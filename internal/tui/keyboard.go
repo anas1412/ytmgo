@@ -183,6 +183,20 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if m.activePage == PageStream && (m.openAlbum != nil || m.isLoadingAlbum || m.albumCoverURL != "") {
 			coverCmd := m.leaveAlbumView()
 			m.resetStreamCursor()
+			// An album opened from an artist steps back to that artist,
+			// not out of it. leaveAlbumView has just cleared the strip's
+			// art, so the artist's photo is fetched again.
+			if m.openArtist != nil {
+				m.artistShowsAlbums = true
+				m.albumMode = true
+				m.setStatus(fmt.Sprintf("%s — %d releases", m.openArtist.Name, len(m.openArtist.Albums)))
+				if m.artistArtURL != "" {
+					m.albumSeq++
+					m.albumArtURL = ""
+					return m, tea.Batch(coverCmd, loadAlbumArtCmd(m.artistArtURL, m.albumSeq))
+				}
+				return m, coverCmd
+			}
 			m.setStatus("Albums")
 			return m, coverCmd
 		}
@@ -310,9 +324,9 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.albumMode = m.artistShowsAlbums
 			m.resetStreamCursor()
 			if m.artistShowsAlbums {
-				m.setStatus(fmt.Sprintf("%s — %d releases", m.openArtist.Name, len(m.albums)))
+				m.setStatus(fmt.Sprintf("%s — %d releases", m.openArtist.Name, len(m.openArtist.Albums)))
 			} else {
-				m.setStatus(fmt.Sprintf("%s — %d songs", m.openArtist.Name, len(m.albumTracks)))
+				m.setStatus(fmt.Sprintf("%s — %d songs", m.openArtist.Name, len(m.artistSongs)))
 			}
 			return m, nil
 		}
@@ -543,10 +557,11 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		case m.activePage == PageStream && m.activePanel == PanelSearch:
 			// Album list: x grabs the whole album into its own folder.
 			if m.openAlbum == nil && m.albumMode {
-				if len(m.albums) == 0 || m.searchCursor < 0 || m.searchCursor >= len(m.albums) {
+				albums := m.streamAlbums()
+				if len(albums) == 0 || m.searchCursor < 0 || m.searchCursor >= len(albums) {
 					return m, nil
 				}
-				a := m.albums[m.searchCursor]
+				a := albums[m.searchCursor]
 				m.setStatus("Fetching " + a.Title + "…")
 				return m, downloadAlbumCmd(a, m.downloadDir())
 			}

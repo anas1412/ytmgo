@@ -69,8 +69,8 @@ func (m *Model) activateSelection() tea.Cmd {
 	case PageStream:
 		// Album list: Enter opens the album rather than queueing it.
 		if m.openAlbum == nil && m.albumMode {
-			if len(m.albums) > 0 && m.searchCursor >= 0 && m.searchCursor < len(m.albums) {
-				a := m.albums[m.searchCursor]
+			if albums := m.streamAlbums(); len(albums) > 0 && m.searchCursor >= 0 && m.searchCursor < len(albums) {
+				a := albums[m.searchCursor]
 				m.isLoadingAlbum = true
 				m.albumSeq++
 				m.albumCoverURL = a.CoverURL

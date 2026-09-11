@@ -1033,12 +1033,99 @@ func (m Model) renderSpectrum(width, height int) []string {
 	return rows
 }
 
+// browseStrip is the header above an album's tracklist or an artist's
+// list: art on the left, three lines of facts beside it, then a blank
+// and a separator. albumStripRows tells the scroll clamp how many rows
+// it takes. Returns nil when neither page is open.
+//
+// Shared because the artist's releases need the same header as their
+// songs — a grid of albums with no name on it says nothing about whose
+// they are.
+func (m Model) browseStrip(rowW int, tracks []search.Result) []string {
+	if m.openAlbum == nil && m.openArtist == nil {
+		return nil
+	}
+	total := 0
+	for _, r := range tracks {
+		total += r.Duration
+	}
+	// The strip says what is on screen: an album names its artist and
+	// year, an artist names their following and catalogue size.
+	heading, stats := "", ""
+	if m.openAlbum != nil {
+		heading = m.openAlbum.Title
+		stats = m.openAlbum.Artist
+		if m.openAlbum.Year != "" {
+			stats += " · " + m.openAlbum.Year
+		}
+	} else {
+		heading = m.openArtist.Name
+		stats = fmt.Sprintf("%d releases", len(m.openArtist.Albums))
+		if m.openArtist.Subscribers != "" {
+			stats = m.openArtist.Subscribers + " subscribers · " + stats
+		}
+	}
+
+	// Art on the left, text beside it — the same shape as the player
+	// bar's card, at album-page size.
+	artH := albumStripRows - 1 // last strip row is the separator
+	artCols, artRows := coverFitCells(m.albumArtImg, albumArtSlotCols, artH)
+	art := renderArtBlock(m.albumArtImg, m.albumArtURL, artCols, artRows, artH,
+		m.albumArtSendN, coverart.AlbumImageID, &albumArtRender)
+	inset := 0
+	if artCols > 0 {
+		inset = artCols + 2
+	}
+	textW := max(4, rowW-inset)
+
+	var third string
+	switch {
+	case m.openArtist != nil && m.openAlbum == nil && m.artistShowsAlbums:
+		// Showing releases, so a track count would describe a list that
+		// is not on screen.
+		third = fmt.Sprintf("%d releases · [A] top songs · [esc] back", len(m.openArtist.Albums))
+	default:
+		trackWord := "tracks"
+		if len(tracks) == 1 {
+			trackWord = "track"
+		}
+		third = fmt.Sprintf("%d %s · %s", len(tracks), trackWord, formatTotalDuration(total))
+		if m.openArtist != nil && m.openAlbum == nil {
+			third += "  ·  [A] releases"
+		}
+	}
+
+	strip := []string{
+		styleNowTitle.Render(truncate(heading, textW)),
+		styleTextDim.Render(truncate(stats, textW)),
+		styleTextDim.Render(truncate(third, textW)),
+		"",
+		"",
+	}
+	out := make([]string, 0, len(strip))
+	for i := range strip {
+		if inset == 0 {
+			out = append(out, strip[i])
+			continue
+		}
+		a := ""
+		if i < len(art) {
+			a = art[i]
+		}
+		if pad := inset - 2 - lipgloss.Width(a); pad > 0 {
+			a += strings.Repeat(" ", pad)
+		}
+		out = append(out, a+"  "+strip[i])
+	}
+	return out
+}
+
 // renderAlbums draws the album search results.
 func (m Model) renderAlbums(width, height int) string {
 	if m.isSearching {
 		return styleEmpty.Width(width - 2).Height(height).Render(m.spinner() + "  Searching albums…")
 	}
-	if len(m.albums) == 0 {
+	if len(m.streamAlbums()) == 0 {
 		return styleEmpty.Width(width - 2).Height(height).Render(
 			"Type an album name and press Enter  ([A] back to songs)")
 	}
@@ -1048,15 +1135,20 @@ func (m Model) renderAlbums(width, height int) string {
 	// right-hand column.
 	rowW := max(1, width-2)
 	var lines []string
-	maxItems := (height - 1) / 2
+	// An artist's releases keep the artist's header: a grid of albums
+	// with no name on it says nothing about whose they are.
+	head := m.browseStrip(rowW, nil)
+	lines = append(lines, head...)
+	maxItems := (height - 1 - len(head)) / 2
 	if maxItems < 1 {
 		maxItems = 1
 	}
 	start := m.searchOffset
-	end := min(start+maxItems, len(m.albums))
+	albums := m.streamAlbums()
+	end := min(start+maxItems, len(albums))
 
 	for i := start; i < end; i++ {
-		a := m.albums[i]
+		a := albums[i]
 		isSelected := !m.searchFocused && m.activePanel == PanelSearch && i == m.searchCursor
 		prefix := fmt.Sprintf("%d. ", i+1)
 		title := truncate(a.Title, max(4, rowW-lipgloss.Width(prefix)-2))
@@ -1076,7 +1168,7 @@ func (m Model) renderAlbums(width, height int) string {
 		lines = append(lines, renderListItemBlock(prefix+title, info, isSelected, false, rowW))
 	}
 
-	if ind := scrollIndicator(start, len(m.albums)-end, m.searchCursor+1, len(m.albums)); ind != "" {
+	if ind := scrollIndicator(start, len(albums)-end, m.searchCursor+1, len(albums)); ind != "" {
 		lines = append(lines, ind)
 	}
 	return padPanel(strings.Join(lines, "\n"), width, height)
@@ -1084,10 +1176,11 @@ func (m Model) renderAlbums(width, height int) string {
 
 // renderAlbumTracks draws the tracklist of the open album.
 func (m Model) renderAlbumTracks(width, height int) string {
+	tracks := m.streamTracks()
 	if m.isLoadingAlbum {
 		return styleEmpty.Width(width - 2).Height(height).Render(m.spinner() + "  Loading album…")
 	}
-	if len(m.albumTracks) == 0 {
+	if len(tracks) == 0 {
 		return styleEmpty.Width(width - 2).Height(height).Render("This album has no playable tracks")
 	}
 
@@ -1097,76 +1190,8 @@ func (m Model) renderAlbumTracks(width, height int) string {
 	rowW := max(1, width-2)
 	var lines []string
 
-	// A compact header strip above the tracklist: the album's own line,
-	// then its stats, so the panel title stays short and untruncated.
-	// The album's cover sits right-aligned across the strip's rows.
-	// albumStripRows tells the scroll clamp these rows are spoken for.
-	if m.openAlbum != nil || m.openArtist != nil {
-		total := 0
-		for _, r := range m.albumTracks {
-			total += r.Duration
-		}
-		// The strip says what is on screen: an album names its artist
-		// and year, an artist names their following and catalogue size.
-		heading, stats := "", ""
-		if m.openAlbum != nil {
-			heading = m.openAlbum.Title
-			stats = m.openAlbum.Artist
-			if m.openAlbum.Year != "" {
-				stats += " · " + m.openAlbum.Year
-			}
-		} else {
-			heading = m.openArtist.Name
-			stats = fmt.Sprintf("%d releases", len(m.openArtist.Albums))
-			if m.openArtist.Subscribers != "" {
-				stats = m.openArtist.Subscribers + " subscribers · " + stats
-			}
-		}
-
-		// Art on the left, text beside it — the same shape as the
-		// player bar's card, at album-page size.
-		artH := albumStripRows - 1 // last strip row is the separator
-		artCols, artRows := coverFitCells(m.albumArtImg, albumArtSlotCols, artH)
-		art := renderArtBlock(m.albumArtImg, m.albumArtURL, artCols, artRows, artH,
-			m.albumArtSendN, coverart.AlbumImageID, &albumArtRender)
-		inset := 0
-		if artCols > 0 {
-			inset = artCols + 2
-		}
-		textW := max(4, rowW-inset)
-		trackWord := "tracks"
-		if len(m.albumTracks) == 1 {
-			trackWord = "track"
-		}
-		third := fmt.Sprintf("%d %s · %s", len(m.albumTracks), trackWord, formatTotalDuration(total))
-		if m.openArtist != nil && m.artistShowsAlbums {
-			// Showing releases, so a track count would describe a list
-			// that is not on screen.
-			third = "[A] top songs · [esc] back"
-		} else if m.openArtist != nil {
-			third += "  ·  [A] releases"
-		}
-		strip := []string{
-			styleNowTitle.Render(truncate(heading, textW)),
-			styleTextDim.Render(truncate(stats, textW)),
-			styleTextDim.Render(truncate(third, textW)),
-			"",
-			"",
-		}
-		for i := range strip {
-			if inset == 0 {
-				lines = append(lines, strip[i])
-				continue
-			}
-			a := ""
-			if i < len(art) {
-				a = art[i]
-			}
-			if pad := inset - 2 - lipgloss.Width(a); pad > 0 {
-				a += strings.Repeat(" ", pad)
-			}
-			lines = append(lines, a+"  "+strip[i])
-		}
+	if head := m.browseStrip(rowW, tracks); len(head) > 0 {
+		lines = append(lines, head...)
 	}
 
 	// One line per track: the header already names the album's artist,
@@ -1178,12 +1203,12 @@ func (m Model) renderAlbumTracks(width, height int) string {
 		maxItems = 1
 	}
 	start := m.searchOffset
-	end := min(start+maxItems, len(m.albumTracks))
+	end := min(start+maxItems, len(tracks))
 
 	// Track numbers are absolute positions in the album.
-	numW := len(fmt.Sprintf("%d", len(m.albumTracks)))
+	numW := len(fmt.Sprintf("%d", len(tracks)))
 	for i := start; i < end; i++ {
-		r := m.albumTracks[i]
+		r := tracks[i]
 		isSelected := !m.searchFocused && m.activePanel == PanelSearch && i == m.searchCursor
 		prefix := fmt.Sprintf("%0*d. ", numW, i+1)
 		heart := ""
@@ -1215,7 +1240,7 @@ func (m Model) renderAlbumTracks(width, height int) string {
 		lines = append(lines, renderAlbumTrackLine(prefix, title, byline, right, isSelected, rowW))
 	}
 
-	if ind := scrollIndicator(start, len(m.albumTracks)-end, m.searchCursor+1, len(m.albumTracks)); ind != "" {
+	if ind := scrollIndicator(start, len(tracks)-end, m.searchCursor+1, len(tracks)); ind != "" {
 		lines = append(lines, ind)
 	}
 	return padPanel(strings.Join(lines, "\n"), width, height)
