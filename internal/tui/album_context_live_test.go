@@ -7,7 +7,9 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
+	"ytmgo/internal/queue"
 	"ytmgo/internal/search"
+	"ytmgo/internal/ytmusic"
 )
 
 // i on a track that carries no artist id — a queue row saved before
@@ -263,4 +265,93 @@ func TestReleaseClickMatchesRow(t *testing.T) {
 		t.Fatalf("only %d releases were findable on screen", checked)
 	}
 	t.Logf("%d releases all select themselves", checked)
+}
+
+// With an artist page open and the cursor in the queue, A acts on the
+// highlighted queue track — it opens that track's artist. It used to
+// flip the artist page beside it between songs and releases, ignoring
+// the selection entirely, so there was no way to reach the artist of
+// anything in the queue while a page was open.
+func TestArtistKeyFollowsTheFocusedPanel(t *testing.T) {
+	if testing.Short() {
+		t.Skip("short mode: skipping network test")
+	}
+	m := worstCaseModel(t, 150, 44)
+	msg := openArtistCmd("UCRr1xG_2WIDs18a6cIiCxeA", m.artistSeq+1)()
+	m.artistSeq++
+	nm, _ := m.handleArtistLoaded(msg.(ArtistLoadedMsg))
+	m = nm.(Model)
+	if m.openArtist == nil || m.artistShowsAlbums {
+		t.Fatal("the artist page did not open on its songs")
+	}
+
+	// A queue track by somebody else, highlighted.
+	m.queue.Clear()
+	m.queue.Add(queue.Track{
+		ID: "65-UZY0mN3o", Title: "CHE.R.RY", Artist: "YUI",
+		AlbumBrowseID: "MPREb_GPU0kIvZxOF",
+	})
+	m.queueCursor = 0
+	m.activePanel = PanelQueue
+
+	nm, cmd := m.handleKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'A'}})
+	after := nm.(Model)
+	if after.artistShowsAlbums {
+		t.Error("A flipped the artist page instead of acting on the queue selection")
+	}
+	if cmd == nil {
+		t.Fatalf("A did nothing for the queue track (status: %q)", after.statusMessage)
+	}
+	loaded, ok := cmd().(ArtistLoadedMsg)
+	if !ok {
+		t.Fatalf("A produced %T, want the queue track's artist", cmd())
+	}
+	if loaded.Artist.Name != "YUI" {
+		t.Errorf("A opened %q, want the queue track's artist YUI", loaded.Artist.Name)
+	}
+
+	// Back in the browse list, A still switches songs ⇄ releases.
+	m.activePanel = PanelSearch
+	nm, _ = m.handleKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'A'}})
+	if !nm.(Model).artistShowsAlbums {
+		t.Error("A in the browse list no longer switches to the releases")
+	}
+}
+
+// The same rule for a: inside an album with the queue focused, it opens
+// the queue track's album rather than queueing the album beside it.
+func TestAlbumKeyFollowsTheFocusedPanel(t *testing.T) {
+	if testing.Short() {
+		t.Skip("short mode: skipping network test")
+	}
+	m := worstCaseModel(t, 150, 44)
+	m.activePage = PageStream
+	m.openAlbum = &ytmusic.Album{BrowseID: "MPREb_GPU0kIvZxOF", Title: "CAN'T BUY MY LOVE"}
+	m.albumTracks = []search.Result{{ID: "a1", Title: "One"}, {ID: "a2", Title: "Two"}}
+
+	m.queue.Clear()
+	m.queue.Add(queue.Track{
+		ID: "65-UZY0mN3o", Title: "Instant Crush", Artist: "Daft Punk",
+		AlbumBrowseID: "MPREb_K8qWMWVqXGi",
+	})
+	m.queueCursor = 0
+	m.activePanel = PanelQueue
+
+	before := m.queue.Len()
+	nm, cmd := m.handleKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'a'}})
+	after := nm.(Model)
+	if after.queue.Len() != before {
+		t.Errorf("a queued the open album (%d → %d) instead of acting on the queue selection",
+			before, after.queue.Len())
+	}
+	if cmd == nil {
+		t.Fatalf("a did nothing for the queue track (status: %q)", after.statusMessage)
+	}
+	am, ok := cmd().(AlbumTracksMsg)
+	if !ok {
+		t.Fatalf("a produced %T, want the queue track's album", cmd())
+	}
+	if am.Album.BrowseID != "MPREb_K8qWMWVqXGi" {
+		t.Errorf("a opened album %q, want the queue track's", am.Album.BrowseID)
+	}
 }

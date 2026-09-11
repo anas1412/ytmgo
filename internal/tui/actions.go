@@ -390,6 +390,14 @@ func (m *Model) openAlbumOfSelected() tea.Cmd {
 	return openAlbumCmd(ytmusic.Album{BrowseID: t.AlbumBrowseID}, m.albumSeq)
 }
 
+// browsingHere reports whether the artist or album on screen is what
+// the cursor is actually in. With the focus in the queue, the
+// highlighted queue track is the subject — a and A act on it — rather
+// than on the page behind it, which is not where the user is pointing.
+func (m Model) browsingHere() bool {
+	return m.activePage == PageStream && m.activePanel == PanelSearch
+}
+
 // openArtistOfSelected opens the artist page of the highlighted track.
 // The album a song came from is reachable from there, so this is the
 // only "go to" key.

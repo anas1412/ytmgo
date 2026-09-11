@@ -335,7 +335,12 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		// releases. Anywhere else, open the artist of the highlighted
 		// track — which is how you get onto an artist page in the first
 		// place. One key for "who made this, and what else".
-		if m.activePage == PageStream && m.openArtist != nil && m.openAlbum == nil {
+		//
+		// Only when the cursor is in that list, though: with the focus
+		// in the queue the highlighted queue track is what the user is
+		// pointing at, so A opens its artist rather than flipping the
+		// page beside it.
+		if m.browsingHere() && m.openArtist != nil && m.openAlbum == nil {
 			m.artistShowsAlbums = !m.artistShowsAlbums
 			m.albumMode = m.artistShowsAlbums
 			m.resetStreamCursor()
@@ -358,7 +363,11 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		// be i to open, a to queue and A for the artist: three keys
 		// with no relation to each other, and the two that looked like
 		// a pair were the two that were not.
-		if m.activePage == PageStream && m.openAlbum != nil && len(m.albumTracks) > 0 {
+		//
+		// Queue-all needs the cursor to be in the tracklist, for the
+		// same reason A does: with the focus in the queue, the subject
+		// is the highlighted queue track, not the album beside it.
+		if m.browsingHere() && m.openAlbum != nil && len(m.albumTracks) > 0 {
 			var cmd tea.Cmd
 			for i, r := range m.albumTracks {
 				t := m.resolveTrack(r)
