@@ -333,8 +333,7 @@ func positionCmd(p *player.Player) tea.Cmd {
 func endedCmd(p *player.Player) tea.Cmd {
 	return func() (msg tea.Msg) {
 		defer func() { recover() }()
-		<-p.Ended()
-		return SongEndedMsg{}
+		return SongEndedMsg{Natural: <-p.Ended()}
 	}
 }
 

@@ -65,7 +65,7 @@ type Player struct {
 	duration   float64 // last observed duration for the loaded track
 	closing    bool    // set by Shutdown; suppresses teardown events
 	posCh      chan PositionUpdate
-	endCh      chan struct{}
+	endCh      chan bool
 }
 
 func New() *Player {
@@ -73,7 +73,7 @@ func New() *Player {
 		volume:     80,
 		socketPath: socketPath(),
 		posCh:      make(chan PositionUpdate, 10),
-		endCh:      make(chan struct{}, 1),
+		endCh:      make(chan bool, 1),
 	}
 }
 
@@ -93,9 +93,11 @@ func (p *Player) Positions() <-chan PositionUpdate {
 	return p.posCh
 }
 
-// Ended returns a channel that receives when a track ends naturally
-// (or errors out mid-stream, so the queue can skip it).
-func (p *Player) Ended() <-chan struct{} {
+// Ended returns a channel that receives when a track ends naturally or
+// errors out mid-stream. True means the file ended on its own; false
+// means mpv could not play it, which the caller has to tell apart —
+// every track failing looks exactly like the queue playing very fast.
+func (p *Player) Ended() <-chan bool {
 	return p.endCh
 }
 
@@ -273,7 +275,7 @@ func (p *Player) ensureRunning() error {
 		p.state = StateStopped
 		p.mu.Unlock()
 		if wasActive {
-			p.emitEnded()
+			p.emitEnded(false)
 		}
 	}()
 
@@ -355,7 +357,7 @@ func (p *Player) readLoop(conn net.Conn) {
 				p.mu.Lock()
 				p.state = StateStopped
 				p.mu.Unlock()
-				p.emitEnded()
+				p.emitEnded(ev.Reason == "eof")
 			}
 		}
 	}
@@ -396,9 +398,9 @@ func (p *Player) handlePropertyChange(ev ipcEvent) {
 	}
 }
 
-func (p *Player) emitEnded() {
+func (p *Player) emitEnded(natural bool) {
 	select {
-	case p.endCh <- struct{}{}:
+	case p.endCh <- natural:
 	default:
 	}
 }

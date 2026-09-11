@@ -52,8 +52,11 @@ type (
 		Duration float64
 	}
 
-	// SongEndedMsg fires when the current track finishes naturally.
-	SongEndedMsg struct{}
+	// SongEndedMsg fires when the current track finishes, or when mpv
+	// gives up on it. Natural separates the two: a failure advances the
+	// queue just the same, but a run of them is a broken setup rather
+	// than fast listening, and has to say so.
+	SongEndedMsg struct{ Natural bool }
 
 	// DownloadProgressMsg reports status from the downloader worker.
 	DownloadProgressMsg struct {
@@ -342,6 +345,13 @@ type Model struct {
 	// silently (returned nil — no AutoplayResultsMsg sent).
 	autoplayFired bool
 
+	// failedInARow counts tracks mpv could not play, back to back. One
+	// is a dead stream and worth skipping past; a run of them means the
+	// setup is broken — an outdated yt-dlp is the usual cause — and
+	// without this the queue was silently torn through at speed with
+	// nothing playing and nothing said.
+	failedInARow int
+
 	// ── Mouse double-click tracking ──
 	lastClickAt    time.Time
 	lastClickY     int
@@ -541,6 +551,7 @@ func (m *Model) startTrackPlayback(playURL string, t queue.Track) tea.Cmd {
 		m.playerState = player.StateStopped
 		return nil
 	}
+	m.failedInARow = 0
 	// Mirror the player's state — it is the single source of truth.
 	m.playerState = m.player.State()
 	m.updatePresence()

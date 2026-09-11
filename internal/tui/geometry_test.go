@@ -938,3 +938,62 @@ func TestPaneTogglesPersist(t *testing.T) {
 		}
 	}
 }
+
+// TestUnplayableTracksStopRatherThanRaceThroughTheQueue: a track mpv
+// cannot open advances the queue like any other end, so one dead stream
+// is skipped. But when nothing plays — an outdated yt-dlp does this to
+// every track at once — carrying on tore through the whole queue in
+// seconds, silently. After maxFailedInARow it stops and says so.
+func TestUnplayableTracksStopRatherThanRaceThroughTheQueue(t *testing.T) {
+	failed := SongEndedMsg{Natural: false}
+
+	m := worstCaseModel(t, 150, 40)
+	before := m.queue.Len()
+
+	// The first failures keep going: a dead stream should be skipped.
+	for i := 1; i < maxFailedInARow; i++ {
+		nm, _ := m.handleSongEnded(failed)
+		m = nm.(Model)
+		if m.failedInARow != i {
+			t.Fatalf("after %d failures the counter is %d", i, m.failedInARow)
+		}
+	}
+	if m.queue.Len() != before {
+		t.Errorf("skipping removed tracks from the queue")
+	}
+
+	// The one that crosses the threshold stops instead.
+	nm, cmd := m.handleSongEnded(failed)
+	m = nm.(Model)
+	if cmd != nil {
+		t.Errorf("crossing the threshold still queued more work")
+	}
+	if m.playerState != player.StateStopped {
+		t.Errorf("player state is %v, want stopped", m.playerState)
+	}
+	if !strings.Contains(m.statusMessage, "yt-dlp") {
+		t.Errorf("status %q does not name the usual cause", m.statusMessage)
+	}
+	if m.failedInARow != 0 {
+		t.Errorf("the counter was not reset for the next attempt")
+	}
+}
+
+// TestNaturalEndClearsTheFailureRun: two dead streams either side of a
+// track that plays must not add up to a stop.
+func TestNaturalEndClearsTheFailureRun(t *testing.T) {
+	m := worstCaseModel(t, 150, 40)
+	for i := 0; i < maxFailedInARow-1; i++ {
+		nm, _ := m.handleSongEnded(SongEndedMsg{Natural: false})
+		m = nm.(Model)
+	}
+	nm, _ := m.handleSongEnded(SongEndedMsg{Natural: true})
+	m = nm.(Model)
+	if m.failedInARow != 0 {
+		t.Fatalf("a natural end left the counter at %d", m.failedInARow)
+	}
+	nm, _ = m.handleSongEnded(SongEndedMsg{Natural: false})
+	if got := nm.(Model); got.failedInARow != 1 {
+		t.Errorf("counter is %d after one failure past a good track, want 1", got.failedInARow)
+	}
+}

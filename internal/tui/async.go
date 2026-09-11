@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"strconv"
 	"time"
 
 	"ytmgo/internal/downloader"
@@ -255,6 +256,12 @@ func (m Model) handleLibraryScan(msg LibraryScanMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+// maxFailedInARow is how many unplayable tracks pass before ytmgo stops
+// and says so. Three is enough that a couple of genuinely dead streams
+// still get skipped without comment, and few enough that a broken
+// install is caught before the queue is gone.
+const maxFailedInARow = 3
+
 // ── Settings saved ───────────────────────────────────────────────────
 
 func (m Model) handleSettingsSaved(msg SettingsSavedMsg) (tea.Model, tea.Cmd) {
@@ -457,6 +464,30 @@ func (m Model) handleSongEnded(msg SongEndedMsg) (tea.Model, tea.Cmd) {
 	// possible: the player only emits Ended for end-file reason "eof"
 	// (or "error"), never for track switches or manual stops.
 	m.endedListening = false
+
+	// A track mpv could not play advances the queue like any other end,
+	// so one dead stream is skipped rather than stalling everything. A
+	// run of them is different: it means nothing can play, and carrying
+	// on tears through the whole queue in seconds with nothing heard
+	// and nothing said. Ubuntu's packaged yt-dlp is old enough to do
+	// this to every track at once.
+	if msg.Natural {
+		m.failedInARow = 0
+	} else {
+		m.failedInARow++
+		if m.failedInARow >= maxFailedInARow {
+			m.failedInARow = 0
+			m.playerState = player.StateStopped
+			if m.player != nil {
+				m.player.Stop()
+			}
+			m.position, m.duration = 0, 0
+			m.updatePresence()
+			m.setStatus("Nothing will play — mpv could not open " +
+				strconv.Itoa(maxFailedInARow) + " tracks in a row. Update yt-dlp: yt-dlp -U")
+			return m, nil
+		}
+	}
 
 	// Auto-advance: play the next track. Uses resolveAndPlayCmd
 	// so already-downloaded tracks play immediately while streaming
