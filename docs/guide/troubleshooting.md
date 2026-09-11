@@ -96,10 +96,20 @@ macOS always has `pbcopy`.
 
 ## No album art
 
-Full-colour artwork uses the kitty graphics protocol, so it needs kitty
-— ytmgo looks for `KITTY_WINDOW_ID`, or `kitty` in `TERM`. Everywhere
-else it falls back to coloured half-blocks, which is a coarser picture,
-not a missing one.
+Full-colour artwork uses the kitty graphics protocol. kitty defined it,
+but three terminals implement it and ytmgo draws real images in all
+three:
+
+| Terminal | Artwork |
+|---|---|
+| kitty | Full image |
+| Ghostty | Full image |
+| WezTerm | Full image |
+| Alacritty, xterm, GNOME Terminal, Konsole… | Coloured half-blocks |
+
+The fallback is a coarser picture, not a missing one. Alacritty in
+particular implements no inline-image protocol at all, by design, so
+half-blocks is the best any program can do there.
 
 Inside `tmux` or `screen` the fallback is used even in kitty: the
 multiplexer swallows the graphics escapes, so drawing the real image

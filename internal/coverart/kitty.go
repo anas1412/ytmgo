@@ -37,8 +37,16 @@ const AlbumImageID = 1338
 // chunkSize is the protocol's maximum payload per escape sequence.
 const chunkSize = 4096
 
-// KittySupported reports whether the terminal is kitty, which is the
-// only terminal this path targets.
+// KittySupported reports whether the terminal speaks the kitty graphics
+// protocol. kitty defined it, but it is not the only one that
+// implements it: Ghostty and WezTerm do too, and neither announces
+// itself the way kitty does — Ghostty sets TERM=xterm-ghostty and no
+// KITTY_WINDOW_ID at all, so looking only for kitty sent both to the
+// half-block fallback while they were capable of the real image.
+//
+// Terminals with no inline-image protocol — Alacritty, most of xterm's
+// descendants — are not a detection problem and never will be; the
+// fallback is the best picture they can draw.
 func KittySupported() bool {
 	// Multiplexers swallow the graphics escapes, and KITTY_WINDOW_ID is
 	// inherited into them — so taking the kitty path inside tmux or
@@ -49,7 +57,15 @@ func KittySupported() bool {
 	if os.Getenv("KITTY_WINDOW_ID") != "" {
 		return true
 	}
-	return strings.Contains(strings.ToLower(os.Getenv("TERM")), "kitty")
+	// TERM_PROGRAM is how these two identify themselves; TERM carries
+	// the name as well for kitty and Ghostty, but not dependably for
+	// WezTerm, which often leaves it at xterm-256color.
+	switch strings.ToLower(os.Getenv("TERM_PROGRAM")) {
+	case "ghostty", "wezterm":
+		return true
+	}
+	term := strings.ToLower(os.Getenv("TERM"))
+	return strings.Contains(term, "kitty") || strings.Contains(term, "ghostty")
 }
 
 // transmitCache memoises the encoded transmit, so emitting it across a

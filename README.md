@@ -98,7 +98,7 @@ The yt-dlp installed alongside ytmgo is offered for removal. Other system depend
   dark background. Then nine full schemes: gruvbox, nord, dracula, catppuccin, tokyo-night, rose-pine,
   everforest, solarized-light and latte. Set it in Settings; terminal and ytmgo leave your background
   (and any transparency) alone.
-- **Now playing, everywhere** — Album art and the track's album sit in the player bar itself, on every page; `v` opens a live spectrum under your results. Art renders at full resolution on kitty, as coloured half-blocks elsewhere.
+- **Now playing, everywhere** — Album art and the track's album sit in the player bar itself, on every page; `v` opens a live spectrum under your results. Art renders at full resolution on kitty, Ghostty and WezTerm, as coloured half-blocks elsewhere.
 - **Discord Rich Presence** — Show what you're listening to — track, artist, play status — live on your Discord profile.
 - **Static binary, no bloat** — Pure Go, no Electron, no browser engine. Starts instantly, sips RAM, gets out of your way.
 
