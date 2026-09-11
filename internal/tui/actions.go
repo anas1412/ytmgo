@@ -399,19 +399,24 @@ func (m *Model) openArtistOfSelected() tea.Cmd {
 		m.setStatus("Nothing selected")
 		return nil
 	}
-	if t.ArtistBrowseID == "" {
-		// Local files, legacy rows, and the occasional track whose
-		// byline names an artist YouTube Music has no page for.
-		who := t.Artist
-		if who == "" {
-			who = t.Title
-		}
+	who := t.Artist
+	if who == "" {
+		who = t.Title
+	}
+	if t.ArtistBrowseID == "" && t.AlbumBrowseID == "" {
+		// Local files, and the occasional track whose byline names an
+		// artist YouTube Music has no page for.
 		m.setStatus("No artist page for " + who)
 		return nil
 	}
 	m.isLoadingArtist = true
 	m.artistSeq++
-	m.setStatus("Opening " + t.Artist + "…")
+	m.setStatus("Opening " + who + "…")
+	if t.ArtistBrowseID == "" {
+		// Queue and history rows saved before tracks carried an artist
+		// id; the album they name knows who made it.
+		return artistViaAlbumCmd(t.AlbumBrowseID, m.artistSeq)
+	}
 	return openArtistCmd(t.ArtistBrowseID, m.artistSeq)
 }
 

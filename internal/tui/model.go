@@ -112,6 +112,11 @@ type (
 		Songs  []search.Result // TopSongs as playable results
 		Error  error
 		Seq    int // generation counter; stale responses are skipped
+		// ForAlbum is the album this artist was fetched to sit behind.
+		// Set when i opened an album from outside any artist page: the
+		// page fills in underneath instead of replacing what is on
+		// screen, and only while that album is still the one open.
+		ForAlbum string
 	}
 
 	// AlbumTracksMsg carries a fetched album's tracklist.

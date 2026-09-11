@@ -99,6 +99,13 @@ func (m Model) handleAlbumTracks(msg AlbumTracksMsg) (tea.Model, tea.Cmd) {
 			cmds = append(cmds, cmd)
 		}
 	}
+	// An album opened with i from a search or the queue has nothing
+	// behind it, so esc would leave the artist entirely and A would
+	// have no songs to flip to. Fetch the artist the page names and
+	// stack it underneath, so every album sits in the same place.
+	if m.openArtist == nil && alb.ArtistBrowseID != "" {
+		cmds = append(cmds, artistBehindAlbumCmd(alb.ArtistBrowseID, alb.BrowseID))
+	}
 	m.resetStreamCursor()
 	m.setStatus(fmt.Sprintf("%s — %d tracks  ([a] queue all · [esc] back)", alb.Title, len(msg.Tracks)))
 	// The album page's own art replaces the provisional one from the
@@ -581,6 +588,21 @@ func (m Model) handleAutoplayResults(msg AutoplayResultsMsg) (tea.Model, tea.Cmd
 
 func (m Model) handleArtistLoaded(msg ArtistLoadedMsg) (tea.Model, tea.Cmd) {
 	m.isLoadingArtist = false
+	// Context for an album opened with i: fill the page in underneath,
+	// leaving the album, its art and the cursor exactly as they are.
+	// If the user has moved on — escaped out, or opened something else
+	// — the album it belongs to is no longer open and it is dropped.
+	if msg.ForAlbum != "" {
+		if msg.Error != nil || m.openAlbum == nil || m.openAlbum.BrowseID != msg.ForAlbum {
+			return m, nil
+		}
+		a := msg.Artist
+		m.openArtist = &a
+		m.artistSongs = msg.Songs
+		m.artistShowsAlbums = false
+		m.artistArtURL = a.ThumbURL
+		return m, nil
+	}
 	// A superseded open (the user pressed I on another track) must not
 	// overwrite the newer one.
 	if msg.Seq != m.artistSeq {

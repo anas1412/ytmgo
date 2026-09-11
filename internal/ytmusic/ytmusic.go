@@ -530,9 +530,13 @@ type Album struct {
 	BrowseID string // MPREb_… — the id AlbumTracks takes
 	Title    string
 	Artist   string
-	Year     string
-	CoverURL string
-	Tracks   []Track // populated by AlbumTracks
+	// ArtistBrowseID is the UC… id behind the byline, filled in by
+	// AlbumTracks. It is how an album reaches its artist page when the
+	// track that opened it carries no artist id of its own.
+	ArtistBrowseID string
+	Year           string
+	CoverURL       string
+	Tracks         []Track // populated by AlbumTracks
 }
 
 // SearchAlbums runs an albums-filtered YouTube Music search.
@@ -588,6 +592,7 @@ func AlbumTracks(browseID string) (Album, error) {
 	if header != nil {
 		album.Title = digString(header, "title", "runs", 0, "text")
 		album.Artist = digString(header, "straplineTextOne", "runs", 0, "text")
+		album.ArtistBrowseID = artistBrowseIDFromRun(dig(header, "straplineTextOne", "runs", 0))
 		// subtitle runs read ["Album", " • ", "2015"] — the year is last.
 		if runs, _ := dig(header, "subtitle", "runs").([]interface{}); len(runs) > 0 {
 			album.Year = digString(runs[len(runs)-1], "text")

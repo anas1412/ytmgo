@@ -184,6 +184,40 @@ func openArtistCmd(browseID string, seq int) tea.Cmd {
 	}
 }
 
+// artistBehindAlbumCmd fetches the artist page an album belongs under,
+// so an album opened with i lands in the same place it would have if
+// the user had walked in through the artist's releases: esc steps back
+// to the discography, A flips to the top songs.
+func artistBehindAlbumCmd(artistBrowseID, albumBrowseID string) tea.Cmd {
+	return func() tea.Msg {
+		msg, ok := openArtistCmd(artistBrowseID, 0)().(ArtistLoadedMsg)
+		if !ok || msg.Error != nil {
+			return nil // the album is still usable on its own
+		}
+		msg.ForAlbum = albumBrowseID
+		return msg
+	}
+}
+
+// artistViaAlbumCmd resolves an artist id the track never carried.
+// Rows saved before ArtistBrowseID existed have only the album, and the
+// album page's byline links to the artist.
+func artistViaAlbumCmd(albumBrowseID string, seq int) tea.Cmd {
+	return func() tea.Msg {
+		alb, err := ytmusic.AlbumTracks(albumBrowseID)
+		if err != nil {
+			return ArtistLoadedMsg{Error: err, Seq: seq}
+		}
+		if alb.ArtistBrowseID == "" {
+			return ArtistLoadedMsg{
+				Error: fmt.Errorf("no artist page for %s", alb.Artist),
+				Seq:   seq,
+			}
+		}
+		return openArtistCmd(alb.ArtistBrowseID, seq)()
+	}
+}
+
 // AlbumDownloadMsg asks the model to enqueue a fetched album's tracks.
 type AlbumDownloadMsg struct {
 	Album ytmusic.Album
