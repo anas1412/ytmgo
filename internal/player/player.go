@@ -51,8 +51,13 @@ type PositionUpdate struct {
 
 // Player controls one persistent mpv instance.
 type Player struct {
-	mu         sync.Mutex
-	cmd        *exec.Cmd
+	mu  sync.Mutex
+	cmd *exec.Cmd
+	// cmdDone is closed by cmd's watcher once it has reaped the process.
+	// Shutdown waits on this rather than calling Wait itself: exec.Cmd
+	// does not support two concurrent Waits, and doing it anyway raced
+	// on the Cmd's internal state.
+	cmdDone    chan struct{}
 	conn       net.Conn
 	socketPath string
 	state      State
@@ -192,19 +197,18 @@ func (p *Player) Shutdown() {
 		p.conn = nil
 	}
 	if p.cmd != nil && p.cmd.Process != nil {
-		// Grace period for the quit command, then force-kill.
-		done := make(chan struct{})
-		cmd := p.cmd
-		go func() {
-			cmd.Wait()
-			close(done)
-		}()
-		select {
-		case <-done:
-		case <-time.After(2 * time.Second):
-			cmd.Process.Kill()
+		// Grace period for the quit command, then force-kill. The wait
+		// is on the watcher's channel, not a second Wait of our own.
+		cmd, done := p.cmd, p.cmdDone
+		if done != nil {
+			select {
+			case <-done:
+			case <-time.After(2 * time.Second):
+				cmd.Process.Kill()
+			}
 		}
 		p.cmd = nil
+		p.cmdDone = nil
 	}
 	p.state = StateStopped
 	os.Remove(p.socketPath)
@@ -243,12 +247,18 @@ func (p *Player) ensureRunning() error {
 		return fmt.Errorf("mpv failed to start: %w (is mpv installed?)", err)
 	}
 	p.cmd = cmd
+	done := make(chan struct{})
+	p.cmdDone = done
 
 	// Watch for unexpected mpv death. A track playing when the process
 	// dies is reported as ended so the queue advances and the next Play
 	// respawns mpv, instead of the app stalling silently.
+	//
+	// This is the only Wait on this Cmd. done is closed before the lock
+	// is taken, so Shutdown can wait on it while holding the lock.
 	go func() {
 		cmd.Wait()
+		close(done)
 		p.mu.Lock()
 		if p.closing || p.cmd != cmd {
 			p.mu.Unlock()
@@ -271,6 +281,7 @@ func (p *Player) ensureRunning() error {
 	if err != nil {
 		cmd.Process.Kill()
 		p.cmd = nil
+		p.cmdDone = nil // the watcher sees p.cmd != cmd and bows out
 		return fmt.Errorf("mpv IPC connect: %w", err)
 	}
 	p.conn = conn

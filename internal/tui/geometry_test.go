@@ -841,3 +841,50 @@ func TestHintsToggleKeepsGeometry(t *testing.T) {
 		}
 	}
 }
+
+// TestDownloadFromQueueOnEveryPage: the queue panel is drawn on every
+// page but Settings, and its rows are selectable there, so x must
+// download the highlighted queue track from all of them. It used to
+// also require the stream page, leaving the key dead on four pages
+// while the row sat highlighted.
+func TestDownloadFromQueueOnEveryPage(t *testing.T) {
+	// An empty PATH keeps the enqueued job from launching a real
+	// yt-dlp: the worker's exec fails at once and the job just sits
+	// there failed, which is all this needs.
+	t.Setenv("PATH", t.TempDir())
+
+	for _, page := range []Page{PageStream, PageFavorites, PageLibrary, PageHistory, PageDownloads} {
+		m := worstCaseModel(t, 150, 40)
+		m.switchPage(page)
+		m.activePanel = PanelQueue
+		// A URL in hand means x enqueues directly rather than resolving
+		// first; the async path is the resolved-URL handler's business.
+		// Tracks() hands back a copy, so the track has to go in with its
+		// URL already set rather than be patched afterwards.
+		m.queue.Clear()
+		m.queue.Add(queue.Track{
+			ID: "m9SMT5ipbxk", Title: "Some Song", Artist: "Someone",
+			URL: "https://music.youtube.com/watch?v=m9SMT5ipbxk",
+		})
+		m.queueCursor = 0
+
+		nm, _ := m.handleKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'x'}})
+		got := nm.(Model)
+		if got.downloader == nil {
+			t.Errorf("%v: x on the queue started no download", page)
+			continue
+		}
+		if len(got.downloader.Jobs()) == 0 {
+			t.Errorf("%v: x on the queue queued no job", page)
+		}
+	}
+
+	// Settings draws no queue panel, so a stale focus must not fire.
+	m := worstCaseModel(t, 150, 40)
+	m.switchPage(PageSettings)
+	m.activePanel = PanelQueue
+	nm, _ := m.handleKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'x'}})
+	if got := nm.(Model); got.downloader != nil && len(got.downloader.Jobs()) > 0 {
+		t.Errorf("x on the settings page queued a download")
+	}
+}

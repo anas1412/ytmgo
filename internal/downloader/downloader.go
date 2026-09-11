@@ -129,7 +129,7 @@ func (d *Downloader) Enqueue(trackID, title, uploader, url, outDir, coverURL str
 // EnqueueAs is Enqueue with an explicit output filename stem (no
 // extension), used by album downloads to number tracks.
 func (d *Downloader) EnqueueAs(trackID, title, uploader, url, outDir, coverURL, nameStem string) {
-	ext := "." + d.format
+	ext := "." + d.currentFormat()
 	// Check if file already downloaded
 	expected := filepath.Join(outDir, stemFor(uploader, title, nameStem)+ext)
 	if _, err := os.Stat(expected); err == nil {
@@ -180,7 +180,7 @@ func (d *Downloader) IsDownloaded(trackID, title, uploader, outDir string) bool 
 
 // IsDownloadedAs is IsDownloaded for a job with an explicit filename stem.
 func (d *Downloader) IsDownloadedAs(trackID, title, uploader, outDir, nameStem string) bool {
-	ext := "." + d.format
+	ext := "." + d.currentFormat()
 	// Check full name: {uploader} - {title}.{ext} (matches actual yt-dlp output)
 	if nameStem != "" || (uploader != "" && title != "") {
 		expected := filepath.Join(outDir, stemFor(uploader, title, nameStem)+ext)
@@ -209,12 +209,20 @@ func (d *Downloader) HasPendingJob(trackID string) bool {
 	return false
 }
 
-// Jobs returns a snapshot of all jobs
+// Jobs returns a snapshot of all jobs.
+//
+// The jobs are copied, not aliased. Copying only the pointers left the
+// caller reading Status, Progress and Err straight out of the live job
+// while the worker was writing them — the UI reads these every frame,
+// so it was a real race, not a theoretical one.
 func (d *Downloader) Jobs() []*Job {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	cp := make([]*Job, len(d.jobs))
-	copy(cp, d.jobs)
+	for i, j := range d.jobs {
+		snapshot := *j
+		cp[i] = &snapshot
+	}
 	return cp
 }
 
@@ -234,6 +242,39 @@ func (d *Downloader) worker(outDir string) {
 	}
 }
 
+// A live job's mutable fields are written on the worker goroutine and
+// read by Jobs() on another, so every mutation goes through one of
+// these three rather than touching the struct directly.
+
+func (d *Downloader) setJobStatus(job *Job, st Status, err error) {
+	d.mu.Lock()
+	job.Status = st
+	job.Err = err
+	d.mu.Unlock()
+}
+
+func (d *Downloader) setJobProgress(job *Job, pct float64) {
+	d.mu.Lock()
+	job.Progress = pct
+	d.mu.Unlock()
+}
+
+func (d *Downloader) finishJob(job *Job, path string) {
+	d.mu.Lock()
+	job.Status = StatusDone
+	job.Progress = 100
+	job.FilePath = path
+	d.mu.Unlock()
+}
+
+// currentFormat reads the output format under the lock, since the
+// settings page can change it while a download is running.
+func (d *Downloader) currentFormat() string {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return d.format
+}
+
 // stemFor returns the output filename (no extension) for a job.
 func stemFor(uploader, title, nameStem string) string {
 	if nameStem != "" {
@@ -246,12 +287,17 @@ func stemFor(uploader, title, nameStem string) string {
 var progressRe = regexp.MustCompile(`\[download\]\s+(\d+\.\d+)%`)
 
 func (d *Downloader) runJob(job *Job, outDir string) {
-	job.Status = StatusDownloading
+	d.setJobStatus(job, StatusDownloading, nil)
+
+	// Read the format once and use it for both the yt-dlp argument and
+	// the output path. Reading it twice meant a format changed on the
+	// settings page mid-download made yt-dlp write one extension while
+	// the lookup below hunted for the other.
+	format := d.currentFormat()
 
 	// Ensure output directory exists
 	if err := os.MkdirAll(outDir, 0755); err != nil {
-		job.Status = StatusFailed
-		job.Err = fmt.Errorf("create download dir: %w", err)
+		d.setJobStatus(job, StatusFailed, fmt.Errorf("create download dir: %w", err))
 		d.progress <- ProgressEvent{TrackID: job.TrackID, Status: StatusFailed, Err: job.Err}
 		return
 	}
@@ -261,8 +307,7 @@ func (d *Downloader) runJob(job *Job, outDir string) {
 	if videoURL == "" {
 		result, err := ytresolve.Resolve(job.Uploader, job.Title)
 		if err != nil {
-			job.Status = StatusFailed
-			job.Err = fmt.Errorf("ytresolve: %w", err)
+			d.setJobStatus(job, StatusFailed, fmt.Errorf("ytresolve: %w", err))
 			d.progress <- ProgressEvent{TrackID: job.TrackID, Title: job.Title, Uploader: job.Uploader, Status: StatusFailed, Err: job.Err}
 			return
 		}
@@ -272,8 +317,7 @@ func (d *Downloader) runJob(job *Job, outDir string) {
 		}
 	}
 	if videoURL == "" {
-		job.Status = StatusFailed
-		job.Err = fmt.Errorf("no video URL for %s - %s", job.Uploader, job.Title)
+		d.setJobStatus(job, StatusFailed, fmt.Errorf("no video URL for %s - %s", job.Uploader, job.Title))
 		d.progress <- ProgressEvent{TrackID: job.TrackID, Title: job.Title, Uploader: job.Uploader, Status: StatusFailed, Err: job.Err}
 		return
 	}
@@ -288,9 +332,9 @@ func (d *Downloader) runJob(job *Job, outDir string) {
 	// --get-filename). We know the output path from the template, so we
 	// construct it ourselves after yt-dlp completes.
 	args := []string{
-		"--newline",                // progress on its own line, not \r-overwritten
-		"-x",                       // extract audio
-		"--audio-format", d.format, // output format: m4a or mp3
+		"--newline",              // progress on its own line, not \r-overwritten
+		"-x",                     // extract audio
+		"--audio-format", format, // output format: m4a or mp3
 		"--audio-quality", "0", // best quality
 		"--embed-thumbnail", // embed YouTube thumbnail as cover art
 		// YouTube serves thumbnails as WebP, which ffmpeg cannot embed
@@ -308,15 +352,13 @@ func (d *Downloader) runJob(job *Job, outDir string) {
 	// errors), so the percentage must be parsed from stdout.
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
-		job.Status = StatusFailed
-		job.Err = fmt.Errorf("yt-dlp stdout pipe: %w", err)
+		d.setJobStatus(job, StatusFailed, fmt.Errorf("yt-dlp stdout pipe: %w", err))
 		d.progress <- ProgressEvent{TrackID: job.TrackID, Title: job.Title, Uploader: job.Uploader, Status: StatusFailed, Err: job.Err}
 		return
 	}
 
 	if err := cmd.Start(); err != nil {
-		job.Status = StatusFailed
-		job.Err = fmt.Errorf("yt-dlp start: %w", err)
+		d.setJobStatus(job, StatusFailed, fmt.Errorf("yt-dlp start: %w", err))
 		d.progress <- ProgressEvent{TrackID: job.TrackID, Title: job.Title, Uploader: job.Uploader, Status: StatusFailed, Err: job.Err}
 		return
 	}
@@ -331,7 +373,7 @@ func (d *Downloader) runJob(job *Job, outDir string) {
 			if m := progressRe.FindStringSubmatch(line); len(m) > 1 {
 				var pct float64
 				fmt.Sscanf(m[1], "%f", &pct)
-				job.Progress = pct
+				d.setJobProgress(job, pct)
 				d.progress <- ProgressEvent{
 					TrackID:  job.TrackID,
 					Title:    job.Title,
@@ -346,8 +388,7 @@ func (d *Downloader) runJob(job *Job, outDir string) {
 	// Wait for completion
 	if err := cmd.Wait(); err != nil {
 		<-progressDone
-		job.Status = StatusFailed
-		job.Err = fmt.Errorf("yt-dlp failed: %w", err)
+		d.setJobStatus(job, StatusFailed, fmt.Errorf("yt-dlp failed: %w", err))
 		d.progress <- ProgressEvent{TrackID: job.TrackID, Title: job.Title, Uploader: job.Uploader, Status: StatusFailed, Err: job.Err}
 		return
 	}
@@ -355,7 +396,7 @@ func (d *Downloader) runJob(job *Job, outDir string) {
 
 	// The output path is known from the template. Verify it exists so we
 	// surface an error if yt-dlp put the file somewhere unexpected.
-	outPath := filepath.Join(outDir, stem+"."+d.format)
+	outPath := filepath.Join(outDir, stem+"."+format)
 	if _, err := os.Stat(outPath); err != nil {
 		// File not found — yt-dlp may have used a different extension
 		// (e.g. opus → m4a remux gives .opus on some versions). Scan
@@ -372,9 +413,8 @@ func (d *Downloader) runJob(job *Job, outDir string) {
 		if outPath == "" {
 			// Still nothing — emit a failed status so the user
 			// gets a clear error instead of a silent empty folder.
-			job.Status = StatusFailed
-			job.Err = fmt.Errorf("yt-dlp completed but no output file found for %s - %s (expected: %s.*)",
-				job.Uploader, job.Title, titleBase)
+			d.setJobStatus(job, StatusFailed, fmt.Errorf("yt-dlp completed but no output file found for %s - %s (expected: %s.*)",
+				job.Uploader, job.Title, titleBase))
 			d.progress <- ProgressEvent{TrackID: job.TrackID, Title: job.Title, Uploader: job.Uploader, Status: StatusFailed, Err: job.Err}
 			return
 		}
@@ -393,9 +433,7 @@ func (d *Downloader) runJob(job *Job, outDir string) {
 		}
 	}
 
-	job.Status = StatusDone
-	job.Progress = 100
-	job.FilePath = outPath
+	d.finishJob(job, outPath)
 	d.progress <- ProgressEvent{
 		TrackID:  job.TrackID,
 		Title:    job.Title,

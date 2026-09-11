@@ -553,7 +553,12 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.setStatus("Download queued: " + t.Title)
 			return m, downloadCmd(m.downloader)
 
-		case m.activePage == PageStream && m.activePanel == PanelQueue && m.queue.Len() > 0:
+		// Any page but Settings: the queue panel is drawn on all of them
+		// and its rows are selectable on all of them, so x has to work
+		// on all of them. It used to also require the stream page, which
+		// made the key silently dead on Favs, Library, History and
+		// Downloads while the row sat there highlighted.
+		case m.activePage != PageSettings && m.activePanel == PanelQueue && m.queue.Len() > 0:
 			if m.queueCursor < 0 || m.queueCursor >= m.queue.Len() {
 				return m, nil
 			}
