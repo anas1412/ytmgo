@@ -107,7 +107,7 @@ func (m Model) handleAlbumTracks(msg AlbumTracksMsg) (tea.Model, tea.Cmd) {
 		cmds = append(cmds, artistBehindAlbumCmd(alb.ArtistBrowseID, alb.BrowseID))
 	}
 	m.resetStreamCursor()
-	m.setStatus(fmt.Sprintf("%s — %d tracks  ([a] queue all · [esc] back)", alb.Title, len(msg.Tracks)))
+	m.setStatus(fmt.Sprintf("%s — %d tracks  ([a] queue all songs · [esc] back)", alb.Title, len(msg.Tracks)))
 	// The album page's own art replaces the provisional one from the
 	// song result (usually identical, but the page is authoritative).
 	if alb.CoverURL != "" {

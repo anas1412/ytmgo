@@ -226,7 +226,7 @@ func TestLiveAlbumFromArtistSong(t *testing.T) {
 		t.Fatal("no song on the artist page links to its release")
 	}
 
-	// Put the cursor on one that has a release, and press i.
+	// Put the cursor on one that has a release, and press a.
 	m.activePanel = PanelSearch
 	for i, s := range m.artistSongs {
 		if s.AlbumBrowseID != "" {
@@ -235,21 +235,21 @@ func TestLiveAlbumFromArtistSong(t *testing.T) {
 		}
 	}
 	want := m.artistSongs[m.searchCursor]
-	nm, cmd := m.handleKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'i'}})
+	nm, cmd := m.handleKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'a'}})
 	m = nm.(Model)
 	if cmd == nil {
-		t.Fatal("i on an artist's song opened nothing")
+		t.Fatal("a on an artist's song opened nothing")
 	}
 	am, ok := cmd().(AlbumTracksMsg)
 	if !ok {
-		t.Fatalf("i produced %T", cmd())
+		t.Fatalf("a produced %T", cmd())
 	}
 	nm, _ = m.handleAlbumTracks(am)
 	m = nm.(Model)
 	if m.openAlbum == nil {
 		t.Fatal("the release did not open")
 	}
-	t.Logf("i on %q opened %q (%d tracks)", want.Title, m.openAlbum.Title, len(m.albumTracks))
+	t.Logf("a on %q opened %q (%d tracks)", want.Title, m.openAlbum.Title, len(m.albumTracks))
 	if m.openArtist == nil {
 		t.Error("opening the release lost the artist underneath")
 	}

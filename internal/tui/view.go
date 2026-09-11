@@ -461,7 +461,7 @@ func (m Model) renderPanels() string {
 	// Search panel title
 	fHint := styleKeyHint.Render("[f]")
 	xHint := styleKeyHint.Render("[x]")
-	iHint := styleKeyHint.Render("[i]")
+	aHint := styleKeyHint.Render("[a]")
 	panelLabel := "SEARCH RESULTS"
 	switch m.activePage {
 	case PageHistory:
@@ -493,34 +493,39 @@ func (m Model) renderPanels() string {
 				what = "RELEASES"
 			}
 			panelLabel = strings.ToUpper(m.openArtist.Name) + " · " + what +
-				m.hints("  "+albHint+" switch  "+iHint+" album  "+escHint+" back")
+				m.hints("  "+albHint+" switch  "+aHint+" album  "+escHint+" back")
 			if m.artistFilter() != "" {
 				panelLabel = strings.ToUpper(m.openArtist.Name) + " · " + what +
 					fmt.Sprintf("  🔍 %d", m.streamListLen())
 			}
 		case m.openAlbum != nil:
-			aHint := styleKeyHint.Render("[a]")
 			escHint := styleKeyHint.Render("[esc]")
+			// Inside an album, a queues the lot — say so, since the
+			// same key opened this page a moment ago.
+			back := " back"
+			if m.openArtist != nil {
+				back = " releases"
+			}
 			panelLabel = "ALBUM" +
-				m.hints("  "+aHint+" queue all  "+xHint+" download  "+escHint+" back")
+				m.hints("  "+aHint+" queue all songs  "+xHint+" download  "+escHint+back)
 		case m.albumMode:
 			albHint := styleKeyHint.Render("[A]")
 			panelLabel = "RELEASES" + m.hints("  "+albHint+" songs  "+xHint+" download album")
 		case m.showingRecommendations:
 			rHint := styleKeyHint.Render("[R]")
 			albHint := styleKeyHint.Render("[A]")
-			panelLabel = "RECOMMENDATIONS" + m.hints("  "+rHint+" refresh  "+albHint+" artist  "+iHint+" album  "+xHint+" download")
+			panelLabel = "RECOMMENDATIONS" + m.hints("  "+rHint+" refresh  "+albHint+" artist  "+aHint+" album  "+xHint+" download")
 		default:
 			albHint := styleKeyHint.Render("[A]")
-			panelLabel = "SEARCH RESULTS" + m.hints("  "+albHint+" artist  "+iHint+" album  "+xHint+" download  "+fHint+" fav")
+			panelLabel = "SEARCH RESULTS" + m.hints("  "+albHint+" artist  "+aHint+" album  "+xHint+" download  "+fHint+" fav")
 		}
 	default:
 		albHint := styleKeyHint.Render("[A]")
 		if m.showingRecommendations {
 			rHint := styleKeyHint.Render("[R]")
-			panelLabel = "RECOMMENDATIONS" + m.hints("  "+rHint+" refresh  "+albHint+" artist  "+iHint+" album  "+xHint+" download")
+			panelLabel = "RECOMMENDATIONS" + m.hints("  "+rHint+" refresh  "+albHint+" artist  "+aHint+" album  "+xHint+" download")
 		} else {
-			panelLabel = "SEARCH RESULTS" + m.hints("  "+albHint+" artist  "+iHint+" album  "+xHint+" download  "+fHint+" fav")
+			panelLabel = "SEARCH RESULTS" + m.hints("  "+albHint+" artist  "+aHint+" album  "+xHint+" download  "+fHint+" fav")
 		}
 	}
 	// Truncate every panel title so the border always has room for its
@@ -1099,9 +1104,9 @@ func (m Model) browseStrip(rowW int, tracks []search.Result) []string {
 		case m.openArtist != nil:
 			// An album sitting inside an artist page: esc steps back
 			// into the discography it was opened from.
-			third += "  ·  [esc] releases"
+			third += "  ·  [a] queue all songs · [esc] releases"
 		default:
-			third += "  ·  [esc] back"
+			third += "  ·  [a] queue all songs · [esc] back"
 		}
 	}
 

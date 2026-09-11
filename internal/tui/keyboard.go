@@ -330,13 +330,6 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "p", "left":
 		return m, m.prevTrack()
 
-	case "i":
-		// The album of the highlighted song, from any list that knows
-		// it — including an artist's own top songs, so a song on their
-		// page opens straight into the release it came from. esc from
-		// there steps back to the artist rather than out of both.
-		return m, m.openAlbumOfSelected()
-
 	case "A":
 		// On an artist page, switch between their songs and their
 		// releases. Anywhere else, open the artist of the highlighted
@@ -355,7 +348,16 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, m.openArtistOfSelected()
 	case "a":
-		// Queue every track of the open album.
+		// The album key, doing the one album thing available where the
+		// user is standing: inside an album, queue the whole thing;
+		// anywhere else, open the album the highlighted song came from
+		// — including an artist's own top songs, so a song on their
+		// page opens straight into the release it came from.
+		//
+		// Lowercase is the album, uppercase is the artist. This used to
+		// be i to open, a to queue and A for the artist: three keys
+		// with no relation to each other, and the two that looked like
+		// a pair were the two that were not.
 		if m.activePage == PageStream && m.openAlbum != nil && len(m.albumTracks) > 0 {
 			var cmd tea.Cmd
 			for i, r := range m.albumTracks {
@@ -369,7 +371,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.setStatus(fmt.Sprintf("Queued %d tracks from %s", len(m.albumTracks), m.openAlbum.Title))
 			return m, tea.Batch(cmd, saveQueueCmd(m.db, m.queue))
 		}
-		return m, nil
+		return m, m.openAlbumOfSelected()
 
 	case "v":
 		// The visualizer: the spectrum beneath the results, on every
