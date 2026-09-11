@@ -115,6 +115,30 @@ Inside `tmux` or `screen` the fallback is used even in kitty: the
 multiplexer swallows the graphics escapes, so drawing the real image
 would produce nothing at all.
 
+## "/usr is configured to be read-only"
+
+An atomic Fedora — Silverblue, Kinoite, Bazzite, Bluefin. `dnf` is
+present but cannot write to `/usr`, so installing mpv, ffmpeg and cava
+the usual way fails.
+
+ytmgo itself installs fine: it goes to `/usr/local/bin`, which is
+writable on these systems. Only the dependencies need another route.
+
+Layer them onto the image, the native way — this needs a reboot:
+
+```bash
+sudo rpm-ostree install mpv ffmpeg cava
+```
+
+Or put them in your home directory instead, with no reboot and nothing
+layered:
+
+```bash
+brew install mpv ffmpeg cava
+```
+
+A `distrobox` container works too, if you already run one.
+
 ## Media keys do nothing
 
 Media keys and the desktop's now-playing widget work over

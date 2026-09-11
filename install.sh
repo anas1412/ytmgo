@@ -359,6 +359,24 @@ if [ ${#missing[@]} -gt 0 ]; then
   pm_cmd=""
   case "$os" in
     Linux)
+      # Atomic Fedora first — Silverblue, Kinoite, Bazzite, Bluefin and
+      # friends all carry dnf, but /usr is read-only, so dnf fails with
+      # a message about an image-based system and the installer used to
+      # blame the sudo password. Layering is the native fix, and it
+      # needs a reboot, so this tells rather than does.
+      if command -v rpm-ostree >/dev/null 2>&1 && [ ! -w /usr ]; then
+        err "This system keeps /usr read-only, so packages cannot be installed into it."
+        err "ytmgo itself is installed. For the rest, layer them onto the image:"
+        err "    sudo rpm-ostree install ${missing[*]}"
+        err "  (then reboot)"
+        if command -v brew >/dev/null 2>&1; then
+          err "Or into your home directory, with no reboot and no layering:"
+          err "    brew install ${missing[*]}"
+        else
+          err "Or run them from a container: distrobox, or a Homebrew install."
+        fi
+        exit 1
+      fi
       if   command -v apt    >/dev/null 2>&1; then pm_cmd="sudo apt install -y mpv ffmpeg cava"
       elif command -v dnf    >/dev/null 2>&1; then pm_cmd="sudo dnf install -y mpv ffmpeg cava"
       elif command -v pacman >/dev/null 2>&1; then pm_cmd="sudo pacman -S --noconfirm mpv ffmpeg cava"
@@ -378,7 +396,7 @@ if [ ${#missing[@]} -gt 0 ]; then
 
   info "Running: $pm_cmd"
   if ! $pm_cmd; then
-    err "Package install failed (maybe sudo password was wrong?)."
+    err "Package install failed."
     err "Try running this yourself: $pm_cmd"
     exit 1
   fi
