@@ -469,6 +469,7 @@ func (m Model) renderPanels() string {
 	// Search panel title
 	fHint := styleKeyHint.Render("[f]")
 	xHint := styleKeyHint.Render("[x]")
+	iHint := styleKeyHint.Render("[i]")
 	panelLabel := "SEARCH RESULTS"
 	switch m.activePage {
 	case PageHistory:
@@ -500,7 +501,7 @@ func (m Model) renderPanels() string {
 				what = "RELEASES"
 			}
 			panelLabel = strings.ToUpper(m.openArtist.Name) + " · " + what +
-				m.hints("  "+albHint+" switch  "+xHint+" download  "+escHint+" back")
+				m.hints("  "+albHint+" switch  "+iHint+" album  "+escHint+" back")
 			if m.artistFilter() != "" {
 				panelLabel = strings.ToUpper(m.openArtist.Name) + " · " + what +
 					fmt.Sprintf("  🔍 %d", m.streamListLen())
@@ -516,18 +517,18 @@ func (m Model) renderPanels() string {
 		case m.showingRecommendations:
 			rHint := styleKeyHint.Render("[R]")
 			albHint := styleKeyHint.Render("[A]")
-			panelLabel = "RECOMMENDATIONS" + m.hints("  "+rHint+" refresh  "+albHint+" artist  "+xHint+" download  "+fHint+" fav")
+			panelLabel = "RECOMMENDATIONS" + m.hints("  "+rHint+" refresh  "+albHint+" artist  "+iHint+" album  "+xHint+" download")
 		default:
 			albHint := styleKeyHint.Render("[A]")
-			panelLabel = "SEARCH RESULTS" + m.hints("  "+albHint+" artist  "+xHint+" download  "+fHint+" fav")
+			panelLabel = "SEARCH RESULTS" + m.hints("  "+albHint+" artist  "+iHint+" album  "+xHint+" download  "+fHint+" fav")
 		}
 	default:
 		albHint := styleKeyHint.Render("[A]")
 		if m.showingRecommendations {
 			rHint := styleKeyHint.Render("[R]")
-			panelLabel = "RECOMMENDATIONS" + m.hints("  "+rHint+" refresh  "+albHint+" artist  "+xHint+" download  "+fHint+" fav")
+			panelLabel = "RECOMMENDATIONS" + m.hints("  "+rHint+" refresh  "+albHint+" artist  "+iHint+" album  "+xHint+" download")
 		} else {
-			panelLabel = "SEARCH RESULTS" + m.hints("  "+albHint+" artist  "+xHint+" download  "+fHint+" fav")
+			panelLabel = "SEARCH RESULTS" + m.hints("  "+albHint+" artist  "+iHint+" album  "+xHint+" download  "+fHint+" fav")
 		}
 	}
 	// Truncate every panel title so the border always has room for its

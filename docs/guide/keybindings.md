@@ -54,6 +54,7 @@ move on. `n` always advances, even with repeat-one enabled.
 | Key | Action |
 |-----|--------|
 | `R` | Refresh recommendations |
+| `i` | Open the **album** the selected song came from — including from an artist's page |
 | `A` | Open the **artist** of the selected track; on their page, switch songs ⇄ releases |
 | `f` | Toggle favourite on the selected track |
 | `C` | Clear play history (History page) |

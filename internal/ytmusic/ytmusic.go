@@ -865,6 +865,10 @@ func parseSongRows(root interface{}, artist string) []Track {
 				"text", "runs", 0, "text"),
 			Album: digString(item, "flexColumns", 3, "musicResponsiveListItemFlexColumnRenderer",
 				"text", "runs", 0, "text"),
+			// The album run links to its release page, which is what
+			// makes [i] work on a song listed under its artist.
+			AlbumBrowseID: albumBrowseIDFromRun(dig(item, "flexColumns", 3,
+				"musicResponsiveListItemFlexColumnRenderer", "text", "runs", 0)),
 			Duration: parseClock(digString(item, "fixedColumns", 0,
 				"musicResponsiveListItemFixedColumnRenderer", "text", "runs", 0, "text")),
 			CoverURL: largestThumbnail(dig(item, "thumbnail", "musicThumbnailRenderer", "thumbnail", "thumbnails")),

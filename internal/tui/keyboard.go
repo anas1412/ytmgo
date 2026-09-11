@@ -330,6 +330,13 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "p", "left":
 		return m, m.prevTrack()
 
+	case "i":
+		// The album of the highlighted song, from any list that knows
+		// it — including an artist's own top songs, so a song on their
+		// page opens straight into the release it came from. esc from
+		// there steps back to the artist rather than out of both.
+		return m, m.openAlbumOfSelected()
+
 	case "A":
 		// On an artist page, switch between their songs and their
 		// releases. Anywhere else, open the artist of the highlighted

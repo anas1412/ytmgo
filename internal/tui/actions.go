@@ -357,6 +357,39 @@ func (m *Model) copyLinkAction() tea.Cmd {
 	return nil
 }
 
+// openAlbumOfSelected opens the release the highlighted song belongs
+// to. Works wherever a track is listed, an artist's top songs included:
+// their rows carry the album id, so a song on an artist's page opens
+// into its release and esc steps back to the artist.
+func (m *Model) openAlbumOfSelected() tea.Cmd {
+	t, ok := m.selectedTrack()
+	if !ok {
+		m.setStatus("Nothing selected")
+		return nil
+	}
+	if t.AlbumBrowseID == "" {
+		// Local files, legacy rows, and singles that belong to no
+		// release page.
+		name := t.Album
+		if name == "" {
+			name = t.Title
+		}
+		m.setStatus("No album page for " + name)
+		return nil
+	}
+	m.isLoadingAlbum = true
+	m.albumSeq++
+	// The song's own thumbnail is the album's art; the fetched page
+	// refines it in handleAlbumTracks.
+	m.albumCoverURL = t.CoverURL
+	name := t.Album
+	if name == "" {
+		name = "album"
+	}
+	m.setStatus("Opening " + name + "…")
+	return openAlbumCmd(ytmusic.Album{BrowseID: t.AlbumBrowseID}, m.albumSeq)
+}
+
 // openArtistOfSelected opens the artist page of the highlighted track.
 // The album a song came from is reachable from there, so this is the
 // only "go to" key.

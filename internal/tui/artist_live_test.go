@@ -197,3 +197,70 @@ func TestLiveArtistCoverIsItsOwn(t *testing.T) {
 	b := art.Img.Bounds()
 	t.Logf("artist photo %dx%d", b.Dx(), b.Dy())
 }
+
+// TestLiveAlbumFromArtistSong: pressing i on a song listed under its
+// artist opens the release that song came from, and esc steps back to
+// the artist. Those rows had no album id at all, so i said "no album
+// page" for every one of them.
+func TestLiveAlbumFromArtistSong(t *testing.T) {
+	if testing.Short() {
+		t.Skip("short mode: skipping network test")
+	}
+	m := worstCaseModel(t, 150, 40)
+	msg := openArtistCmd("UCRr1xG_2WIDs18a6cIiCxeA", m.artistSeq+1)()
+	m.artistSeq++
+	nm, _ := m.handleArtistLoaded(msg.(ArtistLoadedMsg))
+	m = nm.(Model)
+	if len(m.artistSongs) == 0 {
+		t.Fatal("no songs on the artist page")
+	}
+
+	withAlbum := 0
+	for _, s := range m.artistSongs {
+		if s.AlbumBrowseID != "" {
+			withAlbum++
+		}
+	}
+	t.Logf("%d of %d songs link to their release", withAlbum, len(m.artistSongs))
+	if withAlbum == 0 {
+		t.Fatal("no song on the artist page links to its release")
+	}
+
+	// Put the cursor on one that has a release, and press i.
+	m.activePanel = PanelSearch
+	for i, s := range m.artistSongs {
+		if s.AlbumBrowseID != "" {
+			m.searchCursor = i
+			break
+		}
+	}
+	want := m.artistSongs[m.searchCursor]
+	nm, cmd := m.handleKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'i'}})
+	m = nm.(Model)
+	if cmd == nil {
+		t.Fatal("i on an artist's song opened nothing")
+	}
+	am, ok := cmd().(AlbumTracksMsg)
+	if !ok {
+		t.Fatalf("i produced %T", cmd())
+	}
+	nm, _ = m.handleAlbumTracks(am)
+	m = nm.(Model)
+	if m.openAlbum == nil {
+		t.Fatal("the release did not open")
+	}
+	t.Logf("i on %q opened %q (%d tracks)", want.Title, m.openAlbum.Title, len(m.albumTracks))
+	if m.openArtist == nil {
+		t.Error("opening the release lost the artist underneath")
+	}
+
+	// esc returns to the artist, not out of everything.
+	nm, _ = m.handleKey(tea.KeyMsg{Type: tea.KeyEsc})
+	m = nm.(Model)
+	if m.openAlbum != nil || m.openArtist == nil {
+		t.Error("esc did not step back to the artist")
+	}
+	if len(m.artistSongs) == 0 {
+		t.Error("the artist's songs did not survive the round trip")
+	}
+}
