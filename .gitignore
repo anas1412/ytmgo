@@ -38,3 +38,6 @@ docs/.vitepress/dist/
 docs/.vitepress/cache/
 docs/public/install.sh
 docs/public/uninstall.sh
+
+# Local agent scaffolding: launch configs and task worktrees.
+.claude/
