@@ -346,10 +346,22 @@ func (m Model) handleClick(x, y int) (Model, tea.Cmd) {
 				}
 				m.libraryCursor = idx
 			default:
-				// An open album renders its header strip above the
-				// list, and its tracks are one line each, not two.
+				// A browse view draws the artist/album header strip
+				// above its list, so the first row starts that much
+				// further down. Tracks are one line each; releases are
+				// two, like ordinary results.
+				//
+				// The strip was subtracted for tracks only, which left
+				// every click on an artist's releases two rows off —
+				// the strip is drawn there too.
+				row := y - clickItemOffsetY
+				if len(m.browseStrip(1, nil)) > 0 {
+					row -= albumStripRows
+				}
 				if m.streamShowsTracks() {
-					idx = y - clickItemOffsetY - albumStripRows
+					idx = row
+				} else {
+					idx = row / clickLinesPerItem
 				}
 				idx += m.searchOffset
 				// Clamp against the active list (results, albums, or an

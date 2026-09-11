@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -208,4 +209,58 @@ func TestOnlyAlbumsShowATotalRuntime(t *testing.T) {
 	if want := formatTotalDuration(albTotal); !strings.Contains(strip, want) {
 		t.Errorf("the album strip lost its runtime (%s):\n%s", want, strip)
 	}
+}
+
+// An artist's releases are drawn under the same header strip the
+// tracklist uses, but the click maths only subtracted that strip for
+// tracks — so every click on a release landed two rows off.
+func TestReleaseClickMatchesRow(t *testing.T) {
+	if testing.Short() {
+		t.Skip("short mode: skipping network test")
+	}
+	m := worstCaseModel(t, 150, 44)
+	msg := openArtistCmd("UCRr1xG_2WIDs18a6cIiCxeA", m.artistSeq+1)()
+	m.artistSeq++
+	nm, _ := m.handleArtistLoaded(msg.(ArtistLoadedMsg))
+	m = nm.(Model)
+	nm, _ = m.handleKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'A'}})
+	m = nm.(Model)
+	if !m.artistShowsAlbums {
+		t.Fatal("A did not switch to the releases")
+	}
+	m.searchCursor, m.searchOffset = 0, 0
+
+	albums := m.streamAlbums()
+	if len(albums) < 3 {
+		t.Fatalf("only %d releases to click", len(albums))
+	}
+	lines := strings.Split(m.View(), "\n")
+	checked := 0
+	for want := 0; want < 3; want++ {
+		// Match the row number, not the title: two of an artist's
+		// releases can share a prefix, and the first match would then
+		// be the wrong row.
+		title := albums[want].Title
+		marker := fmt.Sprintf("%d. ", want+1)
+		row := -1
+		for i, l := range lines {
+			if strings.Contains(l, marker+title[:min(15, len(title))]) {
+				row = i
+				break
+			}
+		}
+		if row < 0 {
+			continue
+		}
+		got, _ := m.handleClick(10, row)
+		if got.searchCursor != want {
+			t.Errorf("clicking the row of release %d (%q) selected %d (%q)",
+				want, title, got.searchCursor, albums[min(got.searchCursor, len(albums)-1)].Title)
+		}
+		checked++
+	}
+	if checked < 2 {
+		t.Fatalf("only %d releases were findable on screen", checked)
+	}
+	t.Logf("%d releases all select themselves", checked)
 }
