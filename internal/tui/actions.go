@@ -2,6 +2,7 @@ package tui
 
 import (
 	"errors"
+	"strings"
 	"time"
 
 	"ytmgo/internal/clipboard"
@@ -384,7 +385,7 @@ func (m *Model) openAlbumOfSelected() tea.Cmd {
 	if t.AlbumBrowseID == "" {
 		// Local files, legacy rows, and singles that belong to no
 		// release page.
-		name := t.Album
+		name := albumLabel(t.Album)
 		if name == "" {
 			name = t.Title
 		}
@@ -396,13 +397,27 @@ func (m *Model) openAlbumOfSelected() tea.Cmd {
 	// The song's own thumbnail is the album's art; the fetched page
 	// refines it in handleAlbumTracks.
 	m.albumCoverURL = t.CoverURL
-	name := t.Album
+	name := albumLabel(t.Album)
 	if name == "" {
 		name = "album"
 	}
 	m.browseLoadingName = name
 	m.setStatus("Opening " + name + "…")
 	return openAlbumCmd(ytmusic.Album{BrowseID: t.AlbumBrowseID}, m.albumSeq)
+}
+
+// albumLabel returns an album name fit to show, or "" when the field
+// does not hold one. Queue, favourite and history rows saved before the
+// artist page read its columns correctly carry a play count where the
+// album belongs — "○ 35M plays" under a playing track — and those rows
+// live in the database, so they outlast the parser fix. A count is not
+// an album name, so nothing is shown rather than the wrong thing.
+func albumLabel(s string) string {
+	t := strings.TrimSpace(s)
+	if strings.HasSuffix(t, " plays") || strings.HasSuffix(t, " views") {
+		return ""
+	}
+	return t
 }
 
 // browsingHere reports whether the artist or album on screen is what

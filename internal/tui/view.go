@@ -2110,8 +2110,8 @@ func (m Model) renderPlayerBar() string {
 		}
 		// The middle row carries the album, which the title row has no
 		// room for. Blank when the source didn't say.
-		if t.Album != "" {
-			albumRow = styleTextDim.Render(truncate("○ "+t.Album, innerW))
+		if name := albumLabel(t.Album); name != "" {
+			albumRow = styleTextDim.Render(truncate("○ "+name, innerW))
 		}
 	}
 
