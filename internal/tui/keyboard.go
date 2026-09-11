@@ -758,6 +758,10 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
+	case "u":
+		// The track's YouTube Music link, for sharing it somewhere else.
+		return m, m.copyLinkAction()
+
 	case "c":
 		return m, m.toggleAutoplayAction()
 

@@ -1,7 +1,10 @@
 package tui
 
 import (
+	"errors"
 	"time"
+
+	"ytmgo/internal/clipboard"
 
 	"ytmgo/internal/player"
 	"ytmgo/internal/queue"
@@ -378,4 +381,72 @@ func (m *Model) cycleRepeatAction() tea.Cmd {
 	}
 	m.updateMPRIS()
 	return saveQueueCmd(m.db, m.queue)
+}
+
+// selectedTrack returns the track the cursor is on, wherever the cursor
+// happens to be. The per-page branching matches what `i` and `x` each
+// do inline; this is the one copy new actions should use.
+func (m *Model) selectedTrack() (queue.Track, bool) {
+	switch {
+	case m.activePage == PageSettings:
+		return queue.Track{}, false
+
+	case m.activePanel == PanelQueue && m.queue.Len() > 0:
+		idx := min(m.queueCursor, m.queue.Len()-1)
+		return m.queue.Tracks()[idx], true
+
+	case m.activePage == PageFavorites:
+		if m.favCursor >= 0 && m.favCursor < len(m.favorites) {
+			return m.favorites[m.favCursor], true
+		}
+
+	case m.activePage == PageHistory:
+		if m.historyCursor >= 0 && m.historyCursor < len(m.history) {
+			return historyEntryTrack(m.history[m.historyCursor]), true
+		}
+
+	case m.activePage == PageLibrary:
+		tracks := m.filteredLibrary()
+		if m.libraryCursor >= 0 && m.libraryCursor < len(tracks) {
+			return tracks[m.libraryCursor], true
+		}
+
+	default: // Stream page: search results, or an open album's tracks
+		list := m.results
+		if m.openAlbum != nil {
+			list = m.albumTracks
+		}
+		if m.searchCursor >= 0 && m.searchCursor < len(list) {
+			return m.resolveTrack(list[m.searchCursor]), true
+		}
+	}
+	return queue.Track{}, false
+}
+
+// copyLinkAction puts the highlighted track's YouTube Music URL on the
+// clipboard. Built from the video id rather than the track's own URL:
+// that field is empty until playback resolves it, and for a downloaded
+// track it is a local path.
+func (m *Model) copyLinkAction() tea.Cmd {
+	t, ok := m.selectedTrack()
+	if !ok {
+		m.setStatus("Nothing selected to copy")
+		return nil
+	}
+	if !ytmusic.IsVideoID(t.ID) {
+		// Local library files and pre-YouTube history rows have no link.
+		m.setStatus("No link for " + t.Title)
+		return nil
+	}
+	url := ytmusic.WatchURL(t.ID)
+	if err := clipboard.Copy(url); err != nil {
+		if errors.Is(err, clipboard.ErrNoTool) {
+			m.setStatus("No clipboard tool — " + clipboard.InstallHint())
+		} else {
+			m.setStatus("Copy failed: " + err.Error())
+		}
+		return nil
+	}
+	m.setStatus("Copied link: " + url)
+	return nil
 }

@@ -997,3 +997,42 @@ func TestNaturalEndClearsTheFailureRun(t *testing.T) {
 		t.Errorf("counter is %d after one failure past a good track, want 1", got.failedInARow)
 	}
 }
+
+// TestCopyLinkFindsTheSelectedTrack: u copies the highlighted track's
+// link from whichever list the cursor is in, and says so rather than
+// failing quietly when there is no link to copy.
+func TestCopyLinkFindsTheSelectedTrack(t *testing.T) {
+	// No clipboard tool on PATH, so Copy returns ErrNoTool and the
+	// action takes its "cannot copy" branch — which still proves the
+	// track was found and its link built.
+	t.Setenv("PATH", t.TempDir())
+
+	m := worstCaseModel(t, 150, 40)
+	m.activePanel = PanelQueue
+	m.queue.Clear()
+	m.queue.Add(queue.Track{ID: "m9SMT5ipbxk", Title: "Some Song", Artist: "Someone"})
+	m.queueCursor = 0
+
+	// Through the key, not the action, so the binding is covered too.
+	nm, _ := m.handleKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'u'}})
+	m = nm.(Model)
+	if !strings.Contains(m.statusMessage, "clipboard") {
+		t.Errorf("status %q does not explain the missing clipboard tool", m.statusMessage)
+	}
+
+	// A local library file has no YouTube id, so there is no link.
+	m.queue.Clear()
+	m.queue.Add(queue.Track{ID: "/home/me/Music/song.m4a", Title: "Local File"})
+	m.queueCursor = 0
+	m.copyLinkAction()
+	if !strings.Contains(m.statusMessage, "No link") {
+		t.Errorf("a local file reported %q, want it to say there is no link", m.statusMessage)
+	}
+
+	// Settings has no selection at all.
+	m.switchPage(PageSettings)
+	m.copyLinkAction()
+	if !strings.Contains(m.statusMessage, "Nothing selected") {
+		t.Errorf("settings page reported %q", m.statusMessage)
+	}
+}
