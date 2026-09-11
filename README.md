@@ -117,6 +117,22 @@ or one of the nine built-in themes:
 
 ---
 
+## Supported systems
+
+**Linux (any distribution) and macOS**, on x86_64 and arm64. Windows is
+not supported.
+
+The binary is built with cgo off, so it is statically linked and depends
+on no system C library — the same build runs on glibc and on musl,
+Alpine included. Playback goes through mpv, which picks its own audio
+output, so PipeWire, PulseAudio, ALSA, JACK and sndio all work without
+configuration.
+
+Two features are Linux-only: **media keys** (MPRIS is D-Bus, so on macOS
+they do nothing) and the **spectrum**, which needs cava to find a monitor
+of your output — automatic on PipeWire and PulseAudio, a hand-configured
+loopback on bare ALSA.
+
 ## Prerequisites
 
 - **Go** 1.22+ (only to build from source)

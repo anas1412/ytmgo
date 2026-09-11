@@ -47,6 +47,34 @@ go build -o ytmgo .
 ./ytmgo
 ```
 
+## Supported systems
+
+| | |
+|---|---|
+| **Linux**, any distribution | x86_64 and arm64 |
+| **macOS** | Intel and Apple Silicon |
+| Windows | Not supported |
+
+*Any distribution* is meant literally: the binary is built with cgo off,
+so it is statically linked and depends on no system C library. It runs
+the same on glibc and on musl — Alpine included — and needs nothing
+backported.
+
+Two things are Linux-only inside the app. **Media keys and the desktop
+media widget** work over MPRIS, which is D-Bus, so on macOS they simply
+do nothing — everything else behaves identically. And the **spectrum**
+needs cava to find a monitor of your audio output, which PipeWire and
+PulseAudio both provide automatically; on a bare ALSA setup cava needs a
+loopback configured by hand. Nothing else cares which audio stack you
+run: playback goes through mpv, which picks its own output — PipeWire,
+PulseAudio, ALSA, JACK, sndio or CoreAudio.
+
+Windows is not supported and is not planned. ytmgo runs mpv, yt-dlp and
+ffmpeg as child processes and has to kill a whole tree when a download
+is cancelled — yt-dlp spawns ffmpeg, and killing only the parent orphans
+it. That relies on POSIX process groups, which Windows has no equivalent
+of.
+
 ## Requirements
 
 ytmgo drives a few external programs rather than reimplementing them.
