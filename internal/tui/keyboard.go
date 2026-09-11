@@ -362,13 +362,14 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, coverCmd
 
 	case "i":
-		// Open the album page of the highlighted track, from any list
+		// Open the artist page of the highlighted track, from any list
 		// that knows it: search results, queue, favorites, history.
-		return m, m.openAlbumOfSelected()
-
-	case "I":
-		// And the artist page. Lowercase the release, uppercase whoever
-		// made it.
+		//
+		// This used to open the album, with I for the artist. They read
+		// as a pair and were not one: an artist page already contains
+		// their albums, one [A] away, so the album key was a second
+		// door into a room the first one opens onto. One key, and the
+		// album a song came from is still reachable from it.
 		return m, m.openArtistOfSelected()
 
 	case "a":

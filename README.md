@@ -85,8 +85,8 @@ The yt-dlp installed alongside ytmgo is offered for removal. Other system depend
 ## Features
 
 - **Native YouTube Music search** — Talks to YT Music's own API directly (no key, no login, no third-party proxy). Results carry exact video IDs, so playback starts on the right recording every time.
-- **Album preview** — Press `i` on any song — in results, the queue, favorites, or history — to open its album's tracklist, ready to queue or download in one key. The album's cover takes over the now-playing panel while you browse; nothing is queued until you ask.
-- **Artist pages** — Press `I` on any song to open whoever made it: their hundred most-played tracks, and `A` for their whole discography. Every release opens into its tracklist, so one song becomes a catalogue.
+- **Album preview** — Reach any release from its artist's page and open its tracklist, ready to queue or download in one key. The album's cover takes over the now-playing panel while you browse; nothing is queued until you ask.
+- **Artist pages** — Press `i` on any song to open whoever made it: their hundred most-played tracks, and `A` for their whole discography. Every release opens into its tracklist, so one song becomes a catalogue.
 - **Synced lyrics** — Press `y` to swap the spectrum for lyrics, with the current line highlighted as the song plays (via LRCLIB, plain-text fallback from YT Music). Cached locally, so replays are instant.
 - **Autoplay radio** — When the queue runs dry, ytmgo queues what YouTube Music itself would play next, seeded from your listening history.
 - **Download in one key** — Press `x` on any track and it downloads. Queue-friendly, one at a time, with progress feedback.
@@ -315,8 +315,7 @@ Tab cycles focus through: search input → result list → queue panel → searc
 | `r` | Cycle repeat: OFF → ONE → ALL |
 | `x` | Download selected track |
 | `u` | Copy the track's YouTube Music link to the clipboard |
-| `i` | Open the album of the selected track |
-| `I` | Open the **artist** page of the selected track — their top songs and releases |
+| `i` | Open the **artist** of the selected track — their top songs, and `A` for every release |
 | `R` | Refresh recommendations |
 | `A` | Toggle search between songs and albums |
 | `a` | Queue every track of the open album |

@@ -55,8 +55,7 @@ move on. `n` always advances, even with repeat-one enabled.
 |-----|--------|
 | `R` | Refresh recommendations |
 | `A` | Switch searching between songs and albums |
-| `i` | Open the album the selected track belongs to |
-| `I` | Open the **artist** page of the selected track — their top songs and releases |
+| `i` | Open the **artist** of the selected track — their top songs, and `A` for every release |
 | `a` | Queue every track of the open album |
 | `f` | Toggle favourite on the selected track |
 | `C` | Clear play history (History page) |

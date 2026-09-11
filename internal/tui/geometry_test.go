@@ -1108,7 +1108,7 @@ func TestArtistListSourceFollowsTheMode(t *testing.T) {
 	}
 }
 
-// TestArtistKeyNeedsAnArtistID: I says why it cannot open rather than
+// TestArtistKeyNeedsAnArtistID: i says why it cannot open rather than
 // doing nothing. A local library file has no YouTube artist behind it.
 func TestArtistKeyNeedsAnArtistID(t *testing.T) {
 	m := worstCaseModel(t, 150, 40)
@@ -1117,7 +1117,7 @@ func TestArtistKeyNeedsAnArtistID(t *testing.T) {
 	m.queue.Add(queue.Track{ID: "local", Title: "A File", Artist: "Someone"})
 	m.queueCursor = 0
 
-	nm, cmd := m.handleKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'I'}})
+	nm, cmd := m.handleKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'i'}})
 	got := nm.(Model)
 	if cmd != nil {
 		t.Error("a track with no artist id still fired a fetch")
@@ -1131,7 +1131,7 @@ func TestArtistKeyNeedsAnArtistID(t *testing.T) {
 	m.queue.Add(queue.Track{ID: "m9SMT5ipbxk", Title: "A Song", Artist: "Someone",
 		ArtistBrowseID: "UCRr1xG_2WIDs18a6cIiCxeA"})
 	m.queueCursor = 0
-	nm, cmd = m.handleKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'I'}})
+	nm, cmd = m.handleKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'i'}})
 	if cmd == nil {
 		t.Error("a track with an artist id did not fire a fetch")
 	}
