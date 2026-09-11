@@ -344,7 +344,7 @@ func (m *Model) copyLinkAction() tea.Cmd {
 		m.setStatus("No link for " + t.Title)
 		return nil
 	}
-	url := ytmusic.WatchURL(t.ID)
+	url := ytmusic.ShareURL(t.ID, m.settings.CopyMusicLinks)
 	if err := clipboard.Copy(url); err != nil {
 		if errors.Is(err, clipboard.ErrNoTool) {
 			m.setStatus("No clipboard tool — " + clipboard.InstallHint())

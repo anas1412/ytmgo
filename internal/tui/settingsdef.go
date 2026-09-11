@@ -51,75 +51,6 @@ var settingDefs = []settingDef{
 		},
 	},
 	{
-		label: "Theme",
-		kind:  settingCycle,
-		value: func(m *Model) string { return string(ParseTheme(m.settings.Theme)) },
-		desc:  func(m *Model) string { return ThemeDesc(ParseTheme(m.settings.Theme)) },
-		activate: func(m *Model) tea.Cmd {
-			cur := ParseTheme(m.settings.Theme)
-			next := themeOrder[0]
-			for i, t := range themeOrder {
-				if t == cur {
-					next = themeOrder[(i+1)%len(themeOrder)]
-					break
-				}
-			}
-			m.settings.Theme = string(next)
-			ApplyTheme(next)
-			return saveSettingsCmd(m.db, m.settings)
-		},
-	},
-	{
-		label: "Show Key Hints",
-		kind:  settingToggle,
-		value: func(m *Model) string { return boolStr(m.settings.ShowHints) },
-		desc:  staticDesc("Inline [key] hints in titles and the player bar — the footer always keeps its set (z toggles too)"),
-		activate: func(m *Model) tea.Cmd {
-			m.settings.ShowHints = !m.settings.ShowHints
-			return saveSettingsCmd(m.db, m.settings)
-		},
-	},
-	{
-		label: "Show Quotes",
-		kind:  settingToggle,
-		value: func(m *Model) string { return boolStr(m.settings.ShowQuotes) },
-		desc:  staticDesc("Show quotes in status bar when idle"),
-		activate: func(m *Model) tea.Cmd {
-			m.settings.ShowQuotes = !m.settings.ShowQuotes
-			m.tickCount = 0
-			if m.settings.ShowQuotes {
-				// Start from first fallback quote
-				m.fallbackIdx = 0
-				m.currentQuote = fallbackQuotes[0]
-			} else {
-				// Advance to next tip
-				m.advanceTip()
-			}
-			return saveSettingsCmd(m.db, m.settings)
-		},
-	},
-	{
-		label: "Discord RPC",
-		kind:  settingToggle,
-		value: func(m *Model) string { return boolStr(m.settings.DiscordRPCEnabled) },
-		desc:  staticDesc("Show currently playing track on your Discord profile"),
-		activate: func(m *Model) tea.Cmd {
-			m.settings.DiscordRPCEnabled = !m.settings.DiscordRPCEnabled
-			m.reinitDiscordRPC()
-			return saveSettingsCmd(m.db, m.settings)
-		},
-	},
-	{
-		label: "Autoplay",
-		kind:  settingToggle,
-		value: func(m *Model) string { return boolStr(m.settings.AutoplayEnabled) },
-		desc:  staticDesc("Auto-queue related tracks when queue runs out"),
-		activate: func(m *Model) tea.Cmd {
-			m.settings.AutoplayEnabled = !m.settings.AutoplayEnabled
-			return saveSettingsCmd(m.db, m.settings)
-		},
-	},
-	{
 		label: "Default Volume",
 		kind:  settingNumber,
 		value: func(m *Model) string { return fmt.Sprintf("%d", m.settings.DefaultVolume) },
@@ -130,16 +61,6 @@ var settingDefs = []settingDef{
 				m.player.SetVolume(m.settings.DefaultVolume)
 			}
 			m.volume = m.settings.DefaultVolume
-			return saveSettingsCmd(m.db, m.settings)
-		},
-	},
-	{
-		label: "Search Limit",
-		kind:  settingNumber,
-		value: func(m *Model) string { return fmt.Sprintf("%d", m.settings.SearchLimit) },
-		desc:  staticDesc("Max results per search  (+/- adjust)"),
-		adjust: func(m *Model, dir int) tea.Cmd {
-			m.settings.SearchLimit = min(100, max(5, m.settings.SearchLimit+dir*5))
 			return saveSettingsCmd(m.db, m.settings)
 		},
 	},
@@ -170,6 +91,75 @@ var settingDefs = []settingDef{
 			if m.downloader != nil {
 				m.downloader.SetFormat(m.settings.DownloadFormat)
 			}
+			return saveSettingsCmd(m.db, m.settings)
+		},
+	},
+	{
+		label: "Search Limit",
+		kind:  settingNumber,
+		value: func(m *Model) string { return fmt.Sprintf("%d", m.settings.SearchLimit) },
+		desc:  staticDesc("Max results per search  (+/- adjust)"),
+		adjust: func(m *Model, dir int) tea.Cmd {
+			m.settings.SearchLimit = min(100, max(5, m.settings.SearchLimit+dir*5))
+			return saveSettingsCmd(m.db, m.settings)
+		},
+	},
+	{
+		label: "Theme",
+		kind:  settingCycle,
+		value: func(m *Model) string { return string(ParseTheme(m.settings.Theme)) },
+		desc:  func(m *Model) string { return ThemeDesc(ParseTheme(m.settings.Theme)) },
+		activate: func(m *Model) tea.Cmd {
+			cur := ParseTheme(m.settings.Theme)
+			next := themeOrder[0]
+			for i, t := range themeOrder {
+				if t == cur {
+					next = themeOrder[(i+1)%len(themeOrder)]
+					break
+				}
+			}
+			m.settings.Theme = string(next)
+			ApplyTheme(next)
+			return saveSettingsCmd(m.db, m.settings)
+		},
+	},
+	{
+		label: "Show Quotes",
+		kind:  settingToggle,
+		value: func(m *Model) string { return boolStr(m.settings.ShowQuotes) },
+		desc:  staticDesc("Show quotes in status bar when idle"),
+		activate: func(m *Model) tea.Cmd {
+			m.settings.ShowQuotes = !m.settings.ShowQuotes
+			m.tickCount = 0
+			if m.settings.ShowQuotes {
+				// Start from first fallback quote
+				m.fallbackIdx = 0
+				m.currentQuote = fallbackQuotes[0]
+			} else {
+				// Advance to next tip
+				m.advanceTip()
+			}
+			return saveSettingsCmd(m.db, m.settings)
+		},
+	},
+	{
+		label: "Copy Link As",
+		kind:  settingCycle,
+		value: func(m *Model) string { return settings.CopyLinkLabel(m.settings.CopyMusicLinks) },
+		desc:  staticDesc("Which link [u] puts on the clipboard — both play the same recording"),
+		activate: func(m *Model) tea.Cmd {
+			m.settings.CopyMusicLinks = !m.settings.CopyMusicLinks
+			return saveSettingsCmd(m.db, m.settings)
+		},
+	},
+	{
+		label: "Discord RPC",
+		kind:  settingToggle,
+		value: func(m *Model) string { return boolStr(m.settings.DiscordRPCEnabled) },
+		desc:  staticDesc("Show currently playing track on your Discord profile"),
+		activate: func(m *Model) tea.Cmd {
+			m.settings.DiscordRPCEnabled = !m.settings.DiscordRPCEnabled
+			m.reinitDiscordRPC()
 			return saveSettingsCmd(m.db, m.settings)
 		},
 	},

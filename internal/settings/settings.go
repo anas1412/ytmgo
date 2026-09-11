@@ -38,6 +38,10 @@ type Settings struct {
 	// launch. Both default on.
 	VisualizerOn bool `json:"visualizer_on"`
 	LyricsOn     bool `json:"lyrics_on"`
+	// CopyMusicLinks picks which host u writes to the clipboard. Off by
+	// default: a youtube.com link opens anywhere, including for people
+	// without YouTube Music, and still plays the same recording.
+	CopyMusicLinks bool `json:"copy_music_links"`
 }
 
 // Defaults returns a Settings with sane defaults.
@@ -55,7 +59,16 @@ func Defaults() *Settings {
 		Theme:             "terminal",
 		VisualizerOn:      true,
 		LyricsOn:          true,
+		CopyMusicLinks:    false,
 	}
+}
+
+// CopyLinkLabel names the host u copies to the clipboard.
+func CopyLinkLabel(musicHost bool) string {
+	if musicHost {
+		return "music.youtube.com — opens in YouTube Music"
+	}
+	return "youtube.com — opens anywhere"
 }
 
 // DownloadFormatLabel returns a human-readable label for the download format.

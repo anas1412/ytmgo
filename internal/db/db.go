@@ -199,6 +199,7 @@ func openAt(path string) (*DB, error) {
 	db.Exec(`ALTER TABLE settings ADD COLUMN show_hints INTEGER NOT NULL DEFAULT 1`)
 	db.Exec(`ALTER TABLE settings ADD COLUMN visualizer_on INTEGER NOT NULL DEFAULT 1`)
 	db.Exec(`ALTER TABLE settings ADD COLUMN lyrics_on INTEGER NOT NULL DEFAULT 1`)
+	db.Exec(`ALTER TABLE settings ADD COLUMN copy_music_links INTEGER NOT NULL DEFAULT 0`)
 	db.Exec(`ALTER TABLE favorites ADD COLUMN cover_url TEXT NOT NULL DEFAULT ''`)
 	db.Exec(`ALTER TABLE favorites ADD COLUMN url TEXT NOT NULL DEFAULT ''`)
 	db.Exec(`ALTER TABLE play_history ADD COLUMN cover_url TEXT NOT NULL DEFAULT ''`)
@@ -393,9 +394,9 @@ func (d *DB) ClearPlayHistory() error {
 // Returns Defaults if the row doesn't exist or any error occurs.
 func (d *DB) LoadSettings() (*settings.Settings, error) {
 	var s settings.Settings
-	var showQuotes, discordRPC, autoplayEnabled, showHints, vizOn, lyricsOn int
-	row := d.QueryRow(`SELECT playback_mode, default_volume, search_limit, download_dir, download_format, show_quotes, discord_rpc_enabled, autoplay_enabled, theme, show_hints, visualizer_on, lyrics_on FROM settings WHERE id = 1`)
-	if err := row.Scan(&s.PlaybackMode, &s.DefaultVolume, &s.SearchLimit, &s.DownloadDir, &s.DownloadFormat, &showQuotes, &discordRPC, &autoplayEnabled, &s.Theme, &showHints, &vizOn, &lyricsOn); err != nil {
+	var showQuotes, discordRPC, autoplayEnabled, showHints, vizOn, lyricsOn, copyMusic int
+	row := d.QueryRow(`SELECT playback_mode, default_volume, search_limit, download_dir, download_format, show_quotes, discord_rpc_enabled, autoplay_enabled, theme, show_hints, visualizer_on, lyrics_on, copy_music_links FROM settings WHERE id = 1`)
+	if err := row.Scan(&s.PlaybackMode, &s.DefaultVolume, &s.SearchLimit, &s.DownloadDir, &s.DownloadFormat, &showQuotes, &discordRPC, &autoplayEnabled, &s.Theme, &showHints, &vizOn, &lyricsOn, &copyMusic); err != nil {
 		return settings.Defaults(), fmt.Errorf("load settings: %w", err)
 	}
 	s.ShowQuotes = showQuotes != 0
@@ -404,14 +405,15 @@ func (d *DB) LoadSettings() (*settings.Settings, error) {
 	s.AutoplayEnabled = autoplayEnabled != 0
 	s.VisualizerOn = vizOn != 0
 	s.LyricsOn = lyricsOn != 0
+	s.CopyMusicLinks = copyMusic != 0
 	return &s, nil
 }
 
 // SaveSettings writes settings to the database.
 func (d *DB) SaveSettings(s *settings.Settings) error {
 	_, err := d.Exec(
-		`UPDATE settings SET playback_mode = ?, default_volume = ?, search_limit = ?, download_dir = ?, download_format = ?, show_quotes = ?, discord_rpc_enabled = ?, autoplay_enabled = ?, theme = ?, show_hints = ?, visualizer_on = ?, lyrics_on = ? WHERE id = 1`,
-		s.PlaybackMode, s.DefaultVolume, s.SearchLimit, s.DownloadDir, s.DownloadFormat, boolInt(s.ShowQuotes), boolInt(s.DiscordRPCEnabled), boolInt(s.AutoplayEnabled), s.Theme, boolInt(s.ShowHints), boolInt(s.VisualizerOn), boolInt(s.LyricsOn),
+		`UPDATE settings SET playback_mode = ?, default_volume = ?, search_limit = ?, download_dir = ?, download_format = ?, show_quotes = ?, discord_rpc_enabled = ?, autoplay_enabled = ?, theme = ?, show_hints = ?, visualizer_on = ?, lyrics_on = ?, copy_music_links = ? WHERE id = 1`,
+		s.PlaybackMode, s.DefaultVolume, s.SearchLimit, s.DownloadDir, s.DownloadFormat, boolInt(s.ShowQuotes), boolInt(s.DiscordRPCEnabled), boolInt(s.AutoplayEnabled), s.Theme, boolInt(s.ShowHints), boolInt(s.VisualizerOn), boolInt(s.LyricsOn), boolInt(s.CopyMusicLinks),
 	)
 	if err != nil {
 		return fmt.Errorf("save settings: %w", err)

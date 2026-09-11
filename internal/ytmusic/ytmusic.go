@@ -67,6 +67,16 @@ func WatchURL(videoID string) string {
 	return "https://music.youtube.com/watch?v=" + videoID
 }
 
+// ShareURL returns the link to hand to a person rather than to a
+// player. Same recording either way — only the site that opens differs,
+// and a youtube.com link opens for everyone.
+func ShareURL(videoID string, musicHost bool) string {
+	if musicHost {
+		return WatchURL(videoID)
+	}
+	return "https://www.youtube.com/watch?v=" + videoID
+}
+
 var videoIDRe = regexp.MustCompile(`^[A-Za-z0-9_-]{11}$`)
 
 // IsVideoID reports whether s looks like a YouTube videoId. Used to

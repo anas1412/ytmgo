@@ -314,7 +314,7 @@ Tab cycles focus through: search input → result list → queue panel → searc
 | `s` | Toggle shuffle |
 | `r` | Cycle repeat: OFF → ONE → ALL |
 | `x` | Download selected track |
-| `u` | Copy the track's YouTube Music link to the clipboard |
+| `u` | Copy the track's link (host set by **Copy Link As** in Settings) |
 | `a` | Open the **album** the selected song came from. Inside an album, queue every song on it |
 | `A` | Open the **artist** of the selected track. On their page, switch songs ⇄ releases |
 | `R` | Refresh recommendations |

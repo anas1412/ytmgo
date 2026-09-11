@@ -64,7 +64,7 @@ move on. `n` always advances, even with repeat-one enabled.
 | Key | Action |
 |-----|--------|
 | `x` | Download the selected track, and jump to the Downloads page |
-| `u` | Copy the track's YouTube Music link to the clipboard |
+| `u` | Copy the track's link to the clipboard — a `youtube.com` link by default, `music.youtube.com` if you change **Copy Link As** in Settings |
 | `X` | Jump to the Downloads page and back |
 | `o` | Open the download directory in your file manager |
 | `U` | Check for updates, and confirm the install |
