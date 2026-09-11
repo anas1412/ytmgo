@@ -31,6 +31,26 @@ while [ $# -gt 0 ]; do
   esac
 done
 
+# The two files below are generated from these, not typed out twice:
+# the PKGBUILD said cava was needed and the .SRCINFO did not, which is
+# the list helpers actually read.
+DEPENDS=(mpv yt-dlp ffmpeg cava)
+MAKEDEPENDS=("go>=1.22")
+
+TARBALL="https://github.com/anas1412/ytmgo/archive/$TAG.tar.gz"
+
+# makepkg verifies the source against this. It was SKIP, which verifies
+# nothing: a truncated or substituted tarball built silently. GitHub
+# generates these archives on demand but the bytes for a given tag are
+# stable, so the hash can be pinned like any other source.
+echo "Hashing $TARBALL …" >&2
+SHA256="$(curl -fsSL "$TARBALL" | sha256sum | cut -d' ' -f1)"
+if [ -z "$SHA256" ] || [ "$SHA256" = "$(printf '' | sha256sum | cut -d' ' -f1)" ]; then
+  echo "error: could not hash $TARBALL — refusing to generate a package that verifies nothing" >&2
+  exit 1
+fi
+echo "  sha256 $SHA256" >&2
+
 # ---- PKGBUILD ----
 read -r -d '' PKGBUILD << PKGBUILD_EOF || true
 # Maintainer: Anas <anas1412@github>
@@ -46,10 +66,10 @@ pkgdesc="A terminal-based YouTube Music client — search, download, queue, and 
 arch=('x86_64' 'aarch64')
 url="https://github.com/anas1412/ytmgo"
 license=('MIT')
-depends=('mpv' 'yt-dlp' 'ffmpeg' 'cava')
-makedepends=('go>=1.22')
+depends=($(printf "'%s' " "${DEPENDS[@]}" | sed 's/ $//'))
+makedepends=($(printf "'%s' " "${MAKEDEPENDS[@]}" | sed 's/ $//'))
 source=("\$url/archive/v\$pkgver.tar.gz")
-sha256sums=('SKIP')
+sha256sums=('$SHA256')
 
 build() {
   cd "\$srcdir/\$pkgname-\$pkgver"
@@ -96,12 +116,10 @@ pkgbase = ytmgo
 	arch = x86_64
 	arch = aarch64
 	license = MIT
-	makedepends = go>=1.22
-	depends = mpv
-	depends = yt-dlp
-	depends = ffmpeg
+$(printf '\tmakedepends = %s\n' "${MAKEDEPENDS[@]}")
+$(printf '\tdepends = %s\n' "${DEPENDS[@]}")
 	source = https://github.com/anas1412/ytmgo/archive/v$VERSION.tar.gz
-	sha256sums = SKIP
+	sha256sums = $SHA256
 
 pkgname = ytmgo
 SRCINFO_EOF
