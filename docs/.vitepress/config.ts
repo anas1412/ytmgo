@@ -40,8 +40,10 @@ export default defineConfig({
           text: 'Getting started',
           items: [
             { text: 'Install', link: '/guide/install' },
+            { text: 'Browsing', link: '/guide/browsing' },
             { text: 'Keybindings', link: '/guide/keybindings' },
             { text: 'Command line', link: '/guide/cli' },
+            { text: 'Troubleshooting', link: '/guide/troubleshooting' },
           ],
         },
       ],

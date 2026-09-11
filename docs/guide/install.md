@@ -47,22 +47,6 @@ go build -o ytmgo .
 ./ytmgo
 ```
 
-::: tip yt-dlp comes from upstream, not your package manager
-`yt-dlp` is the one dependency a distro package actively breaks. YouTube
-changes, yt-dlp patches within days, and a frozen archive does not
-follow — Debian and Ubuntu still carry builds from 2023 and 2025
-alongside the current one. An out-of-date yt-dlp cannot open a single
-track, which looks like ytmgo skipping through the whole queue in
-silence.
-
-So the installer fetches yt-dlp from its own releases, next to the
-ytmgo binary. That copy self-updates with `yt-dlp -U`; a packaged one
-refuses to.
-
-You do not have to do anything about a yt-dlp you already have. ytmgo
-runs its own copy by absolute path and tells mpv's stream hook to use
-the same one, so whatever your PATH order is, the current yt-dlp wins.
-:::
 
 ## Supported systems
 
@@ -122,8 +106,25 @@ macOS:
 brew install mpv ffmpeg cava
 ```
 
-yt-dlp is missing from those lists on purpose. Install it from upstream,
-where it can keep itself current:
+::: tip yt-dlp comes from upstream, not your package manager
+`yt-dlp` is the one dependency a distro package actively breaks. YouTube
+changes, yt-dlp patches within days, and a frozen archive does not
+follow — Debian and Ubuntu still carry builds from 2023 and 2025
+alongside the current one. An out-of-date yt-dlp cannot open a single
+track, which looks like ytmgo skipping through the whole queue in
+silence.
+
+So the installer fetches yt-dlp from its own releases, next to the
+ytmgo binary. That copy self-updates with `yt-dlp -U`; a packaged one
+refuses to.
+
+You do not have to do anything about a yt-dlp you already have. ytmgo
+runs its own copy by absolute path and tells mpv's stream hook to use
+the same one, so whatever your PATH order is, the current yt-dlp wins.
+:::
+
+The installer does this for you. To do it by hand, or to give a
+system-wide yt-dlp the same treatment:
 
 ```bash
 curl -fsSL https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_linux \
@@ -155,34 +156,16 @@ queue — plus `downloads/` and a log.
 Before v1 the database was in `~/.config/ytmgo`. It moves itself the
 first time a v1 build starts; nothing to do, and nothing is lost.
 
-## If nothing plays
+::: tip Backing it up
+Copy `ytmgo.db` while ytmgo is closed. A clean exit leaves no `-wal`
+file beside it; if you see one, the app is still running or did not exit
+cleanly, and copying the database alone would miss recent writes.
+:::
 
-Almost always an out-of-date yt-dlp. YouTube changes, yt-dlp patches
-within days, and a distro package does not follow — so every track fails
-to open at once.
+## When something does not work
 
-ytmgo stops after three tracks in a row fail and says so:
-
-> Nothing will play — mpv could not open 3 tracks in a row. Update
-> yt-dlp: `yt-dlp -U`
-
-Run that, and if the copy on your machine came from a package manager
-and refuses to self-update, install the upstream one from the section
-above. You do not need to remove the packaged copy or change your
-`PATH`; ytmgo prefers its own.
-
-To check what ytmgo is actually running:
-
-```bash
-ls -l "$(dirname "$(command -v ytmgo)")/yt-dlp" && yt-dlp --version
-```
-
-If a track still will not play, take ytmgo out of it and try mpv
-directly — if this fails too, the problem is below ytmgo:
-
-```bash
-mpv --no-video "https://music.youtube.com/watch?v=dQw4w9WgXcQ"
-```
+Start with [Troubleshooting](/guide/troubleshooting) — nothing plays, no
+sound, no visualizer, no album art, media keys, lyrics.
 
 ## Uninstalling
 
