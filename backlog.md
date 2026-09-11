@@ -19,11 +19,11 @@ Everything below is in main and working.
 | **Library** — everything already on disk, filterable | `internal/library` |
 | **Favourites and play history** — both persisted | `favorites`, `play_history` tables |
 | **Queue recovery** — the queue comes back on restart | `db.LoadQueue` |
-| **Synced lyrics** — LRCLIB, following the song, cached locally | `internal/lyrics` |
+| **Synced lyrics** — LRCLIB, following the song, cached locally; `y` remembers whether the pane was open | `internal/lyrics` |
 | **Album previews** — tracklist, cover art, queue or download the lot | `internal/tui` |
 | **MPRIS** — media keys and desktop widgets; silently absent without a session bus | `internal/mpris` |
 | **Discord Rich Presence** — now-playing, toggleable | `internal/discordrpc` |
-| **Spectrum visualiser** — via cava, optional | `internal/visualizer` |
+| **Spectrum visualiser** — via cava, optional; `v` remembers whether the pane was open | `internal/visualizer` |
 | **Eleven themes** — the terminal's own colours, ytmgo's, and nine full schemes | `internal/tui/theme.go` |
 | **Full mouse support** — tabs, lists, seek bar, volume, transport, mode toggles | `internal/tui/mouse.go` |
 | **Album art in the terminal** — kitty graphics where available | `internal/coverart` |
@@ -32,25 +32,23 @@ Everything below is in main and working.
 
 ## Before 1.0
 
-Small, and all of it is about not making promises we have to break later.
+Nothing outstanding. The list was a licence file, the database moving
+out of the config directory, live API tests off the CI gate, downloader
+test coverage, and this file being wrong — all done.
 
-### Downloader test coverage
-**Status:** ❌ Not started · **Effort:** Small
-
-The downloader is 5.8% covered across 527 lines, and it is the part that
-writes to disk and shells out to yt-dlp. The pure logic — filename
-sanitising, progress parsing, queue transitions — can be tested without
-running anything.
-
-### Search history
-**Status:** ❌ Not started · **Effort:** Small
-
-Recent queries, for re-running one without retyping. The only piece of
-the original persistence plan still missing; the other four shipped.
+Search history was on this list and moved below. It is a convenience,
+not a promise about the interface, and shipping 1.0 does not make it
+harder to add.
 
 ---
 
 ## After 1.0
+
+### Search history
+**Status:** ❌ Not started · **Effort:** Small
+
+Recent queries, for re-running one without retyping. The last piece of
+the original persistence plan; the other four shipped.
 
 ### User authentication
 **Status:** ❌ Not started · **Effort:** Medium
