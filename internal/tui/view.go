@@ -1989,8 +1989,10 @@ func (m Model) renderSettingsList(panelWidth, panelHeight int) string {
 
 	// Help text at bottom, wrapped like the descriptions above it —
 	// cut off, it lost the half naming the keys that leave the page.
+	// The page numbers are not named here: the tabs carry them, and
+	// they work on every page rather than this one.
 	for _, l := range strings.Split(styleSettingsDesc.Width(innerW).
-		Render("↑↓ navigate · Enter toggle/edit · Esc cancel edit · 1-6 switch page"), "\n") {
+		Render("↑↓ navigate · Enter toggle/edit · Esc cancel edit"), "\n") {
 		lines = append(lines, truncate(l, innerW))
 	}
 
