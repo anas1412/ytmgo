@@ -12,7 +12,7 @@ Everything below is in main and working.
 
 | Feature | Where |
 |---|---|
-| **Search** — songs and albums, straight against YouTube Music's own API, no key or login | `internal/ytmusic` |
+| **Search** — songs, straight against YouTube Music's own API, no key or login (albums too, from the CLI's `-a`) | `internal/ytmusic` |
 | **Playback** — mpv under the hood, queue with shuffle and repeat OFF / ONE / ALL | `internal/player`, `internal/queue` |
 | **Autoplay radio** — when the queue runs dry, enqueues what YouTube Music would play next | `internal/ytmusic`, `[c]` on the player bar |
 | **Downloads** — one key per track, whole albums into numbered folders, on their own page | `internal/downloader` |
@@ -21,7 +21,7 @@ Everything below is in main and working.
 | **Queue recovery** — the queue comes back on restart | `db.LoadQueue` |
 | **Synced lyrics** — LRCLIB, following the song, cached locally; `y` remembers whether the pane was open | `internal/lyrics` |
 | **Album previews** — tracklist, cover art, queue or download the lot | `internal/tui` |
-| **Artist pages** — top songs and full discography, from any track | `ytmusic.Artist`, `[i]` |
+| **Artist pages** — top songs and full discography, from any track | `ytmusic.Artist`, `[A]` |
 | **MPRIS** — media keys and desktop widgets; silently absent without a session bus | `internal/mpris` |
 | **Discord Rich Presence** — now-playing, toggleable | `internal/discordrpc` |
 | **Spectrum visualiser** — via cava, optional; `v` remembers whether the pane was open | `internal/visualizer` |

@@ -105,12 +105,6 @@ type (
 		Seq     int // generation counter; stale responses are skipped
 	}
 
-	// AlbumResultsMsg carries results back from an album search.
-	AlbumResultsMsg struct {
-		Albums []ytmusic.Album
-		Error  error
-	}
-
 	// ArtistLoadedMsg carries a fetched artist page.
 	ArtistLoadedMsg struct {
 		Artist ytmusic.ArtistPage
@@ -274,9 +268,8 @@ type Model struct {
 	// ── Albums (Stream page, toggled with A) ──
 	// The left panel shows exactly one list at a time, so albums reuse
 	// searchCursor/searchOffset rather than carrying their own.
-	albumMode  bool            // search returns albums instead of songs
-	albums     []ytmusic.Album // album search results (cached across A toggles)
-	albumQuery string          // query behind m.albums, so toggling back doesn't refetch
+	albumMode bool            // search returns albums instead of songs
+	albums    []ytmusic.Album // album search results (cached across A toggles)
 	// openArtist is set while an artist page is open. The songs and the
 	// cover are the artist's own fields rather than the album view's:
 	// opening an album from an artist page and backing out of it runs

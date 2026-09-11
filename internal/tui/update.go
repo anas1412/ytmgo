@@ -131,9 +131,6 @@ func (m Model) dispatch(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.handleRecommendations(msg)
 
 	// ── Album search / album opened ──────────────────────────────
-	case AlbumResultsMsg:
-		return m.handleAlbumResults(msg)
-
 	case AlbumTracksMsg:
 		return m.handleAlbumTracks(msg)
 

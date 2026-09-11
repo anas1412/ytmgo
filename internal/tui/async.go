@@ -69,29 +69,6 @@ func (m Model) handleRecommendations(msg RecommendationsMsg) (tea.Model, tea.Cmd
 	return m, nil
 }
 
-// ── Album search results ─────────────────────────────────────────────
-
-func (m Model) handleAlbumResults(msg AlbumResultsMsg) (tea.Model, tea.Cmd) {
-	m.isSearching = false
-	if !m.albumMode {
-		return m, nil // user toggled back to songs while this was in flight
-	}
-	if msg.Error != nil {
-		m.err = msg.Error
-		m.setStatus("Album search failed: " + msg.Error.Error())
-		return m, nil
-	}
-	m.albums = msg.Albums
-	coverCmd := m.leaveAlbumView()
-	m.resetStreamCursor()
-	if len(msg.Albums) == 0 {
-		m.setStatus("No albums found")
-	} else {
-		m.setStatus(fmt.Sprintf("Found %d albums", len(msg.Albums)))
-	}
-	return m, coverCmd
-}
-
 // ── Album opened (tracklist fetched) ─────────────────────────────────
 
 func (m Model) handleAlbumTracks(msg AlbumTracksMsg) (tea.Model, tea.Cmd) {

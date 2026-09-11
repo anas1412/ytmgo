@@ -508,21 +508,22 @@ func (m Model) renderPanels() string {
 				m.hints("  "+aHint+" queue all  "+xHint+" download  "+escHint+" back")
 		case m.albumMode:
 			albHint := styleKeyHint.Render("[A]")
-			panelLabel = "ALBUMS" + m.hints("  "+albHint+" songs  "+xHint+" download album")
+			panelLabel = "RELEASES" + m.hints("  "+albHint+" songs  "+xHint+" download album")
 		case m.showingRecommendations:
 			rHint := styleKeyHint.Render("[R]")
 			albHint := styleKeyHint.Render("[A]")
-			panelLabel = "RECOMMENDATIONS" + m.hints("  "+rHint+" refresh  "+albHint+" albums  "+xHint+" download  "+fHint+" fav")
+			panelLabel = "RECOMMENDATIONS" + m.hints("  "+rHint+" refresh  "+albHint+" artist  "+xHint+" download  "+fHint+" fav")
 		default:
 			albHint := styleKeyHint.Render("[A]")
-			panelLabel = "SEARCH RESULTS" + m.hints("  "+albHint+" albums  "+xHint+" download  "+fHint+" add to fav")
+			panelLabel = "SEARCH RESULTS" + m.hints("  "+albHint+" artist  "+xHint+" download  "+fHint+" fav")
 		}
 	default:
+		albHint := styleKeyHint.Render("[A]")
 		if m.showingRecommendations {
 			rHint := styleKeyHint.Render("[R]")
-			panelLabel = "RECOMMENDATIONS" + m.hints("  "+rHint+" refresh  "+xHint+" download  "+fHint+" add to fav")
+			panelLabel = "RECOMMENDATIONS" + m.hints("  "+rHint+" refresh  "+albHint+" artist  "+xHint+" download  "+fHint+" fav")
 		} else {
-			panelLabel = "SEARCH RESULTS" + m.hints("  "+xHint+" download  "+fHint+" add to fav")
+			panelLabel = "SEARCH RESULTS" + m.hints("  "+albHint+" artist  "+xHint+" download  "+fHint+" fav")
 		}
 	}
 	// Truncate every panel title so the border always has room for its

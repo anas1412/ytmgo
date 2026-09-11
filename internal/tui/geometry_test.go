@@ -1108,7 +1108,7 @@ func TestArtistListSourceFollowsTheMode(t *testing.T) {
 	}
 }
 
-// TestArtistKeyNeedsAnArtistID: i says why it cannot open rather than
+// TestArtistKeyNeedsAnArtistID: A says why it cannot open rather than
 // doing nothing. A local library file has no YouTube artist behind it.
 func TestArtistKeyNeedsAnArtistID(t *testing.T) {
 	m := worstCaseModel(t, 150, 40)
@@ -1117,7 +1117,7 @@ func TestArtistKeyNeedsAnArtistID(t *testing.T) {
 	m.queue.Add(queue.Track{ID: "local", Title: "A File", Artist: "Someone"})
 	m.queueCursor = 0
 
-	nm, cmd := m.handleKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'i'}})
+	nm, cmd := m.handleKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'A'}})
 	got := nm.(Model)
 	if cmd != nil {
 		t.Error("a track with no artist id still fired a fetch")
@@ -1131,7 +1131,7 @@ func TestArtistKeyNeedsAnArtistID(t *testing.T) {
 	m.queue.Add(queue.Track{ID: "m9SMT5ipbxk", Title: "A Song", Artist: "Someone",
 		ArtistBrowseID: "UCRr1xG_2WIDs18a6cIiCxeA"})
 	m.queueCursor = 0
-	nm, cmd = m.handleKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'i'}})
+	nm, cmd = m.handleKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'A'}})
 	if cmd == nil {
 		t.Error("a track with an artist id did not fire a fetch")
 	}
@@ -1168,5 +1168,47 @@ func TestArtistSwitchAndBack(t *testing.T) {
 	}
 	if m.streamShowsTracks() {
 		t.Error("esc left the list reading the artist's tracks")
+	}
+}
+
+// TestArtistSongsAreActionable: every row action has to reach the
+// artist's songs. Routing only the condition through streamShowsTracks
+// and leaving the assignment on albumTracks — nil on an artist page —
+// made enter, x and i all operate on an empty list.
+func TestArtistSongsAreActionable(t *testing.T) {
+	t.Setenv("PATH", t.TempDir()) // no yt-dlp: x fails fast instead of downloading
+
+	build := func() Model {
+		m := artistModel(t, 150, 40, false)
+		m.artistSongs = []search.Result{{
+			ID: "m9SMT5ipbxk", Title: "A Song", Uploader: "Someone", Duration: 200,
+			URL: "https://music.youtube.com/watch?v=m9SMT5ipbxk", ArtistBrowseID: "UCxxxxxxxxxxxxxxxxxxxxxx",
+		}}
+		m.activePanel = PanelSearch
+		m.searchCursor = 0
+		return m
+	}
+
+	// Enter queues the highlighted song.
+	m := build()
+	before := m.queue.Len()
+	nm, _ := m.handleKey(tea.KeyMsg{Type: tea.KeyEnter})
+	if got := nm.(Model); got.queue.Len() != before+1 {
+		t.Errorf("enter queued %d tracks from the artist page, want 1", got.queue.Len()-before)
+	}
+
+	// x downloads it.
+	m = build()
+	nm, _ = m.handleKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'x'}})
+	got := nm.(Model)
+	if got.downloader == nil || len(got.downloader.Jobs()) == 0 {
+		t.Error("x queued no download from the artist page")
+	}
+
+	// u copies the highlighted song's link — another reader of the list.
+	m = build()
+	m.copyLinkAction()
+	if strings.Contains(m.statusMessage, "Nothing selected") {
+		t.Errorf("u saw an empty list: %q", m.statusMessage)
 	}
 }

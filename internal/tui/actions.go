@@ -82,7 +82,7 @@ func (m *Model) activateSelection() tea.Cmd {
 		// Inside an album: its tracks behave like ordinary results.
 		list := m.results
 		if m.streamShowsTracks() {
-			list = m.albumTracks
+			list = m.streamTracks()
 		}
 		if len(list) > 0 && m.searchCursor >= 0 && m.searchCursor < len(list) {
 			r := list[m.searchCursor]
@@ -320,7 +320,7 @@ func (m *Model) selectedTrack() (queue.Track, bool) {
 	default: // Stream page: search results, or an open album's tracks
 		list := m.results
 		if m.streamShowsTracks() {
-			list = m.albumTracks
+			list = m.streamTracks()
 		}
 		if m.searchCursor >= 0 && m.searchCursor < len(list) {
 			return m.resolveTrack(list[m.searchCursor]), true

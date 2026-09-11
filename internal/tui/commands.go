@@ -120,14 +120,6 @@ func fetchAutoplayCmd(db *db.DB) tea.Cmd {
 
 // ─── Albums ─────────────────────────────────────────────────────────
 
-// searchAlbumsCmd runs an albums-filtered YouTube Music search.
-func searchAlbumsCmd(query string, limit int) tea.Cmd {
-	return func() tea.Msg {
-		albums, err := ytmusic.SearchAlbums(query, limit)
-		return AlbumResultsMsg{Albums: albums, Error: err}
-	}
-}
-
 // openAlbumCmd fetches one album's tracklist and converts it to
 // playable results, so the left panel can render it like any other list.
 // seq is the generation counter — a slow response for a superseded

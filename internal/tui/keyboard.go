@@ -40,12 +40,6 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.isSearching = true
 				m.err = nil
 				m.resetStreamCursor()
-				if m.albumMode {
-					coverCmd := m.leaveAlbumView()
-					m.albums = nil
-					m.albumQuery = query
-					return m, tea.Batch(coverCmd, searchAlbumsCmd(query, m.settings.SearchLimit))
-				}
 				m.results = nil
 				return m, searchCmd(query, m.settings.SearchLimit)
 			}
@@ -316,9 +310,10 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, m.prevTrack()
 
 	case "A":
-		// On an artist page, the same songs/albums idea applies to that
-		// artist rather than to the search, so the key keeps its meaning
-		// instead of gaining a second one.
+		// On an artist page, switch between their songs and their
+		// releases. Anywhere else, open the artist of the highlighted
+		// track — which is how you get onto an artist page in the first
+		// place. One key for "who made this, and what else".
 		if m.activePage == PageStream && m.openArtist != nil && m.openAlbum == nil {
 			m.artistShowsAlbums = !m.artistShowsAlbums
 			m.albumMode = m.artistShowsAlbums
@@ -330,48 +325,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 		}
-		// Toggle the Stream search between songs and albums.
-		if m.activePage != PageStream {
-			return m, nil
-		}
-		m.albumMode = !m.albumMode
-		coverCmd := m.leaveAlbumView()
-		m.resetStreamCursor()
-		if !m.albumMode {
-			// Back to songs: restore whatever the results panel had.
-			m.setStatus("Searching songs")
-			if len(m.results) == 0 {
-				return m, tea.Batch(coverCmd, m.showRecommendations())
-			}
-			return m, coverCmd
-		}
-		// Album results are kept across toggles: only refetch when the
-		// query actually changed, so flipping A back and forth is free.
-		q := m.searchInput.Value()
-		switch {
-		case q != "" && (len(m.albums) == 0 || m.albumQuery != q):
-			m.albumQuery = q
-			m.isSearching = true
-			m.setStatus("Searching albums…")
-			return m, tea.Batch(coverCmd, searchAlbumsCmd(q, m.settings.SearchLimit))
-		case len(m.albums) > 0:
-			m.setStatus(fmt.Sprintf("Albums — %d results", len(m.albums)))
-		default:
-			m.setStatus("Albums — type a query and press Enter")
-		}
-		return m, coverCmd
-
-	case "i":
-		// Open the artist page of the highlighted track, from any list
-		// that knows it: search results, queue, favorites, history.
-		//
-		// This used to open the album, with I for the artist. They read
-		// as a pair and were not one: an artist page already contains
-		// their albums, one [A] away, so the album key was a second
-		// door into a room the first one opens onto. One key, and the
-		// album a song came from is still reachable from it.
 		return m, m.openArtistOfSelected()
-
 	case "a":
 		// Queue every track of the open album.
 		if m.activePage == PageStream && m.openAlbum != nil && len(m.albumTracks) > 0 {
@@ -516,7 +470,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			if m.activePage != PageSettings && m.activePanel == PanelSearch {
 				list := m.results
 				if m.streamShowsTracks() {
-					list = m.albumTracks
+					list = m.streamTracks()
 				}
 				if len(list) > 0 && m.searchCursor >= 0 && m.searchCursor < len(list) {
 					r := list[m.searchCursor]
@@ -569,7 +523,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			// Inside an album, x downloads the highlighted track only.
 			list := m.results
 			if m.streamShowsTracks() {
-				list = m.albumTracks
+				list = m.streamTracks()
 			}
 			if len(list) == 0 || m.searchCursor < 0 || m.searchCursor >= len(list) {
 				return m, nil
