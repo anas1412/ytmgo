@@ -44,8 +44,12 @@ jobs:
       - name: go vet
         run: go vet ./...
 
+      # -race is on the gate deliberately. Both races it would have
+      # caught — a double cmd.Wait in the player, and the downloader's
+      # worker writing job fields the UI read every frame — were in
+      # shipped code for months without a failing test.
       - name: go test
-        run: go test ./... -short -count=1 -timeout 300s
+        run: go test ./... -short -race -count=1 -timeout 300s
 
   # The live tests, against the real YouTube Music and LRCLIB. Not a
   # gate: continue-on-error keeps a third-party outage from failing the
