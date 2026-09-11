@@ -111,6 +111,14 @@ type (
 		Error  error
 	}
 
+	// ArtistLoadedMsg carries a fetched artist page.
+	ArtistLoadedMsg struct {
+		Artist ytmusic.ArtistPage
+		Songs  []search.Result // TopSongs as playable results
+		Error  error
+		Seq    int // generation counter; stale responses are skipped
+	}
+
 	// AlbumTracksMsg carries a fetched album's tracklist.
 	AlbumTracksMsg struct {
 		Album  ytmusic.Album
@@ -266,9 +274,18 @@ type Model struct {
 	// ── Albums (Stream page, toggled with A) ──
 	// The left panel shows exactly one list at a time, so albums reuse
 	// searchCursor/searchOffset rather than carrying their own.
-	albumMode      bool            // search returns albums instead of songs
-	albums         []ytmusic.Album // album search results (cached across A toggles)
-	albumQuery     string          // query behind m.albums, so toggling back doesn't refetch
+	albumMode  bool            // search returns albums instead of songs
+	albums     []ytmusic.Album // album search results (cached across A toggles)
+	albumQuery string          // query behind m.albums, so toggling back doesn't refetch
+	// openArtist is set while an artist page is open. Its top songs go
+	// into albumTracks and its releases into albums, so the artist view
+	// renders through the same list code as everything else — the only
+	// difference is which of the two artistShowsAlbums picks.
+	openArtist        *ytmusic.ArtistPage
+	artistShowsAlbums bool
+	isLoadingArtist   bool
+	artistSeq         int // bumped per fetch; stale responses dropped
+
 	openAlbum      *ytmusic.Album  // non-nil: showing this album's tracks
 	albumTracks    []search.Result // tracks of openAlbum, as playable results
 	isLoadingAlbum bool
@@ -675,9 +692,18 @@ func (m *Model) prefetchCmd(t queue.Track) tea.Cmd {
 // how many rows it has. Albums reuse searchCursor, so every cursor
 // bound and click needs the active list's length rather than
 // len(m.results).
+// streamShowsTracks reports whether the left list is showing a track
+// list — an album's tracklist, or an artist's top songs — rather than
+// search results or a grid of releases. Both feed albumTracks and
+// behave identically from there, so every place that picks a list
+// source asks this rather than testing openAlbum directly.
+func (m Model) streamShowsTracks() bool {
+	return m.openAlbum != nil || (m.openArtist != nil && !m.artistShowsAlbums)
+}
+
 func (m Model) streamListLen() int {
 	switch {
-	case m.openAlbum != nil:
+	case m.streamShowsTracks():
 		return len(m.albumTracks)
 	case m.albumMode:
 		return len(m.albums)

@@ -137,6 +137,9 @@ func (m Model) dispatch(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case AlbumTracksMsg:
 		return m.handleAlbumTracks(msg)
 
+	case ArtistLoadedMsg:
+		return m.handleArtistLoaded(msg)
+
 	case AlbumDownloadMsg:
 		return m.handleAlbumDownload(msg)
 

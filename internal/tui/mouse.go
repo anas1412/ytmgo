@@ -336,7 +336,7 @@ func (m Model) handleClick(x, y int) (Model, tea.Cmd) {
 			default:
 				// An open album renders its header strip above the
 				// list, and its tracks are one line each, not two.
-				if m.openAlbum != nil {
+				if m.streamShowsTracks() {
 					idx = y - clickItemOffsetY - albumStripRows
 				}
 				idx += m.searchOffset

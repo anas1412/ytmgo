@@ -599,3 +599,45 @@ func (m Model) handleAutoplayResults(msg AutoplayResultsMsg) (tea.Model, tea.Cmd
 	m.setStatus("Autoplay: playing suggestions")
 	return m, tea.Batch(cmds...)
 }
+
+// ── Artist page loaded ───────────────────────────────────────────────
+
+func (m Model) handleArtistLoaded(msg ArtistLoadedMsg) (tea.Model, tea.Cmd) {
+	m.isLoadingArtist = false
+	// A superseded open (the user pressed I on another track) must not
+	// overwrite the newer one.
+	if msg.Seq != m.artistSeq {
+		return m, nil
+	}
+	if msg.Error != nil {
+		m.err = msg.Error
+		m.setStatus("Cannot open artist: " + msg.Error.Error())
+		return m, nil
+	}
+	a := msg.Artist
+	m.openArtist = &a
+	// An artist page opens on its songs — this is a music player, and
+	// the first thing wanted is something to play. Unless there are
+	// none, in which case the releases are all there is to show.
+	m.artistShowsAlbums = len(msg.Songs) == 0
+	m.albumTracks = msg.Songs
+	m.albums = a.Albums
+	// Leaving any open album behind: the artist replaces it.
+	m.openAlbum = nil
+	m.albumMode = m.artistShowsAlbums
+	m.resetStreamCursor()
+	m.setStatus(fmt.Sprintf("%s — %d songs, %d releases  ([A] switch · [esc] back)",
+		a.Name, len(msg.Songs), len(a.Albums)))
+
+	// The artist's photo goes through the album-art pipeline: the strip
+	// draws it from the same field, and bumping albumSeq keeps the
+	// transmit/delete bookkeeping that pipeline already does.
+	var cmds []tea.Cmd
+	if a.ThumbURL != "" && a.ThumbURL != m.albumArtURL {
+		m.albumSeq++
+		if c := loadAlbumArtCmd(a.ThumbURL, m.albumSeq); c != nil {
+			cmds = append(cmds, c)
+		}
+	}
+	return m, tea.Batch(cmds...)
+}

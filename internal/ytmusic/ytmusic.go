@@ -51,8 +51,11 @@ type Track struct {
 	Artist        string
 	Album         string
 	AlbumBrowseID string // MPREb_… — the id AlbumTracks takes (empty when unknown)
-	Duration      int    // seconds
-	CoverURL      string
+	// ArtistBrowseID is the UC… channel id Artist takes. Empty when the
+	// byline names an artist YouTube Music has no page for.
+	ArtistBrowseID string
+	Duration       int // seconds
+	CoverURL       string
 }
 
 // WatchURL returns the playable URL for a videoId. mpv resolves it via
@@ -228,6 +231,11 @@ func parseSearchItem(item interface{}) (Track, bool) {
 		}
 		fields = append(fields, s)
 		fieldAlbumIDs = append(fieldAlbumIDs, albumBrowseIDFromRun(r))
+		// The first run that links to an artist page wins: a
+		// collaboration lists several, and the first is the primary.
+		if t.ArtistBrowseID == "" {
+			t.ArtistBrowseID = artistBrowseIDFromRun(r)
+		}
 	}
 	for i, f := range fields {
 		switch {
@@ -265,6 +273,12 @@ func parseRadioItem(item interface{}) (Track, bool) {
 		}
 		fields = append(fields, s)
 		fieldAlbumIDs = append(fieldAlbumIDs, albumBrowseIDFromRun(r))
+		// Radio items carry the same artist link as search rows, in a
+		// different byline field. Missing it here meant recommendations
+		// — the list ytmgo opens on — were the one place [I] did nothing.
+		if t.ArtistBrowseID == "" {
+			t.ArtistBrowseID = artistBrowseIDFromRun(r)
+		}
 	}
 	if len(fields) > 0 {
 		t.Artist = fields[0]
@@ -283,6 +297,19 @@ func parseRadioItem(item interface{}) (Track, bool) {
 // a byline run's navigation endpoint, or "" when the run doesn't point
 // at an album. Artist runs point at channels (MPLA…), so filtering on
 // the MPRE prefix picks out just the album run.
+// artistBrowseIDFromRun returns the run's artist page id, if it links to
+// one. Identified by the run's own pageType rather than the id prefix:
+// UC ids are channel ids generally, and only this tag says the channel
+// is an artist page.
+func artistBrowseIDFromRun(run interface{}) string {
+	if digString(run, "navigationEndpoint", "browseEndpoint",
+		"browseEndpointContextSupportedConfigs", "browseEndpointContextMusicConfig",
+		"pageType") != "MUSIC_PAGE_TYPE_ARTIST" {
+		return ""
+	}
+	return digString(run, "navigationEndpoint", "browseEndpoint", "browseId")
+}
+
 func albumBrowseIDFromRun(run interface{}) string {
 	if id := digString(run, "navigationEndpoint", "browseEndpoint", "browseId"); strings.HasPrefix(id, "MPRE") {
 		return id
@@ -364,6 +391,31 @@ func digString(v interface{}, path ...interface{}) string {
 }
 
 // findKey returns the first value stored under key anywhere in the tree.
+// findAll returns every value stored under key, at any depth. findKey
+// stops at the first; an artist page carries its releases across two
+// carousels, so both have to be reached.
+func findAll(v interface{}, key string) []interface{} {
+	var out []interface{}
+	var walk func(interface{})
+	walk = func(n interface{}) {
+		switch t := n.(type) {
+		case map[string]interface{}:
+			for k, vv := range t {
+				if k == key {
+					out = append(out, vv)
+				}
+				walk(vv)
+			}
+		case []interface{}:
+			for _, vv := range t {
+				walk(vv)
+			}
+		}
+	}
+	walk(v)
+	return out
+}
+
 func findKey(v interface{}, key string) interface{} {
 	switch t := v.(type) {
 	case map[string]interface{}:
@@ -697,4 +749,124 @@ func parseAlbumItem(item interface{}) (Album, bool) {
 	}
 	a.CoverURL = largestThumbnail(dig(item, "thumbnail", "musicThumbnailRenderer", "thumbnail", "thumbnails"))
 	return a, true
+}
+
+// ─── Artists ────────────────────────────────────────────────────────
+
+// ArtistPage is an artist's page: who they are, what they are known
+// for, and what they have released.
+type ArtistPage struct {
+	BrowseID    string // UC… — a channel id
+	Name        string
+	Subscribers string // as rendered, e.g. "7.17M"
+	ThumbURL    string
+	TopSongs    []Track // up to 100, most played first
+	Albums      []Album // Albums, then Singles & EPs, in that order
+}
+
+// Artist fetches an artist's page: their discography and their
+// most-played songs.
+func Artist(browseID string) (ArtistPage, error) {
+	root, err := post("browse", map[string]interface{}{
+		"context":  clientContext(),
+		"browseId": browseID,
+	})
+	if err != nil {
+		return ArtistPage{}, err
+	}
+
+	a := ArtistPage{BrowseID: browseID}
+	if h := findKey(root, "musicImmersiveHeaderRenderer"); h != nil {
+		a.Name = digString(h, "title", "runs", 0, "text")
+		a.Subscribers = digString(h, "subscriptionButton", "subscribeButtonRenderer",
+			"subscriberCountText", "runs", 0, "text")
+		a.ThumbURL = largestThumbnail(dig(h, "thumbnail", "musicThumbnailRenderer", "thumbnail", "thumbnails"))
+	}
+
+	// Albums and singles arrive as separate carousels of two-row items.
+	// Both are releases with a tracklist behind an MPREb_ id, so they go
+	// into one list rather than two views that would behave the same.
+	for _, shelf := range findAll(root, "musicCarouselShelfRenderer") {
+		title := digString(shelf, "header", "musicCarouselShelfBasicHeaderRenderer", "title", "runs", 0, "text")
+		if title != "Albums" && title != "Singles & EPs" && title != "Singles" {
+			continue
+		}
+		contents, _ := dig(shelf, "contents").([]interface{})
+		for _, c := range contents {
+			item := dig(c, "musicTwoRowItemRenderer")
+			if item == nil {
+				continue
+			}
+			id := digString(item, "navigationEndpoint", "browseEndpoint", "browseId")
+			// Only real release pages: a carousel can also hold playlists
+			// and other artists, whose ids AlbumTracks cannot open.
+			if !strings.HasPrefix(id, "MPREb") {
+				continue
+			}
+			a.Albums = append(a.Albums, Album{
+				BrowseID: id,
+				Title:    digString(item, "title", "runs", 0, "text"),
+				Artist:   a.Name,
+				Year:     digString(item, "subtitle", "runs", 0, "text"),
+				CoverURL: largestThumbnail(dig(item, "thumbnailRenderer", "musicThumbnailRenderer", "thumbnail", "thumbnails")),
+			})
+		}
+	}
+	// Top songs. The shelf on the page itself holds five rows with no
+	// durations; the playlist its "more" link points at holds a hundred,
+	// every one with a videoId and a duration. So the shelf is used only
+	// for that link.
+	if shelf := findKey(root, "musicShelfRenderer"); shelf != nil {
+		if pid := digString(shelf, "bottomEndpoint", "browseEndpoint", "browseId"); pid != "" {
+			a.TopSongs, _ = artistTopSongs(pid, a.Name)
+		}
+	}
+
+	if a.Name == "" && len(a.Albums) == 0 {
+		return a, fmt.Errorf("ytmusic artist: nothing recognisable in the response")
+	}
+	return a, nil
+}
+
+// artistTopSongs reads the playlist behind an artist's "more" link.
+// A failure here is not fatal to the page: the discography still stands
+// on its own, so the caller gets the artist with an empty song list.
+func artistTopSongs(playlistID, artist string) ([]Track, error) {
+	root, err := post("browse", map[string]interface{}{
+		"context":  clientContext(),
+		"browseId": playlistID,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return parseSongRows(root, artist), nil
+}
+
+func parseSongRows(root interface{}, artist string) []Track {
+	var out []Track
+	for _, item := range findAll(root, "musicResponsiveListItemRenderer") {
+		vid := digString(item, "playlistItemData", "videoId")
+		if vid == "" {
+			continue
+		}
+		t := Track{
+			VideoID: vid,
+			Title: digString(item, "flexColumns", 0, "musicResponsiveListItemFlexColumnRenderer",
+				"text", "runs", 0, "text"),
+			Artist: digString(item, "flexColumns", 1, "musicResponsiveListItemFlexColumnRenderer",
+				"text", "runs", 0, "text"),
+			Album: digString(item, "flexColumns", 2, "musicResponsiveListItemFlexColumnRenderer",
+				"text", "runs", 0, "text"),
+			Duration: parseClock(digString(item, "fixedColumns", 0,
+				"musicResponsiveListItemFixedColumnRenderer", "text", "runs", 0, "text")),
+			CoverURL: largestThumbnail(dig(item, "thumbnail", "musicThumbnailRenderer", "thumbnail", "thumbnails")),
+		}
+		if t.Artist == "" {
+			t.Artist = artist
+		}
+		if t.Title != "" {
+			out = append(out, t)
+		}
+	}
+	return out
 }

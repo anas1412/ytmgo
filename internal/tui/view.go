@@ -492,6 +492,15 @@ func (m Model) renderPanels() string {
 		}
 	case PageStream:
 		switch {
+		case m.openArtist != nil && m.openAlbum == nil:
+			escHint := styleKeyHint.Render("[esc]")
+			albHint := styleKeyHint.Render("[A]")
+			what := "TOP SONGS"
+			if m.artistShowsAlbums {
+				what = "RELEASES"
+			}
+			panelLabel = strings.ToUpper(m.openArtist.Name) + " · " + what +
+				m.hints("  "+albHint+" switch  "+xHint+" download  "+escHint+" back")
 		case m.openAlbum != nil:
 			aHint := styleKeyHint.Render("[a]")
 			escHint := styleKeyHint.Render("[esc]")
@@ -619,7 +628,7 @@ func (m Model) clearCover() string {
 
 // renderStreamList draws whichever list the Stream page is showing.
 func (m Model) renderStreamList(width, height int) string {
-	if m.openAlbum != nil {
+	if m.streamShowsTracks() {
 		return m.renderAlbumTracks(width, height)
 	}
 	if m.albumMode {
@@ -1092,14 +1101,26 @@ func (m Model) renderAlbumTracks(width, height int) string {
 	// then its stats, so the panel title stays short and untruncated.
 	// The album's cover sits right-aligned across the strip's rows.
 	// albumStripRows tells the scroll clamp these rows are spoken for.
-	if m.openAlbum != nil {
+	if m.openAlbum != nil || m.openArtist != nil {
 		total := 0
 		for _, r := range m.albumTracks {
 			total += r.Duration
 		}
-		stats := m.openAlbum.Artist
-		if m.openAlbum.Year != "" {
-			stats += " · " + m.openAlbum.Year
+		// The strip says what is on screen: an album names its artist
+		// and year, an artist names their following and catalogue size.
+		heading, stats := "", ""
+		if m.openAlbum != nil {
+			heading = m.openAlbum.Title
+			stats = m.openAlbum.Artist
+			if m.openAlbum.Year != "" {
+				stats += " · " + m.openAlbum.Year
+			}
+		} else {
+			heading = m.openArtist.Name
+			stats = fmt.Sprintf("%d releases", len(m.openArtist.Albums))
+			if m.openArtist.Subscribers != "" {
+				stats = m.openArtist.Subscribers + " subscribers · " + stats
+			}
 		}
 
 		// Art on the left, text beside it — the same shape as the
@@ -1117,11 +1138,18 @@ func (m Model) renderAlbumTracks(width, height int) string {
 		if len(m.albumTracks) == 1 {
 			trackWord = "track"
 		}
+		third := fmt.Sprintf("%d %s · %s", len(m.albumTracks), trackWord, formatTotalDuration(total))
+		if m.openArtist != nil && m.artistShowsAlbums {
+			// Showing releases, so a track count would describe a list
+			// that is not on screen.
+			third = "[A] top songs · [esc] back"
+		} else if m.openArtist != nil {
+			third += "  ·  [A] releases"
+		}
 		strip := []string{
-			styleNowTitle.Render(truncate(m.openAlbum.Title, textW)),
+			styleNowTitle.Render(truncate(heading, textW)),
 			styleTextDim.Render(truncate(stats, textW)),
-			styleTextDim.Render(truncate(fmt.Sprintf("%d %s · %s",
-				len(m.albumTracks), trackWord, formatTotalDuration(total)), textW)),
+			styleTextDim.Render(truncate(third, textW)),
 			"",
 			"",
 		}
@@ -1166,7 +1194,18 @@ func (m Model) renderAlbumTracks(width, height int) string {
 
 		title := r.Title
 		var byline string
-		if r.Uploader != "" && r.Uploader != m.openAlbum.Artist {
+		// A row names its own artist only when that differs from whoever
+		// the page is about — the album's artist, or the artist whose
+		// page this is. Repeating the same name on every row buys
+		// nothing and eats the width the title needs.
+		owner := ""
+		switch {
+		case m.openAlbum != nil:
+			owner = m.openAlbum.Artist
+		case m.openArtist != nil:
+			owner = m.openArtist.Name
+		}
+		if r.Uploader != "" && r.Uploader != owner {
 			byline = " · " + r.Uploader
 		}
 		maxTitle := rowW - lipgloss.Width(prefix) - lipgloss.Width(right) - 2 - lipgloss.Width(byline)

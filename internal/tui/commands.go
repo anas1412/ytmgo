@@ -160,6 +160,37 @@ func openAlbumCmd(a ytmusic.Album, seq int) tea.Cmd {
 	}
 }
 
+// openArtistCmd fetches an artist page. The top songs are converted to
+// search results here, so the artist view feeds the same list renderer
+// as search and albums do.
+func openArtistCmd(browseID string, seq int) tea.Cmd {
+	return func() tea.Msg {
+		a, err := ytmusic.Artist(browseID)
+		if err != nil {
+			return ArtistLoadedMsg{Error: err, Seq: seq}
+		}
+		songs := make([]search.Result, 0, len(a.TopSongs))
+		for _, t := range a.TopSongs {
+			cover := t.CoverURL
+			if cover == "" {
+				cover = a.ThumbURL
+			}
+			songs = append(songs, search.Result{
+				ID:             t.VideoID,
+				Title:          t.Title,
+				Uploader:       t.Artist,
+				Album:          t.Album,
+				Duration:       t.Duration,
+				URL:            ytmusic.WatchURL(t.VideoID),
+				CoverURL:       cover,
+				AlbumBrowseID:  t.AlbumBrowseID,
+				ArtistBrowseID: a.BrowseID,
+			})
+		}
+		return ArtistLoadedMsg{Artist: a, Songs: songs, Seq: seq}
+	}
+}
+
 // AlbumDownloadMsg asks the model to enqueue a fetched album's tracks.
 type AlbumDownloadMsg struct {
 	Album ytmusic.Album

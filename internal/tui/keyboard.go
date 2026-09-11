@@ -166,6 +166,18 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case "esc":
+		// An album opened from an artist page steps back to the artist,
+		// not out of it — so the artist is only left once nothing is
+		// stacked on top.
+		if m.activePage == PageStream && m.openArtist != nil && m.openAlbum == nil && !m.isLoadingAlbum {
+			m.leaveArtistView()
+			m.albumTracks = nil
+			m.albums = nil
+			m.albumMode = false
+			m.resetStreamCursor()
+			m.setStatus("Back to results")
+			return m, m.refreshCoverCmd()
+		}
 		// Inside an album: step back to the album list. The preview's
 		// cover override leaves with it, restoring the playing art.
 		if m.activePage == PageStream && (m.openAlbum != nil || m.isLoadingAlbum || m.albumCoverURL != "") {
@@ -290,6 +302,20 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, m.prevTrack()
 
 	case "A":
+		// On an artist page, the same songs/albums idea applies to that
+		// artist rather than to the search, so the key keeps its meaning
+		// instead of gaining a second one.
+		if m.activePage == PageStream && m.openArtist != nil && m.openAlbum == nil {
+			m.artistShowsAlbums = !m.artistShowsAlbums
+			m.albumMode = m.artistShowsAlbums
+			m.resetStreamCursor()
+			if m.artistShowsAlbums {
+				m.setStatus(fmt.Sprintf("%s — %d releases", m.openArtist.Name, len(m.albums)))
+			} else {
+				m.setStatus(fmt.Sprintf("%s — %d songs", m.openArtist.Name, len(m.albumTracks)))
+			}
+			return m, nil
+		}
 		// Toggle the Stream search between songs and albums.
 		if m.activePage != PageStream {
 			return m, nil
@@ -325,6 +351,11 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		// Open the album page of the highlighted track, from any list
 		// that knows it: search results, queue, favorites, history.
 		return m, m.openAlbumOfSelected()
+
+	case "I":
+		// And the artist page. Lowercase the release, uppercase whoever
+		// made it.
+		return m, m.openArtistOfSelected()
 
 	case "a":
 		// Queue every track of the open album.
@@ -469,7 +500,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			// album list shows albums, which are not favoritable.)
 			if m.activePage != PageSettings && m.activePanel == PanelSearch {
 				list := m.results
-				if m.openAlbum != nil {
+				if m.streamShowsTracks() {
 					list = m.albumTracks
 				}
 				if len(list) > 0 && m.searchCursor >= 0 && m.searchCursor < len(list) {
@@ -521,7 +552,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 			// Inside an album, x downloads the highlighted track only.
 			list := m.results
-			if m.openAlbum != nil {
+			if m.streamShowsTracks() {
 				list = m.albumTracks
 			}
 			if len(list) == 0 || m.searchCursor < 0 || m.searchCursor >= len(list) {

@@ -81,7 +81,7 @@ func (m *Model) activateSelection() tea.Cmd {
 		}
 		// Inside an album: its tracks behave like ordinary results.
 		list := m.results
-		if m.openAlbum != nil {
+		if m.streamShowsTracks() {
 			list = m.albumTracks
 		}
 		if len(list) > 0 && m.searchCursor >= 0 && m.searchCursor < len(list) {
@@ -126,7 +126,7 @@ func (m Model) coverOnScreen() bool {
 // albumArtOnScreen reports whether the browse strip is showing the open
 // album's cover — the stream page, an open album, and art in hand.
 func (m Model) albumArtOnScreen() bool {
-	return m.activePage == PageStream && m.openAlbum != nil && m.albumArtImg != nil
+	return m.activePage == PageStream && (m.openAlbum != nil || m.openArtist != nil) && m.albumArtImg != nil
 }
 
 // syncNowPlaying starts or stops the spectrum so it runs exactly while
@@ -413,7 +413,7 @@ func (m *Model) selectedTrack() (queue.Track, bool) {
 
 	default: // Stream page: search results, or an open album's tracks
 		list := m.results
-		if m.openAlbum != nil {
+		if m.streamShowsTracks() {
 			list = m.albumTracks
 		}
 		if m.searchCursor >= 0 && m.searchCursor < len(list) {
@@ -449,4 +449,36 @@ func (m *Model) copyLinkAction() tea.Cmd {
 	}
 	m.setStatus("Copied link: " + url)
 	return nil
+}
+
+// openArtistOfSelected opens the artist page of the highlighted track.
+// Pairs with openAlbumOfSelected: i goes to the release, I to whoever
+// made it.
+func (m *Model) openArtistOfSelected() tea.Cmd {
+	t, ok := m.selectedTrack()
+	if !ok {
+		m.setStatus("Nothing selected")
+		return nil
+	}
+	if t.ArtistBrowseID == "" {
+		// Local files, legacy rows, and the occasional track whose
+		// byline names an artist YouTube Music has no page for.
+		who := t.Artist
+		if who == "" {
+			who = t.Title
+		}
+		m.setStatus("No artist page for " + who)
+		return nil
+	}
+	m.isLoadingArtist = true
+	m.artistSeq++
+	m.setStatus("Opening " + t.Artist + "…")
+	return openArtistCmd(t.ArtistBrowseID, m.artistSeq)
+}
+
+// leaveArtistView closes the artist page, if one is open.
+func (m *Model) leaveArtistView() {
+	m.openArtist = nil
+	m.artistShowsAlbums = false
+	m.isLoadingArtist = false
 }

@@ -21,6 +21,7 @@ Everything below is in main and working.
 | **Queue recovery** — the queue comes back on restart | `db.LoadQueue` |
 | **Synced lyrics** — LRCLIB, following the song, cached locally; `y` remembers whether the pane was open | `internal/lyrics` |
 | **Album previews** — tracklist, cover art, queue or download the lot | `internal/tui` |
+| **Artist pages** — top songs and full discography, from any track | `ytmusic.Artist`, `[I]` |
 | **MPRIS** — media keys and desktop widgets; silently absent without a session bus | `internal/mpris` |
 | **Discord Rich Presence** — now-playing, toggleable | `internal/discordrpc` |
 | **Spectrum visualiser** — via cava, optional; `v` remembers whether the pane was open | `internal/visualizer` |

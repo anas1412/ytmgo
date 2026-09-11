@@ -1036,3 +1036,137 @@ func TestCopyLinkFindsTheSelectedTrack(t *testing.T) {
 		t.Errorf("settings page reported %q", m.statusMessage)
 	}
 }
+
+// artistModel builds a model with an artist page open, in either mode.
+func artistModel(t *testing.T, w, h int, showAlbums bool) Model {
+	t.Helper()
+	m := worstCaseModel(t, w, h)
+	long := "小田和正 Kazumasa Oda and the Very Long Artist Name Orchestra"
+	a := ytmusic.ArtistPage{
+		BrowseID: "UCRr1xG_2WIDs18a6cIiCxeA", Name: long, Subscribers: "7.17M",
+	}
+	for i := 0; i < 20; i++ {
+		a.Albums = append(a.Albums, ytmusic.Album{
+			BrowseID: "MPREb_x", Title: "ラブ・ストーリーは突然に - " + long, Artist: long, Year: "2015",
+		})
+	}
+	m.openArtist = &a
+	m.albums = a.Albums
+	m.artistShowsAlbums = showAlbums
+	m.albumMode = showAlbums
+	if !showAlbums {
+		for i := 0; i < 100; i++ {
+			m.albumTracks = append(m.albumTracks, search.Result{
+				ID: "sZxzPcT1Meg", Title: "ラブ・ストーリーは突然に - " + long,
+				Uploader: long, Duration: 214,
+			})
+		}
+	}
+	return m
+}
+
+// TestLayoutGeometryArtist holds the artist page to the same contract as
+// every other view: exact height, nothing wider than the terminal, and
+// the controls row where the mouse handler expects it.
+func TestLayoutGeometryArtist(t *testing.T) {
+	for _, size := range [][2]int{{200, 50}, {150, 40}, {120, 35}, {90, 26}, {80, 24}} {
+		w, h := size[0], size[1]
+		for _, albums := range []bool{false, true} {
+			label := "artist top songs"
+			if albums {
+				label = "artist releases"
+			}
+			m := artistModel(t, w, h, albums)
+			checkPanelGeometry(t, m, w, h, label)
+
+			// And with the artist's photo in hand, which the strip draws.
+			m.albumArtImg = image.NewRGBA(image.Rect(0, 0, 544, 544))
+			m.albumArtURL = "https://example/artist.jpg"
+			checkPanelGeometry(t, m, w, h, label+" with art")
+		}
+	}
+}
+
+// TestArtistListSourceFollowsTheMode: the left list has to read from
+// albumTracks in songs mode and albums in releases mode. Getting this
+// wrong shows search results under an artist's name.
+func TestArtistListSourceFollowsTheMode(t *testing.T) {
+	m := artistModel(t, 150, 40, false)
+	if !m.streamShowsTracks() {
+		t.Error("songs mode does not read the track list")
+	}
+	if got, want := m.streamListLen(), len(m.albumTracks); got != want {
+		t.Errorf("songs mode lists %d rows, want %d", got, want)
+	}
+
+	m = artistModel(t, 150, 40, true)
+	if m.streamShowsTracks() {
+		t.Error("releases mode still reads the track list")
+	}
+	if got, want := m.streamListLen(), len(m.albums); got != want {
+		t.Errorf("releases mode lists %d rows, want %d", got, want)
+	}
+}
+
+// TestArtistKeyNeedsAnArtistID: I says why it cannot open rather than
+// doing nothing. A local library file has no YouTube artist behind it.
+func TestArtistKeyNeedsAnArtistID(t *testing.T) {
+	m := worstCaseModel(t, 150, 40)
+	m.activePanel = PanelQueue
+	m.queue.Clear()
+	m.queue.Add(queue.Track{ID: "local", Title: "A File", Artist: "Someone"})
+	m.queueCursor = 0
+
+	nm, cmd := m.handleKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'I'}})
+	got := nm.(Model)
+	if cmd != nil {
+		t.Error("a track with no artist id still fired a fetch")
+	}
+	if !strings.Contains(got.statusMessage, "No artist page") {
+		t.Errorf("status %q does not explain why nothing opened", got.statusMessage)
+	}
+
+	// With an id, it fetches.
+	m.queue.Clear()
+	m.queue.Add(queue.Track{ID: "m9SMT5ipbxk", Title: "A Song", Artist: "Someone",
+		ArtistBrowseID: "UCRr1xG_2WIDs18a6cIiCxeA"})
+	m.queueCursor = 0
+	nm, cmd = m.handleKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'I'}})
+	if cmd == nil {
+		t.Error("a track with an artist id did not fire a fetch")
+	}
+	if got := nm.(Model); !got.isLoadingArtist {
+		t.Error("the loading flag was not set")
+	}
+}
+
+// TestArtistSwitchAndBack: A flips songs and releases, esc leaves the
+// page and puts the results back.
+func TestArtistSwitchAndBack(t *testing.T) {
+	m := artistModel(t, 150, 40, false)
+	press := func(m Model, k rune) Model {
+		nm, _ := m.handleKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{k}})
+		return nm.(Model)
+	}
+
+	m = press(m, 'A')
+	if !m.artistShowsAlbums || m.streamShowsTracks() {
+		t.Error("A did not switch to releases")
+	}
+	m = press(m, 'A')
+	if m.artistShowsAlbums || !m.streamShowsTracks() {
+		t.Error("A did not switch back to songs")
+	}
+
+	nm, _ := m.handleKey(tea.KeyMsg{Type: tea.KeyEsc})
+	m = nm.(Model)
+	if m.openArtist != nil {
+		t.Error("esc did not leave the artist page")
+	}
+	if m.albumMode {
+		t.Error("esc left the search in album mode")
+	}
+	if m.streamShowsTracks() {
+		t.Error("esc left the list reading the artist's tracks")
+	}
+}
