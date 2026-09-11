@@ -1322,3 +1322,56 @@ func TestArtistFilterNarrowsBothLists(t *testing.T) {
 		t.Error("the filter leaked off the artist page")
 	}
 }
+
+// TestEnterOnArtistFilterKeepsThePage: the box on an artist page is a
+// filter over that page. Enter moves focus to the list it narrowed; it
+// must not run a search, which would replace the artist's songs with
+// results while their page was still open. And leaving the page takes
+// the filter with it, so the box does not come back holding a query
+// that matches nothing on screen.
+func TestEnterOnArtistFilterKeepsThePage(t *testing.T) {
+	m := artistModel(t, 150, 40, false)
+	m.artistSongs = []search.Result{
+		{ID: "a", Title: "Around the World"},
+		{ID: "b", Title: "Get Lucky"},
+		{ID: "c", Title: "Harder Better"},
+	}
+	m.results = []search.Result{{ID: "z", Title: "Some Earlier Result"}}
+	m.searchFocused = true
+	m.searchInput.Focus()
+	m.searchInput.SetValue("lucky")
+	if got := m.streamListLen(); got != 1 {
+		t.Fatalf("the filter left %d rows, want 1", got)
+	}
+
+	nm, cmd := m.handleKey(tea.KeyMsg{Type: tea.KeyEnter})
+	m = nm.(Model)
+	if cmd != nil {
+		t.Error("enter fired a command — a search would replace the artist's list")
+	}
+	if m.openArtist == nil {
+		t.Fatal("enter left the artist page")
+	}
+	if got := m.streamListLen(); got != 1 {
+		t.Errorf("enter left %d rows, want the filter's 1", got)
+	}
+	if m.searchFocused {
+		t.Error("enter did not move focus to the list")
+	}
+	if len(m.results) != 1 {
+		t.Errorf("enter disturbed the results underneath: %d", len(m.results))
+	}
+
+	// esc leaves, and the filter goes with it.
+	nm, _ = m.handleKey(tea.KeyMsg{Type: tea.KeyEsc})
+	m = nm.(Model)
+	if m.openArtist != nil {
+		t.Fatal("esc did not leave the artist page")
+	}
+	if v := m.searchInput.Value(); v != "" {
+		t.Errorf("the box came back holding %q", v)
+	}
+	if got := m.streamListLen(); got != len(m.results) {
+		t.Errorf("after leaving, the list shows %d rows but results hold %d", got, len(m.results))
+	}
+}

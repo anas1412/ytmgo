@@ -29,6 +29,13 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.searchFocused = false
 			m.searchInput.Blur()
 			m.activePanel = PanelSearch
+			// On an artist page the box is a filter over that page, not
+			// a query. Enter moves focus to the list it narrowed;
+			// running a search here would replace the artist's songs
+			// with results while their page was still open.
+			if m.openArtist != nil && m.openAlbum == nil {
+				return m, nil
+			}
 			query := m.searchInput.Value()
 			if m.activePage == PageLibrary {
 				// On Library page, Enter just exits the search field (filtering already happened live)
@@ -178,6 +185,10 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.albumTracks = nil
 			m.albums = nil
 			m.albumMode = false
+			// The box held a filter over the artist's page. Leaving it
+			// behind would put a query in the box that matches nothing
+			// on the screen it returns to.
+			m.searchInput.SetValue("")
 			m.resetStreamCursor()
 			m.setStatus("Back to results")
 			return m, m.refreshCoverCmd()
