@@ -61,6 +61,16 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if m.activePage == PageLibrary {
 			m.clampLibraryOffset()
 		}
+		// On an artist page the box filters what is on screen, live.
+		// The list shrinks as you type, so the cursor has to come back
+		// inside it or the view scrolls to a row that no longer exists.
+		if m.openArtist != nil && m.openAlbum == nil {
+			if n := m.streamListLen(); m.searchCursor >= n {
+				m.searchCursor = max(0, n-1)
+			}
+			m.clampSearchOffset()
+			return m, cmd
+		}
 		// Clearing the search box on the Stream page brings the
 		// recommendations back without waiting for Enter.
 		if m.activePage == PageStream && !m.showingRecommendations && m.searchInput.Value() == "" {

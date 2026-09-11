@@ -81,14 +81,39 @@ func (m Model) visibleItems() int {
 	if npH > 0 {
 		h = resultsH
 	}
-	// An open album spends rows on its header strip before the list —
-	// and its tracks are one line each, not two.
-	if m.activePage == PageStream && m.openAlbum != nil {
-		n := h - albumStripRows - 1
-		if n < 1 {
-			n = 1
+	// Mirrors what the renderers actually fit, which is not one rule:
+	//
+	//   album tracks and an artist's songs — a header strip, then rows
+	//   of one line each (renderAlbumTracks: height-albumStripRows-1)
+	//
+	//   an artist's releases — the same strip, then rows of two lines
+	//   (renderAlbums: (height-1-strip)/2)
+	//
+	//   everything else — two-line rows, no strip
+	//
+	// Getting this wrong does not misdraw anything; it breaks scrolling,
+	// because the clamp decides the cursor is still on screen when it
+	// has run off the bottom. That is what the artist page did: it was
+	// measured as a plain two-line list, strip and all.
+	if m.activePage == PageStream {
+		strip := 0
+		if m.openAlbum != nil || m.openArtist != nil {
+			strip = albumStripRows
 		}
-		return n
+		if m.streamShowsTracks() {
+			n := h - strip - 1
+			if n < 1 {
+				n = 1
+			}
+			return n
+		}
+		if strip > 0 {
+			n := (h - 1 - strip) / 2
+			if n < 1 {
+				n = 1
+			}
+			return n
+		}
 	}
 	n := (h - 1) / 2
 	if n < 1 {

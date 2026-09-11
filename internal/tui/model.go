@@ -3,6 +3,7 @@ package tui
 import (
 	"image"
 	"os"
+	"strings"
 	"time"
 
 	"ytmgo/internal/db"
@@ -704,16 +705,56 @@ func (m Model) streamTracks() []search.Result {
 	if m.openAlbum != nil {
 		return m.albumTracks
 	}
-	return m.artistSongs
+	return filterResults(m.artistSongs, m.artistFilter())
 }
 
 // streamAlbums is the release grid on screen: an artist's discography
 // while their page is open, and the album search results otherwise.
 func (m Model) streamAlbums() []ytmusic.Album {
 	if m.openArtist != nil && m.openAlbum == nil {
-		return m.openArtist.Albums
+		return filterAlbums(m.openArtist.Albums, m.artistFilter())
 	}
 	return m.albums
+}
+
+// artistFilter is the search box's text while an artist page is open.
+// On an artist page the box narrows what is already on screen instead
+// of starting a new search — the page is a finite list, so filtering it
+// beats replacing it. Empty everywhere else, so nothing else changes.
+func (m Model) artistFilter() string {
+	if m.activePage != PageStream || m.openArtist == nil || m.openAlbum != nil {
+		return ""
+	}
+	return strings.ToLower(strings.TrimSpace(m.searchInput.Value()))
+}
+
+func filterResults(in []search.Result, q string) []search.Result {
+	if q == "" {
+		return in
+	}
+	out := make([]search.Result, 0, len(in))
+	for _, r := range in {
+		if strings.Contains(strings.ToLower(r.Title), q) ||
+			strings.Contains(strings.ToLower(r.Uploader), q) ||
+			strings.Contains(strings.ToLower(r.Album), q) {
+			out = append(out, r)
+		}
+	}
+	return out
+}
+
+func filterAlbums(in []ytmusic.Album, q string) []ytmusic.Album {
+	if q == "" {
+		return in
+	}
+	out := make([]ytmusic.Album, 0, len(in))
+	for _, a := range in {
+		if strings.Contains(strings.ToLower(a.Title), q) ||
+			strings.Contains(strings.ToLower(a.Year), q) {
+			out = append(out, a)
+		}
+	}
+	return out
 }
 
 func (m Model) streamListLen() int {

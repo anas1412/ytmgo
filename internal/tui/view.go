@@ -501,6 +501,10 @@ func (m Model) renderPanels() string {
 			}
 			panelLabel = strings.ToUpper(m.openArtist.Name) + " · " + what +
 				m.hints("  "+albHint+" switch  "+xHint+" download  "+escHint+" back")
+			if m.artistFilter() != "" {
+				panelLabel = strings.ToUpper(m.openArtist.Name) + " · " + what +
+					fmt.Sprintf("  🔍 %d", m.streamListLen())
+			}
 		case m.openAlbum != nil:
 			aHint := styleKeyHint.Render("[a]")
 			escHint := styleKeyHint.Render("[esc]")
@@ -1121,14 +1125,30 @@ func (m Model) browseStrip(rowW int, tracks []search.Result) []string {
 	return out
 }
 
+// emptyBrowseList renders a header strip with a message under it, for
+// a list that has nothing in it. Keeping the strip is the point: an
+// artist page filtered down to nothing would otherwise lose its name
+// and cover while the user is still typing.
+func (m Model) emptyBrowseList(width, height int, msg string) string {
+	rowW := max(1, width-2)
+	head := m.browseStrip(rowW, nil)
+	if len(head) == 0 {
+		return styleEmpty.Width(rowW).Height(height).Render(msg)
+	}
+	lines := append(head, styleEmpty.Width(rowW).Render(msg))
+	return strings.Join(lines, "\n")
+}
+
 // renderAlbums draws the album search results.
 func (m Model) renderAlbums(width, height int) string {
 	if m.isSearching {
 		return styleEmpty.Width(width - 2).Height(height).Render(m.spinner() + "  Searching albums…")
 	}
 	if len(m.streamAlbums()) == 0 {
-		return styleEmpty.Width(width - 2).Height(height).Render(
-			"Type an album name and press Enter  ([A] back to songs)")
+		// The header stays: an artist page that filters down to nothing
+		// must still say whose page it is, or the strip and cover blink
+		// out mid-keystroke.
+		return m.emptyBrowseList(width, height, "No release matches that")
 	}
 
 	// Rows are two columns narrower than the panel, the same as the
@@ -1182,7 +1202,14 @@ func (m Model) renderAlbumTracks(width, height int) string {
 		return styleEmpty.Width(width - 2).Height(height).Render(m.spinner() + "  Loading album…")
 	}
 	if len(tracks) == 0 {
-		return styleEmpty.Width(width - 2).Height(height).Render("This album has no playable tracks")
+		msg := "This album has no playable tracks"
+		if m.openArtist != nil && m.openAlbum == nil {
+			msg = "No song matches that"
+			if m.artistFilter() == "" {
+				msg = "No songs listed for this artist"
+			}
+		}
+		return m.emptyBrowseList(width, height, msg)
 	}
 
 	// Rows are two columns narrower than the panel, the same as the

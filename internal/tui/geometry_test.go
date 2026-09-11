@@ -1212,3 +1212,113 @@ func TestArtistSongsAreActionable(t *testing.T) {
 		t.Errorf("u saw an empty list: %q", m.statusMessage)
 	}
 }
+
+// TestArtistScrollFollowsTheCursor: arrowing down past the last visible
+// row has to scroll. The clamp measures the list with visibleItems, and
+// the artist page was measured as a plain two-line list — strip and all
+// — so the cursor ran off the bottom while the view stayed put.
+func TestArtistScrollFollowsTheCursor(t *testing.T) {
+	for _, showAlbums := range []bool{false, true} {
+		label := "top songs"
+		if showAlbums {
+			label = "releases"
+		}
+		m := artistModel(t, 150, 40, showAlbums)
+		m.activePanel = PanelSearch
+
+		n := m.streamListLen()
+		if n < 10 {
+			t.Fatalf("%s: only %d rows to scroll through", label, n)
+		}
+		vis := m.visibleItems()
+		if vis < 1 || vis >= n {
+			t.Fatalf("%s: %d visible of %d rows makes the test meaningless", label, vis, n)
+		}
+
+		// Walk the cursor to the last row, clamping as the key handler does.
+		for i := 0; i < n-1; i++ {
+			m.searchCursor++
+			m.clampSearchOffset()
+		}
+		if m.searchOffset == 0 {
+			t.Errorf("%s: cursor walked to row %d of %d and the view never scrolled",
+				label, m.searchCursor, n)
+		}
+		// The cursor must be inside the window the renderer will draw.
+		if m.searchCursor < m.searchOffset || m.searchCursor >= m.searchOffset+vis {
+			t.Errorf("%s: cursor %d is outside the visible window [%d,%d)",
+				label, m.searchCursor, m.searchOffset, m.searchOffset+vis)
+		}
+
+		// And what the renderer draws really does contain the last row.
+		// A short marker title, because the fixture's long ones are
+		// truncated in the row and would never match.
+		if showAlbums {
+			m.openArtist.Albums[n-1].Title = "LAST-RELEASE"
+			if !strings.Contains(m.View(), "LAST-RELEASE") {
+				t.Errorf("%s: the last release is not on screen after scrolling to it", label)
+			}
+		} else {
+			m.artistSongs[n-1].Title = "LAST-SONG"
+			if !strings.Contains(m.View(), "LAST-SONG") {
+				t.Errorf("%s: the last song is not on screen after scrolling to it", label)
+			}
+		}
+	}
+}
+
+// TestArtistFilterNarrowsBothLists: the search box on an artist page
+// filters what is already on screen rather than starting a new search,
+// in both modes, and leaves the header and cover alone.
+func TestArtistFilterNarrowsBothLists(t *testing.T) {
+	m := artistModel(t, 150, 40, false)
+	m.artistSongs = []search.Result{
+		{ID: "a", Title: "Around the World", Uploader: "Daft Punk"},
+		{ID: "b", Title: "Get Lucky", Uploader: "Daft Punk"},
+		{ID: "c", Title: "Harder Better Faster", Uploader: "Daft Punk"},
+	}
+	m.openArtist.Albums = []ytmusic.Album{
+		{BrowseID: "MPREb_1", Title: "Discovery", Year: "2001"},
+		{BrowseID: "MPREb_2", Title: "Homework", Year: "1997"},
+		{BrowseID: "MPREb_3", Title: "Random Access Memories", Year: "2013"},
+	}
+	art, url := m.albumArtImg, m.albumArtURL
+
+	if got := m.streamListLen(); got != 3 {
+		t.Fatalf("unfiltered songs: %d, want 3", got)
+	}
+	m.searchInput.SetValue("lucky")
+	if got := m.streamListLen(); got != 1 {
+		t.Errorf("filtering songs for %q gave %d rows, want 1", "lucky", got)
+	}
+	if got := m.streamTracks(); len(got) == 1 && got[0].Title != "Get Lucky" {
+		t.Errorf("filtered to %q, want Get Lucky", got[0].Title)
+	}
+
+	// Releases filter on the same text.
+	m.artistShowsAlbums = true
+	m.albumMode = true
+	m.searchInput.SetValue("home")
+	if got := m.streamListLen(); got != 1 {
+		t.Errorf("filtering releases for %q gave %d rows, want 1", "home", got)
+	}
+
+	// A filter that matches nothing empties the list without panicking.
+	m.searchInput.SetValue("zzzznothing")
+	if got := m.streamListLen(); got != 0 {
+		t.Errorf("a filter matching nothing left %d rows", got)
+	}
+	frame := m.View()
+	if !strings.Contains(frame, m.openArtist.Name) {
+		t.Error("filtering dropped the artist's header")
+	}
+	if m.albumArtImg != art || m.albumArtURL != url {
+		t.Error("filtering disturbed the cover")
+	}
+
+	// And it only applies to an artist page.
+	m.openArtist = nil
+	if m.artistFilter() != "" {
+		t.Error("the filter leaked off the artist page")
+	}
+}
