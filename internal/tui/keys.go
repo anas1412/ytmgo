@@ -235,6 +235,7 @@ var Keys = KeyMap{
 // always visible in the header.
 func (k KeyMap) ShortHelp() []key.Binding {
 	return []key.Binding{
+		k.CopyLink,
 		k.Visualizer,
 		k.Lyrics,
 		k.Hints,
