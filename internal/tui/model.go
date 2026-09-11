@@ -284,6 +284,9 @@ type Model struct {
 	openArtist        *ytmusic.ArtistPage
 	artistShowsAlbums bool
 	isLoadingArtist   bool
+	// browseLoadingName is what an in-flight artist or album fetch is
+	// for, so the wait can name it instead of spinning anonymously.
+	browseLoadingName string
 	artistSeq         int             // bumped per fetch; stale responses dropped
 	artistSongs       []search.Result // top songs, as playable results
 	artistArtURL      string          // artist photo, reloaded when an album closes

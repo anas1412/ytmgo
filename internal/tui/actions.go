@@ -168,7 +168,12 @@ func (m *Model) leaveAlbumView() tea.Cmd {
 	}
 	m.openAlbum = nil
 	m.albumTracks = nil
-	m.isLoadingAlbum = false
+	if m.isLoadingAlbum {
+		// Same as leaveArtistView: cancel the fetch rather than let it
+		// open an album the user has already stepped out of.
+		m.albumSeq++
+		m.isLoadingAlbum = false
+	}
 	m.albumCoverURL = ""
 	return m.refreshCoverCmd()
 }
@@ -386,6 +391,7 @@ func (m *Model) openAlbumOfSelected() tea.Cmd {
 	if name == "" {
 		name = "album"
 	}
+	m.browseLoadingName = name
 	m.setStatus("Opening " + name + "…")
 	return openAlbumCmd(ytmusic.Album{BrowseID: t.AlbumBrowseID}, m.albumSeq)
 }
@@ -419,6 +425,7 @@ func (m *Model) openArtistOfSelected() tea.Cmd {
 	}
 	m.isLoadingArtist = true
 	m.artistSeq++
+	m.browseLoadingName = who
 	m.setStatus("Opening " + who + "…")
 	if t.ArtistBrowseID == "" {
 		// Queue and history rows saved before tracks carried an artist
@@ -428,9 +435,34 @@ func (m *Model) openArtistOfSelected() tea.Cmd {
 	return openArtistCmd(t.ArtistBrowseID, m.artistSeq)
 }
 
+// cancelBrowseLoad drops an artist or album fetch still in flight and
+// leaves whatever was on screen before it started. Bumping the sequence
+// is the cancel: the response still arrives, and its handler discards
+// it for being a generation behind.
+func (m *Model) cancelBrowseLoad() tea.Cmd {
+	var cmd tea.Cmd
+	if m.isLoadingAlbum {
+		cmd = m.leaveAlbumView()
+	}
+	if m.isLoadingArtist {
+		// Only the incoming artist is dropped — an artist page already
+		// open stays, since that is the screen being returned to.
+		m.artistSeq++
+		m.isLoadingArtist = false
+	}
+	m.browseLoadingName = ""
+	return cmd
+}
+
 // leaveArtistView closes the artist page, if one is open.
 func (m *Model) leaveArtistView() {
 	m.openArtist = nil
 	m.artistShowsAlbums = false
-	m.isLoadingArtist = false
+	// Bumping the sequence drops a fetch still in flight. Without it,
+	// escaping during a load did not cancel anything: the response
+	// landed a second later and opened the page the user had left.
+	if m.isLoadingArtist {
+		m.artistSeq++
+		m.isLoadingArtist = false
+	}
 }

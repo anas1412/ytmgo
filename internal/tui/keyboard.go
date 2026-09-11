@@ -177,6 +177,14 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case "esc":
+		// A fetch still in flight: esc cancels it and stays where the
+		// user was, rather than letting the page open a second later
+		// behind a mind already changed.
+		if m.activePage == PageStream && (m.isLoadingArtist || m.isLoadingAlbum) {
+			cmd := m.cancelBrowseLoad()
+			m.setStatus("Cancelled")
+			return m, cmd
+		}
 		// An album opened from an artist page steps back to the artist,
 		// not out of it — so the artist is only left once nothing is
 		// stacked on top.

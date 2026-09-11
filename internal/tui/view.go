@@ -485,6 +485,13 @@ func (m Model) renderPanels() string {
 		}
 	case PageStream:
 		switch {
+		case m.isLoadingAlbum || m.isLoadingArtist:
+			// The keys the old title advertised — switch, queue all —
+			// do nothing until the page arrives. esc does: it now
+			// cancels the fetch rather than letting it open behind the
+			// user.
+			escHint := styleKeyHint.Render("[esc]")
+			panelLabel = "LOADING" + m.hints("  "+escHint+" cancel")
 		case m.openArtist != nil && m.openAlbum == nil:
 			escHint := styleKeyHint.Render("[esc]")
 			albHint := styleKeyHint.Render("[A]")
@@ -631,6 +638,22 @@ func (m Model) clearCover() string {
 
 // renderStreamList draws whichever list the Stream page is showing.
 func (m Model) renderStreamList(width, height int) string {
+	// One wait for both fetches. They used to differ in every way that
+	// matters: an album blanked the panel — header, cover and all —
+	// for a bare "Loading album…", while an artist showed nothing at
+	// all, leaving the previous artist's name and songs on screen for
+	// the whole fetch so the key looked dead.
+	if m.isLoadingAlbum || m.isLoadingArtist {
+		what := m.browseLoadingName
+		if what == "" {
+			what = "album"
+			if m.isLoadingArtist {
+				what = "artist"
+			}
+		}
+		return styleEmpty.Width(width - 2).Height(height).Render(
+			m.spinner() + "  Loading " + what + "…")
+	}
 	if m.streamShowsTracks() {
 		return m.renderAlbumTracks(width, height)
 	}
@@ -1212,9 +1235,6 @@ func (m Model) renderAlbums(width, height int) string {
 // renderAlbumTracks draws the tracklist of the open album.
 func (m Model) renderAlbumTracks(width, height int) string {
 	tracks := m.streamTracks()
-	if m.isLoadingAlbum {
-		return styleEmpty.Width(width - 2).Height(height).Render(m.spinner() + "  Loading album…")
-	}
 	if len(tracks) == 0 {
 		msg := "This album has no playable tracks"
 		if m.openArtist != nil && m.openAlbum == nil {
