@@ -301,7 +301,9 @@ install_ytdlp() {
   info "Installing yt-dlp from upstream…"
   local tmp
   tmp=$(mktemp) || return 1
-  if ! curl -fsSL "$url" -o "$tmp"; then
+  # Shown, not silent: this is ~30MB, and -s left the terminal blank
+  # long enough to look like a hang on a slow connection.
+  if ! curl -fL --progress-bar "$url" -o "$tmp"; then
     rm -f "$tmp"
     warn "Could not download yt-dlp from $url"
     return 1
