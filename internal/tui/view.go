@@ -1884,59 +1884,80 @@ func (m Model) renderDownloadQueue(width, height int) string {
 
 // ─── Settings List ────────────────────────────────────────────────
 
+// settingsRow builds the lines one settings item occupies: its label,
+// its value, its description wrapped over as many lines as it needs,
+// and a blank separator. Descriptions used to be cut off with an
+// ellipsis, which hid the half that explains the setting.
+//
+// Rows are therefore not all the same height any more. Everything that
+// needs to know where an item sits — the scroll maths and the mouse —
+// goes through this one builder rather than multiplying by four.
+func (m Model) settingsRow(idx, innerW int) []string {
+	def := settingDefs[idx]
+	cursor := "  "
+	if idx == m.settingsCursor && !m.settingsEditField {
+		cursor = "▶ "
+	}
+	label := styleSettingsLabel.Render(truncate(cursor+def.label, innerW))
+	value := styleSettingsValue.Render(truncate(def.value(&m), innerW))
+
+	// Show an inline [Open] button on rows that declare one (the
+	// Download Dir row) — makes the 'o' shortcut discoverable.
+	if def.openBtn && !m.settingsEditField {
+		value += "  " + styleSettingsOpenBtn.Render("[Open]")
+	}
+	// When editing a string field, show the input
+	if m.settingsEditField && idx == m.settingsCursor {
+		value = styleSettingsValue.Render(m.settingsEditInput.View())
+	}
+
+	// Clamp AFTER styling: the styles add left padding, so a string
+	// truncated to innerW before styling can still wrap inside the box
+	// and grow it a row (which is fine now, but only where intended).
+	out := []string{
+		truncate(label, innerW),
+		truncate("  "+value, innerW),
+	}
+	// lipgloss wraps to the style's width; the style's own left padding
+	// is part of that width, so wrap at innerW and let it do the maths.
+	wrapped := styleSettingsDesc.Width(innerW).Render(def.desc(&m))
+	for _, l := range strings.Split(wrapped, "\n") {
+		out = append(out, truncate(l, innerW))
+	}
+	return append(out, "")
+}
+
+// settingsFit returns one past the last item that fits in contentH
+// lines starting at the current offset. At least one item always
+// counts, so a very short panel still shows something.
+func (m Model) settingsFit(innerW, contentH int) int {
+	used, end := 0, m.settingsOffset
+	for end < len(settingDefs) {
+		h := len(m.settingsRow(end, innerW))
+		if used+h > contentH && end > m.settingsOffset {
+			break
+		}
+		used += h
+		end++
+	}
+	if end == m.settingsOffset && end < len(settingDefs) {
+		end++
+	}
+	return end
+}
+
 func (m Model) renderSettingsList(panelWidth, panelHeight int) string {
 	var lines []string
 
 	// Rows come from settingDefs — the single source of truth shared
 	// with the keyboard and mouse handlers.
-
-	// Each item uses ~4 lines (label, value, desc, blank).
 	// Reserve 2 lines for scroll indicator + help text at bottom.
-	vis := (panelHeight - 2) / 4
-	if vis < 1 {
-		vis = 1
-	}
-	offset := m.settingsOffset
-	end := offset + vis
-	if end > len(settingDefs) {
-		end = len(settingDefs)
-	}
-
 	innerW := max(1, panelWidth-2)
+	offset := m.settingsOffset
+	end := m.settingsFit(innerW, panelHeight-2)
 
 	for idx := offset; idx < end; idx++ {
-		def := settingDefs[idx]
-		cursor := "  "
-		if idx == m.settingsCursor && !m.settingsEditField {
-			cursor = "▶ "
-		}
-
-		// Truncate each element to innerW so it never spills out of the
-		// bordered panel — descriptions like "… Offline (download first)"
-		// are particularly long and would overflow on narrow terminals.
-		label := styleSettingsLabel.Render(truncate(cursor+def.label, innerW))
-		value := styleSettingsValue.Render(truncate(def.value(&m), innerW))
-		desc := styleSettingsDesc.Render(truncate(def.desc(&m), innerW))
-
-		// Show an inline [Open] button on rows that declare one (the
-		// Download Dir row) — makes the 'o' shortcut discoverable.
-		if def.openBtn && !m.settingsEditField {
-			openBtn := "  " + styleSettingsOpenBtn.Render("[Open]")
-			value = value + openBtn
-		}
-
-		// When editing a string field, show the input
-		if m.settingsEditField && idx == m.settingsCursor {
-			value = styleSettingsValue.Render(m.settingsEditInput.View())
-		}
-
-		// Clamp AFTER styling: the styles add left padding, so a string
-		// truncated to innerW before styling can still wrap inside the
-		// box and grow it a row (breaking mouse hit-testing below).
-		lines = append(lines, truncate(label, innerW))
-		lines = append(lines, truncate("  "+value, innerW))
-		lines = append(lines, truncate(desc, innerW))
-		lines = append(lines, "")
+		lines = append(lines, m.settingsRow(idx, innerW)...)
 	}
 
 	// Scroll indicator
@@ -1946,8 +1967,12 @@ func (m Model) renderSettingsList(panelWidth, panelHeight int) string {
 		lines = append(lines, truncate(styleSettingsDesc.Render("  ↑ more items above"), innerW))
 	}
 
-	// Help text at bottom
-	lines = append(lines, truncate(styleSettingsDesc.Render("↑↓ navigate · Enter toggle/edit · Esc cancel edit · 1-5 switch page"), innerW))
+	// Help text at bottom, wrapped like the descriptions above it —
+	// cut off, it lost the half naming the keys that leave the page.
+	for _, l := range strings.Split(styleSettingsDesc.Width(innerW).
+		Render("↑↓ navigate · Enter toggle/edit · Esc cancel edit · 1-6 switch page"), "\n") {
+		lines = append(lines, truncate(l, innerW))
+	}
 
 	// Pad/truncate each line to full width and full height — overwrites
 	// any stale content from prior taller frames.

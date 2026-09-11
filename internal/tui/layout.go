@@ -230,17 +230,27 @@ func (m Model) queueVisibleItems() int {
 	return n
 }
 
-// settingsVisibleItems returns how many settings items fit in the visible area.
-// Uses the same panel-height calculation as renderSettingsList.
+// settingsVisibleItems returns how many settings items fit in the
+// visible area. Rows are not a fixed height — a long description wraps
+// — so this asks the renderer's own builder rather than dividing by a
+// constant that would drift the moment a description got longer.
 func (m Model) settingsVisibleItems() int {
-	// Panel content height minus 2 lines of overhead (scroll indicator + help text),
-	// divided by 4 lines per item.
 	contentH := m.panelHeight() - 3
-	vis := (contentH - 2) / 4
+	vis := m.settingsFit(m.settingsInnerWidth(), contentH-2) - m.settingsOffset
 	if vis < 1 {
 		return 1
 	}
 	return vis
+}
+
+// settingsInnerWidth is the width one settings row is laid out in,
+// derived exactly as renderSettingsPanels derives it.
+func (m Model) settingsInnerWidth() int {
+	panelWidth := (m.width-2)/2 - 2
+	if panelWidth < 10 {
+		panelWidth = 10
+	}
+	return max(1, panelWidth-2)
 }
 
 // ─── Clamp functions ─────────────────────────────────────────────────

@@ -56,3 +56,81 @@ func TestSettingsClickHitsTheRowUnderTheCursor(t *testing.T) {
 		t.Errorf("clicking row %d (%q) selected setting %d, want %d", row, label, got, want)
 	}
 }
+
+// A description that does not fit is wrapped onto the next line, not
+// cut off with an ellipsis — the half that got cut was the half that
+// explained the setting.
+func TestSettingsDescriptionsWrapInsteadOfTruncating(t *testing.T) {
+	for _, w := range []int{100, 130, 150, 200} {
+		m := worstCaseModel(t, w, 44)
+		m.activePage = PageSettings
+		// The left half only: the shortcuts panel beside it is a
+		// fixed two-column table, not prose, and is not what wraps.
+		var left string
+		for _, l := range strings.Split(m.renderSettingsPanels(), "\n") {
+			if len(l) > w/2 {
+				l = l[:w/2]
+			}
+			left += l + "\n"
+		}
+		if strings.Contains(left, "…") {
+			t.Errorf("width %d: a settings line is still truncated with an ellipsis:\n%s", w, left)
+		}
+	}
+}
+
+// Wrapped rows are taller than unwrapped ones, so a click has to be
+// resolved by walking the rendered rows. Every line of the panel must
+// select the item it is drawn under — checked against the frame, not
+// against the builder that produced it.
+func TestSettingsClickHitsTheRowItIsDrawnUnder(t *testing.T) {
+	for _, w := range []int{100, 120, 150} {
+		m := worstCaseModel(t, w, 44)
+		m.activePage = PageSettings
+		frame := strings.Split(m.View(), "\n")
+
+		labelRow := map[int]int{} // frame line -> item index
+		for y, l := range frame {
+			if !strings.Contains(l, "│") {
+				continue
+			}
+			half := l
+			if len(half) > w/2 {
+				half = half[:w/2]
+			}
+			for idx, def := range settingDefs {
+				if strings.Contains(half, def.label) {
+					labelRow[y] = idx
+				}
+			}
+		}
+		if len(labelRow) < 4 {
+			t.Fatalf("width %d: only %d labels on screen", w, len(labelRow))
+		}
+
+		// Walk every line from the first label to the last, carrying
+		// the item whose block that line belongs to.
+		first, last := len(frame), 0
+		for y := range labelRow {
+			first, last = min(first, y), max(last, y)
+		}
+		cur, checked := -1, 0
+		for y := first; y <= last; y++ {
+			if idx, ok := labelRow[y]; ok {
+				cur = idx
+			}
+			if cur < 0 {
+				continue
+			}
+			nm, _ := m.handleMouse(tea.MouseMsg{
+				X: 20, Y: y, Action: tea.MouseActionPress, Button: tea.MouseButtonLeft,
+			})
+			if got := nm.(Model).settingsCursor; got != cur {
+				t.Errorf("width %d: clicking line %d (under %q) selected %q",
+					w, y, settingDefs[cur].label, settingDefs[got].label)
+			}
+			checked++
+		}
+		t.Logf("width %d: %d lines across %d items all select their own row", w, checked, len(labelRow))
+	}
+}

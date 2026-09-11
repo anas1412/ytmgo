@@ -162,6 +162,23 @@ func (m *Model) scrollLyrics(delta int) {
 	m.lyricsOffset = max(0, min(m.lyricsOffset+delta, maxOffset))
 }
 
+// settingsItemAtLine maps a line inside the settings panel to the item
+// drawn on it, walking the rendered rows from the current offset.
+func (m Model) settingsItemAtLine(line int) int {
+	if line < 0 {
+		return m.settingsOffset
+	}
+	innerW := m.settingsInnerWidth()
+	used := 0
+	for idx := m.settingsOffset; idx < len(settingDefs); idx++ {
+		used += len(m.settingsRow(idx, innerW))
+		if line < used {
+			return idx
+		}
+	}
+	return len(settingDefs) - 1
+}
+
 // handleClick maps a mouse click at (x, y) to the relevant UI action.
 // Returns (updated Model, optional Cmd).
 func (m Model) handleClick(x, y int) (Model, tea.Cmd) {
@@ -248,21 +265,14 @@ func (m Model) handleClick(x, y int) (Model, tea.Cmd) {
 			// The title moved onto the border, so it no longer costs a
 			// row here — leaving it at 3 put every click one item low.
 			const clickItemOffsetY = 2
-			// Each item is 4 lines from renderSettingsList: label, value, desc, blank
-			const settingsLinesPerItem = 4
 
 			midX := m.width / 2
 			if x < midX {
-				// Left panel: settings list
-				idx := (y - clickItemOffsetY) / settingsLinesPerItem
-				idx += m.settingsOffset
-				if idx < 0 {
-					idx = 0
-				}
-				if idx > len(settingDefs)-1 {
-					idx = len(settingDefs) - 1
-				}
-				m.settingsCursor = idx
+				// Left panel: settings list. Rows are not all the same
+				// height — a long description wraps — so walk the same
+				// builder the renderer uses instead of dividing by a
+				// constant that is only right for unwrapped rows.
+				m.settingsCursor = m.settingsItemAtLine(y - clickItemOffsetY)
 				m.clampSettingsOffset()
 			}
 			// Right panel is keyboard shortcuts (view-only) — nothing to click
