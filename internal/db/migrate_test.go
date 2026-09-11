@@ -169,3 +169,41 @@ func TestMigrateIsIdempotent(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+// TestPaneVisibilityRoundTrips: hiding the spectrum or the lyrics has
+// to survive a restart, which means the two flags must make it through
+// SaveSettings and back out of LoadSettings.
+func TestPaneVisibilityRoundTrips(t *testing.T) {
+	d, err := openAt(filepath.Join(t.TempDir(), "ytmgo.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer d.DB.Close()
+
+	// A fresh database opens with both panes on.
+	got, err := d.LoadSettings()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !got.VisualizerOn || !got.LyricsOn {
+		t.Errorf("a new install starts with visualizer=%v lyrics=%v, want both on",
+			got.VisualizerOn, got.LyricsOn)
+	}
+
+	for _, c := range []struct{ viz, lyr bool }{
+		{false, false}, {true, false}, {false, true}, {true, true},
+	} {
+		got.VisualizerOn, got.LyricsOn = c.viz, c.lyr
+		if err := d.SaveSettings(got); err != nil {
+			t.Fatal(err)
+		}
+		back, err := d.LoadSettings()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if back.VisualizerOn != c.viz || back.LyricsOn != c.lyr {
+			t.Errorf("saved visualizer=%v lyrics=%v, loaded %v/%v",
+				c.viz, c.lyr, back.VisualizerOn, back.LyricsOn)
+		}
+	}
+}

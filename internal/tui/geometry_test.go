@@ -28,10 +28,13 @@ func worstCaseModel(t *testing.T, w, h int) Model {
 	t.Helper()
 	t.Setenv("HOME", t.TempDir())
 	m := InitialModel()
-	// The panel is on by default, and the resize below would make it
-	// visible — which spawns a real cava process per model built. Tests
-	// that want the panel set npOn themselves, after the resize.
+	// Both panes are on by default now that the setting remembers them,
+	// and the resize below would make the spectrum visible — which
+	// spawns a real cava process per model built. Start from both
+	// closed; the tests that want either one open say so after the
+	// resize, so each case states the layout it is checking.
 	m.npOn = false
+	m.lyricsOn = false
 
 	nm, _ := m.Update(tea.WindowSizeMsg{Width: w, Height: h})
 	m = nm.(Model)
@@ -886,5 +889,52 @@ func TestDownloadFromQueueOnEveryPage(t *testing.T) {
 	nm, _ := m.handleKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'x'}})
 	if got := nm.(Model); got.downloader != nil && len(got.downloader.Jobs()) > 0 {
 		t.Errorf("x on the settings page queued a download")
+	}
+}
+
+// TestPaneTogglesPersist: [v] and [y] must write the new visibility to
+// settings on every path. Turning lyrics on with an empty queue used to
+// fall through a return that dropped the save, so the pane came back
+// hidden on the next launch.
+func TestPaneTogglesPersist(t *testing.T) {
+	press := func(m Model, k rune) Model {
+		nm, cmd := m.handleKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{k}})
+		if cmd == nil {
+			t.Errorf("[%c] returned no command, so nothing was saved", k)
+		}
+		return nm.(Model)
+	}
+
+	// With a queue, and again with none: the empty-queue path is the one
+	// that dropped the save.
+	for _, empty := range []bool{false, true} {
+		m := worstCaseModel(t, 150, 44)
+		if empty {
+			m.queue.Clear()
+		}
+		m.npOn, m.lyricsOn = true, true
+		m.settings.VisualizerOn, m.settings.LyricsOn = true, true
+
+		m = press(m, 'v')
+		if m.settings.VisualizerOn != m.npOn || m.npOn {
+			t.Errorf("empty=%v: [v] left settings=%v flag=%v, want both false",
+				empty, m.settings.VisualizerOn, m.npOn)
+		}
+		m = press(m, 'v')
+		if m.settings.VisualizerOn != m.npOn || !m.npOn {
+			t.Errorf("empty=%v: [v] again left settings=%v flag=%v, want both true",
+				empty, m.settings.VisualizerOn, m.npOn)
+		}
+
+		m = press(m, 'y')
+		if m.settings.LyricsOn != m.lyricsOn || m.lyricsOn {
+			t.Errorf("empty=%v: [y] left settings=%v flag=%v, want both false",
+				empty, m.settings.LyricsOn, m.lyricsOn)
+		}
+		m = press(m, 'y')
+		if m.settings.LyricsOn != m.lyricsOn || !m.lyricsOn {
+			t.Errorf("empty=%v: [y] again left settings=%v flag=%v, want both true",
+				empty, m.settings.LyricsOn, m.lyricsOn)
+		}
 	}
 }

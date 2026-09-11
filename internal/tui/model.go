@@ -492,8 +492,12 @@ func InitialModel() Model {
 	vol := defSettings.DefaultVolume
 
 	return Model{
-		activePage:             PageStream,
-		npOn:                   true,
+		activePage: PageStream,
+		// Both panes start where they were left. Defaults() has them on,
+		// so a fresh install still opens with the spectrum and lyrics
+		// showing; hiding one now sticks across restarts.
+		npOn:                   defSettings.VisualizerOn,
+		lyricsOn:               defSettings.LyricsOn,
 		activePanel:            PanelSearch,
 		searchInput:            ti,
 		results:                []search.Result{},

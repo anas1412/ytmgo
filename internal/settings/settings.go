@@ -33,6 +33,11 @@ type Settings struct {
 	DiscordRPCEnabled bool   `json:"discord_rpc_enabled"` // enable Discord Rich Presence
 	AutoplayEnabled   bool   `json:"autoplay_enabled"`    // auto-queue related tracks when queue empties
 	Theme             string `json:"theme"`               // auto, dark, light or terminal
+	// VisualizerOn and LyricsOn remember whether each pane was left open,
+	// so hiding one sticks across restarts instead of coming back next
+	// launch. Both default on.
+	VisualizerOn bool `json:"visualizer_on"`
+	LyricsOn     bool `json:"lyrics_on"`
 }
 
 // Defaults returns a Settings with sane defaults.
@@ -48,6 +53,8 @@ func Defaults() *Settings {
 		DiscordRPCEnabled: true,
 		AutoplayEnabled:   true,
 		Theme:             "terminal",
+		VisualizerOn:      true,
+		LyricsOn:          true,
 	}
 }
 

@@ -359,14 +359,16 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		// the visibility change in Update, which also covers the panel
 		// going off screen because the page changed.
 		m.npOn = !m.npOn
+		m.settings.VisualizerOn = m.npOn
+		save := saveSettingsCmd(m.db, m.settings)
 		if m.npOn {
 			m.setStatus("Visualizer on  ([v] hide)")
 			m.clampSearchOffset()
-			return m, m.refreshCoverCmd()
+			return m, tea.Batch(save, m.refreshCoverCmd())
 		}
 		m.setStatus("Visualizer off")
 		// The spectrum was clocking redraws; restart the ticker.
-		return m, m.resumePlayerTick()
+		return m, tea.Batch(save, m.resumePlayerTick())
 
 	case "y":
 		// Lyrics live under the queue in the right column, independent
@@ -380,18 +382,23 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.lyricsOn = !m.lyricsOn
+		m.settings.LyricsOn = m.lyricsOn
+		save := saveSettingsCmd(m.db, m.settings)
 		m.clampQueueOffset()
 		if !m.lyricsOn {
 			m.setStatus("Lyrics off")
-			return m, nil
+			return m, save
 		}
 		m.setStatus("Lyrics on  ([y] hide)")
 		if t, ok := m.queue.Current(); ok {
 			if cmd := m.loadLyricsCmd(t); cmd != nil {
-				return m, cmd
+				return m, tea.Batch(save, cmd)
 			}
 		}
-		return m, nil
+		// Nothing playing, so there are no lyrics to fetch — but the
+		// toggle still has to be written, or turning the pane on with an
+		// empty queue is forgotten by the next launch.
+		return m, save
 
 	case "z":
 		// Show or hide the inline [key] hints. The footer always keeps
