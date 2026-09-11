@@ -106,7 +106,7 @@ The yt-dlp installed alongside ytmgo is offered for removal. Other system depend
 
 ## Demo
 
-![ytmgo TUI screenshot](ytmgo.png)
+![ytmgo TUI screenshot](ytmgo-v1.1.png)
 
 Album preview, live spectrum, and synced lyrics — in the default palette above,
 or one of the nine built-in themes:
