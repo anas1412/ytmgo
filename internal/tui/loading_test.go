@@ -1,9 +1,12 @@
 package tui
 
 import (
+	"image"
 	"strings"
 	"testing"
 
+	"ytmgo/internal/coverart"
+	"ytmgo/internal/queue"
 	"ytmgo/internal/search"
 	"ytmgo/internal/ytmusic"
 
@@ -123,3 +126,70 @@ func TestEscCancelsABrowseLoad(t *testing.T) {
 		t.Errorf("the cancelled fetch opened album %q anyway", got.openAlbum.Title)
 	}
 }
+
+// The cover is a kitty overlay the terminal keeps until something
+// deletes it. The wait replaces the strip that draws it, so starting a
+// fetch has to owe the terminal that delete — otherwise the old
+// artist's photo hangs over the loading message, hiding it.
+func TestLoadingClearsTheStaleCover(t *testing.T) {
+	m := artistOnScreen(t)
+	m.albumArtImg = image.NewRGBA(image.Rect(0, 0, 8, 8))
+	m.albumArtURL = "https://example.invalid/old.jpg"
+	if !m.albumArtOnScreen() {
+		t.Fatal("the settled artist page is not showing its cover")
+	}
+
+	// A with the cursor in the browse list flips to the releases, so
+	// the artist case is the one that actually fetches: a queue track
+	// by somebody else, which is where this was seen.
+	fromQueue := m
+	fromQueue.queue.Clear()
+	fromQueue.queue.Add(queue.Track{
+		ID: "65-UZY0mN3o", Title: "CHE.R.RY", Artist: "YUI",
+		ArtistBrowseID: "UC_yui", AlbumBrowseID: "MPREb_GPU0kIvZxOF",
+	})
+	fromQueue.queueCursor = 0
+	fromQueue.activePanel = PanelQueue
+
+	for _, tc := range []struct {
+		name string
+		key  rune
+		from Model
+	}{{"artist", 'A', fromQueue}, {"album", 'a', m}} {
+		nm, _ := tc.from.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{tc.key}})
+		after := nm.(Model)
+		if after.albumArtOnScreen() {
+			t.Errorf("%s: the cover still counts as on screen while loading", tc.name)
+		}
+		if after.albumArtClearN == 0 {
+			t.Errorf("%s: no delete was scheduled, so the old cover stays over the wait", tc.name)
+		}
+		if after.albumArtSendN != 0 {
+			t.Errorf("%s: the cover is still queued for transmit while loading", tc.name)
+		}
+		// And the escape that removes it is emitted, on a terminal
+		// that has images at all.
+		if esc := after.clearCoverImage(); coverartKitty() && !strings.Contains(esc, "\x1b_G") {
+			t.Errorf("%s: no kitty delete emitted: %q", tc.name, esc)
+		}
+	}
+
+	// When the page arrives, the cover is owed a transmit again.
+	nm, _ := fromQueue.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'A'}})
+	loading := nm.(Model)
+	done := ArtistLoadedMsg{
+		Artist: ytmusic.ArtistPage{Name: "Someone Else", ThumbURL: m.albumArtURL},
+		Songs:  []search.Result{{Title: "a song"}},
+		Seq:    loading.artistSeq,
+	}
+	nm, _ = loading.Update(done)
+	if settled := nm.(Model); !settled.albumArtOnScreen() {
+		t.Error("the cover did not come back once the page arrived")
+	} else if settled.albumArtSendN == 0 {
+		t.Error("the cover is on screen again but was never transmitted")
+	}
+}
+
+// coverartKitty reports whether this terminal draws images at all; the
+// delete escape is empty without one.
+func coverartKitty() bool { return coverart.KittySupported() }

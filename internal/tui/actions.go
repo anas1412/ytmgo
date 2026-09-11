@@ -125,7 +125,16 @@ func (m Model) coverOnScreen() bool {
 
 // albumArtOnScreen reports whether the browse strip is showing the open
 // album's cover — the stream page, an open album, and art in hand.
+//
+// A fetch in flight counts as not showing it. The wait replaces the
+// whole strip, art included, but the kitty image is an overlay the
+// terminal keeps until something deletes it: with the album still set
+// this answered yes, no delete was ever owed, and the old cover hung
+// over the loading message until the new page arrived.
 func (m Model) albumArtOnScreen() bool {
+	if m.isLoadingAlbum || m.isLoadingArtist {
+		return false
+	}
 	return m.activePage == PageStream && (m.openAlbum != nil || m.openArtist != nil) && m.albumArtImg != nil
 }
 
