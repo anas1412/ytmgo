@@ -244,8 +244,10 @@ func (m Model) handleClick(x, y int) (Model, tea.Cmd) {
 				m.searchInput.Blur()
 			}
 
-			// Items start after: border-top(1) + title-line(1) + implicit pad(1) = 3
-			const clickItemOffsetY = 3
+			// Items start after: border-top(1) + implicit pad(1) = 2.
+			// The title moved onto the border, so it no longer costs a
+			// row here — leaving it at 3 put every click one item low.
+			const clickItemOffsetY = 2
 			// Each item is 4 lines from renderSettingsList: label, value, desc, blank
 			const settingsLinesPerItem = 4
 

@@ -298,31 +298,23 @@ func (m Model) renderSettingsPanels() string {
 	}
 	panelHeight := m.panelHeight()
 
+	// Both titles ride the top border, the way every other panel's
+	// does — they used to sit on the first content row, which is why
+	// this page looked unlike the rest of the app.
+	titleW := max(1, panelWidth-5)
+	contentH := panelHeight - 2
+
 	// Left panel: Settings list (always focused — arrows navigate it)
-	leftBorder := panelBorderFocused
-	settingsTitle := stylePanelTitle.Render(truncate("SETTINGS", max(1, panelWidth-2)))
-	settingsContent := m.renderSettingsList(panelWidth, panelHeight-3)
-	leftPanel := lipgloss.JoinVertical(lipgloss.Top,
-		settingsTitle,
-		settingsContent,
-	)
-	leftPanel = leftBorder.
-		Width(panelWidth).
-		Height(panelHeight - 2).
-		Render(leftPanel)
+	leftPanel := boxTitled(
+		stylePanelTitle.Render(truncate("SETTINGS", titleW)),
+		panelBorderFocused.GetBorderTopForeground(),
+		m.renderSettingsList(panelWidth, contentH), panelWidth, contentH)
 
 	// Right panel: Keyboard shortcuts (always visible, view-only)
-	rightBorder := panelBorder
-	helpTitle := stylePanelTitle.Render(truncate("KEYBOARD SHORTCUTS", max(1, panelWidth-2)))
-	helpContent := m.renderHelpPanel(panelWidth, panelHeight-3)
-	rightPanel := lipgloss.JoinVertical(lipgloss.Top,
-		helpTitle,
-		helpContent,
-	)
-	rightPanel = rightBorder.
-		Width(panelWidth).
-		Height(panelHeight - 2).
-		Render(rightPanel)
+	rightPanel := boxTitled(
+		stylePanelTitle.Render(truncate("KEYBOARD SHORTCUTS", titleW)),
+		panelBorder.GetBorderTopForeground(),
+		m.renderHelpPanel(panelWidth, contentH), panelWidth, contentH)
 
 	// Horizontal spacer between columns
 	leftover := m.width - lipgloss.Width(leftPanel) - lipgloss.Width(rightPanel)
