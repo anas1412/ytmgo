@@ -47,6 +47,20 @@ go build -o ytmgo .
 ./ytmgo
 ```
 
+::: tip yt-dlp comes from upstream, not your package manager
+`yt-dlp` is the one dependency a distro package actively breaks. YouTube
+changes, yt-dlp patches within days, and a frozen archive does not
+follow — Debian and Ubuntu still carry builds from 2023 and 2025
+alongside the current one. An out-of-date yt-dlp cannot open a single
+track, which looks like ytmgo skipping through the whole queue in
+silence.
+
+So the installer fetches yt-dlp from its own releases, next to the
+ytmgo binary. That copy self-updates with `yt-dlp -U`; a packaged one
+refuses to. If you already have a packaged yt-dlp earlier on your PATH,
+the installer says so — remove it, or put the install directory first.
+:::
+
 ## Supported systems
 
 | | |
@@ -83,27 +97,38 @@ The installer offers to fetch these for you.
 | Program | Used for | Required |
 |---------|----------|:--------:|
 | `mpv` | Playback | Yes |
-| `yt-dlp` | Downloading | Yes |
+| `yt-dlp` | Downloading, and resolving streams for playback | Yes, installed from upstream |
 | `ffmpeg` | Converting audio and embedding album art | Yes |
 | `cava` | The audio visualizer | Yes |
 
 Debian, Ubuntu and Mint:
 
 ```bash
-sudo apt install mpv yt-dlp ffmpeg cava
+sudo apt install mpv ffmpeg cava
 ```
 
 Fedora:
 
 ```bash
-sudo dnf install mpv yt-dlp ffmpeg cava
+sudo dnf install mpv ffmpeg cava
 ```
 
 macOS:
 
 ```bash
-brew install mpv yt-dlp ffmpeg cava
+brew install mpv ffmpeg cava
 ```
+
+yt-dlp is missing from those lists on purpose. Install it from upstream,
+where it can keep itself current:
+
+```bash
+curl -fsSL https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_linux \
+  -o ~/.local/bin/yt-dlp && chmod +x ~/.local/bin/yt-dlp
+```
+
+Use `yt-dlp_macos` on macOS, or `yt-dlp_linux_aarch64` on arm64. From
+then on `yt-dlp -U` updates it in place.
 
 ## Updating
 

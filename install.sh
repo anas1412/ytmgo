@@ -16,7 +16,7 @@
 #   1. Detects your OS and CPU architecture
 #   2. Downloads the matching static binary from the GitHub Release
 #   3. Installs it to a directory on PATH (or prints the export command)
-#   4. Auto-installs any missing system deps (mpv, yt-dlp, ffmpeg, cava) via
+#   4. Installs yt-dlp from upstream, and any missing mpv/ffmpeg/cava via
 #      your package manager — uses sudo for system PMs, no sudo for brew.
 #      You'll see the exact command before it runs.
 
@@ -268,11 +268,75 @@ case ":$PATH:" in
 esac
 fi
 
+# ─── yt-dlp, from upstream ──────────────────────────────────────────
+# yt-dlp is the one dependency a distro package actively breaks. YouTube
+# changes, yt-dlp patches within days, and a frozen archive does not
+# follow: Debian and Ubuntu still carry builds from 2023 and 2025
+# alongside the current one. An out-of-date yt-dlp cannot open a single
+# track, which ytmgo used to show as the queue skipping past everything
+# in silence.
+#
+# So it comes from yt-dlp's own releases instead, into the same dir as
+# ytmgo. That copy self-updates with `yt-dlp -U`, which a distro-managed
+# one refuses to do.
+install_ytdlp() {
+  local dest="$INSTALL_DIR/yt-dlp" asset
+  case "$os/$(uname -m)" in
+    Linux/x86_64)          asset="yt-dlp_linux" ;;
+    Linux/aarch64|Linux/arm64) asset="yt-dlp_linux_aarch64" ;;
+    Darwin/*)              asset="yt-dlp_macos" ;;
+    *)                     asset="yt-dlp" ;;   # the python zipapp, needs python3
+  esac
+  local url="https://github.com/yt-dlp/yt-dlp/releases/latest/download/$asset"
+
+  # An existing upstream copy just updates itself; that is the whole
+  # point of not using the package manager.
+  if [ -x "$dest" ]; then
+    info "Updating yt-dlp…"
+    "$dest" -U >/dev/null 2>&1 && { success "yt-dlp is current"; return 0; }
+  fi
+
+  info "Installing yt-dlp from upstream…"
+  local tmp
+  tmp=$(mktemp) || return 1
+  if ! curl -fsSL "$url" -o "$tmp"; then
+    rm -f "$tmp"
+    warn "Could not download yt-dlp from $url"
+    return 1
+  fi
+  chmod +x "$tmp"
+  if ! mv "$tmp" "$dest" 2>/dev/null; then
+    if command -v sudo >/dev/null 2>&1 && sudo mv "$tmp" "$dest"; then
+      sudo chmod +x "$dest"
+    else
+      rm -f "$tmp"
+      warn "Could not write $dest"
+      return 1
+    fi
+  fi
+  success "Installed yt-dlp ($("$dest" --version 2>/dev/null || echo 'version unknown'))"
+}
+
+# A distro-managed yt-dlp earlier on PATH would win over ours, and be
+# the stale one. Say so rather than leaving it to be discovered later.
+if command -v yt-dlp >/dev/null 2>&1; then
+  existing=$(command -v yt-dlp)
+  if [ "$existing" != "$INSTALL_DIR/yt-dlp" ]; then
+    warn "A packaged yt-dlp is already on PATH at $existing."
+    warn "It cannot self-update and is usually the reason nothing plays."
+    warn "Installing the upstream build to $INSTALL_DIR/yt-dlp — make sure"
+    warn "$INSTALL_DIR comes first on your PATH, or remove the packaged one."
+  fi
+fi
+install_ytdlp || warn "Continuing without yt-dlp — downloads and playback will not work until it is installed."
+
 # ─── System deps check + install ───────────────────────────────────
-# Auto-install any missing mpv/yt-dlp/ffmpeg via the user's package
+# Auto-install any missing mpv/ffmpeg/cava via the user's package
 # manager. Uses sudo for system PMs (apt/dnf/pacman/apk) — not for brew.
+#
+# yt-dlp is deliberately NOT in that list; see install_ytdlp below.
 missing=()                        # init for `set -u` (line 154 reads ${#missing[@]})
-deps=("mpv" "yt-dlp" "cava")
+deps=("mpv" "cava")
 for dep in "${deps[@]}"; do
   if ! command -v "$dep" >/dev/null 2>&1; then
     missing+=("$dep")
@@ -294,14 +358,14 @@ if [ ${#missing[@]} -gt 0 ]; then
   pm_cmd=""
   case "$os" in
     Linux)
-      if   command -v apt    >/dev/null 2>&1; then pm_cmd="sudo apt install -y mpv yt-dlp ffmpeg cava"
-      elif command -v dnf    >/dev/null 2>&1; then pm_cmd="sudo dnf install -y mpv yt-dlp ffmpeg cava"
-      elif command -v pacman >/dev/null 2>&1; then pm_cmd="sudo pacman -S --noconfirm mpv yt-dlp ffmpeg cava"
-      elif command -v apk    >/dev/null 2>&1; then pm_cmd="sudo apk add mpv yt-dlp ffmpeg cava"
+      if   command -v apt    >/dev/null 2>&1; then pm_cmd="sudo apt install -y mpv ffmpeg cava"
+      elif command -v dnf    >/dev/null 2>&1; then pm_cmd="sudo dnf install -y mpv ffmpeg cava"
+      elif command -v pacman >/dev/null 2>&1; then pm_cmd="sudo pacman -S --noconfirm mpv ffmpeg cava"
+      elif command -v apk    >/dev/null 2>&1; then pm_cmd="sudo apk add mpv ffmpeg cava"
       fi ;;
     Darwin)
       if command -v brew >/dev/null 2>&1; then
-        pm_cmd="brew install mpv yt-dlp ffmpeg cava"
+        pm_cmd="brew install mpv ffmpeg cava"
       fi ;;
   esac
 

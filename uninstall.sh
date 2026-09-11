@@ -19,8 +19,9 @@
 #   2. The database (~/.local/share/ytmgo/ytmgo.db)         ← skipped with --keep-user-data
 #   3. Downloaded tracks (~/.local/share/ytmgo/downloads/)  ← skipped with --keep-downloads
 #
-# System dependencies (mpv, yt-dlp, ffmpeg) are NOT removed — they
-# may be used by other applications.
+# The yt-dlp installed beside the ytmgo binary is ours and is offered
+# for removal. Other system dependencies (mpv, ffmpeg, cava) are NOT
+# removed — they may be used by other applications.
 
 set -euo pipefail
 
@@ -109,6 +110,21 @@ if ask "Remove the ytmgo binary?" true; then
   fi
 else
   warn "Skipping binary removal."
+fi
+
+# ─── 1a. Remove the yt-dlp we installed ─────────────────────────────
+# install.sh puts an upstream yt-dlp beside the ytmgo binary, because a
+# packaged one cannot self-update and goes stale. Only that copy is
+# ours: a distro-managed yt-dlp lives elsewhere and is left alone.
+if [ -n "$BIN_PATH" ]; then
+  OUR_YTDLP="${BIN_PATH%/*}/yt-dlp"
+  if [ -f "$OUR_YTDLP" ] && ask "Remove the yt-dlp installed with ytmgo ($OUR_YTDLP)?" true; then
+    if rm_f "$OUR_YTDLP"; then
+      success "Removed yt-dlp"
+    else
+      warn "Could not remove $OUR_YTDLP"
+    fi
+  fi
 fi
 
 # ─── 1b. Remove the desktop entry and icon ──────────────────────────
@@ -221,8 +237,8 @@ if [ -n "$BIN_PATH" ]; then
 fi
 
 echo ""
-info "System dependencies (mpv, yt-dlp, ffmpeg) were left untouched."
+info "System dependencies (mpv, ffmpeg, cava) were left untouched."
 info "Remove them manually if not needed:"
-echo "  apt:   sudo apt remove mpv yt-dlp ffmpeg"
-echo "  dnf:   sudo dnf remove mpv yt-dlp ffmpeg"
-echo "  brew:  brew uninstall mpv yt-dlp ffmpeg"
+echo "  apt:   sudo apt remove mpv ffmpeg cava"
+echo "  dnf:   sudo dnf remove mpv ffmpeg cava"
+echo "  brew:  brew uninstall mpv ffmpeg cava"

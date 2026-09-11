@@ -78,7 +78,7 @@ curl -fsSL https://anas1412.github.io/ytmgo/uninstall.sh | bash -s -- -y --keep-
 curl -fsSL https://anas1412.github.io/ytmgo/uninstall.sh | bash -s -- -y --keep-user-data
 ```
 
-System dependencies (mpv, yt-dlp, ffmpeg) are **not** touched — they may be used by other applications.
+The yt-dlp installed alongside ytmgo is offered for removal. Other system dependencies (mpv, ffmpeg, cava) are **not** touched — they may be used by other applications.
 
 ---
 
@@ -137,7 +137,10 @@ loopback on bare ALSA.
 
 - **Go** 1.22+ (only to build from source)
 - **mpv** — audio playback
-- **yt-dlp** — downloads, and the stream resolution mpv performs when playing
+- **yt-dlp** — downloads, and the stream resolution mpv performs when playing.
+  Installed from [yt-dlp's own releases](https://github.com/yt-dlp/yt-dlp/releases),
+  not your package manager: distro builds freeze, and a stale yt-dlp cannot open
+  any track. The installed copy self-updates with `yt-dlp -U`.
 - **ffmpeg** — audio extraction and cover-art embedding (includes `ffprobe`, used to read durations of local files)
 - **cava** — audio visualiser (`v`)
 
@@ -147,14 +150,26 @@ These are required for playback and downloads:
 
 ```bash
 # Debian / Ubuntu
-sudo apt install mpv yt-dlp ffmpeg cava
+sudo apt install mpv ffmpeg cava
 
 # macOS
-brew install mpv yt-dlp ffmpeg cava
+brew install mpv ffmpeg cava
 
 # Arch Linux
-sudo pacman -S mpv yt-dlp ffmpeg cava
+sudo pacman -S mpv ffmpeg cava
 ```
+
+yt-dlp is not in those lists on purpose — install it from upstream so it
+can keep itself current:
+
+```bash
+curl -fsSL https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_linux \
+  -o ~/.local/bin/yt-dlp && chmod +x ~/.local/bin/yt-dlp
+```
+
+(`yt-dlp_macos` on macOS, `yt-dlp_linux_aarch64` on arm64.) After that,
+`yt-dlp -U` updates it in place.
+
 
 > Search and recommendations use YouTube Music's API directly. mpv plays the resulting watch URLs (resolving streams through its yt-dlp hook), and yt-dlp downloads tracks for offline use. ffmpeg handles audio extraction and cover-art embedding.
 
