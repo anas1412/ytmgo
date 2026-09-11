@@ -155,6 +155,35 @@ queue — plus `downloads/` and a log.
 Before v1 the database was in `~/.config/ytmgo`. It moves itself the
 first time a v1 build starts; nothing to do, and nothing is lost.
 
+## If nothing plays
+
+Almost always an out-of-date yt-dlp. YouTube changes, yt-dlp patches
+within days, and a distro package does not follow — so every track fails
+to open at once.
+
+ytmgo stops after three tracks in a row fail and says so:
+
+> Nothing will play — mpv could not open 3 tracks in a row. Update
+> yt-dlp: `yt-dlp -U`
+
+Run that, and if the copy on your machine came from a package manager
+and refuses to self-update, install the upstream one from the section
+above. You do not need to remove the packaged copy or change your
+`PATH`; ytmgo prefers its own.
+
+To check what ytmgo is actually running:
+
+```bash
+ls -l "$(dirname "$(command -v ytmgo)")/yt-dlp" && yt-dlp --version
+```
+
+If a track still will not play, take ytmgo out of it and try mpv
+directly — if this fails too, the problem is below ytmgo:
+
+```bash
+mpv --no-video "https://music.youtube.com/watch?v=dQw4w9WgXcQ"
+```
+
 ## Uninstalling
 
 ```bash

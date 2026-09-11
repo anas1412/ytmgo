@@ -138,9 +138,12 @@ loopback on bare ALSA.
 - **Go** 1.22+ (only to build from source)
 - **mpv** — audio playback
 - **yt-dlp** — downloads, and the stream resolution mpv performs when playing.
-  Installed from [yt-dlp's own releases](https://github.com/yt-dlp/yt-dlp/releases),
-  not your package manager: distro builds freeze, and a stale yt-dlp cannot open
-  any track. The installed copy self-updates with `yt-dlp -U`.
+  Installed by the one-liner from [yt-dlp's own releases](https://github.com/yt-dlp/yt-dlp/releases)
+  rather than your package manager, because distro builds freeze and a stale
+  yt-dlp cannot open a single track. That copy self-updates with `yt-dlp -U`.
+  If you already have a packaged yt-dlp, leave it — ytmgo runs its own by
+  absolute path and points mpv's stream hook at the same one, so your `PATH`
+  order does not decide which is used.
 - **ffmpeg** — audio extraction and cover-art embedding (includes `ffprobe`, used to read durations of local files)
 - **cava** — audio visualiser (`v`)
 
@@ -159,19 +162,44 @@ brew install mpv ffmpeg cava
 sudo pacman -S mpv ffmpeg cava
 ```
 
-yt-dlp is not in those lists on purpose — install it from upstream so it
-can keep itself current:
+yt-dlp is missing from those lists on purpose. The one-liner installs it
+for you; only do this if you are building from source:
 
 ```bash
 curl -fsSL https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_linux \
   -o ~/.local/bin/yt-dlp && chmod +x ~/.local/bin/yt-dlp
 ```
 
-(`yt-dlp_macos` on macOS, `yt-dlp_linux_aarch64` on arm64.) After that,
-`yt-dlp -U` updates it in place.
+Use `yt-dlp_macos` on macOS, or `yt-dlp_linux_aarch64` on arm64. After
+that, `yt-dlp -U` updates it in place.
+
+Put it next to the `ytmgo` binary and it is picked up regardless of
+`PATH`; anywhere on `PATH` also works.
 
 
 > Search and recommendations use YouTube Music's API directly. mpv plays the resulting watch URLs (resolving streams through its yt-dlp hook), and yt-dlp downloads tracks for offline use. ffmpeg handles audio extraction and cover-art embedding.
+
+---
+
+## If nothing plays
+
+Almost always an out-of-date yt-dlp. YouTube changes, yt-dlp patches within
+days, and a distro package does not follow — so every track fails to open at
+once. ytmgo stops after three failures in a row and tells you:
+
+> Nothing will play — mpv could not open 3 tracks in a row. Update yt-dlp: `yt-dlp -U`
+
+Run that. If your copy came from a package manager and refuses to self-update,
+install the upstream one (see above). You do **not** need to remove the packaged
+copy or reorder your `PATH` — ytmgo runs its own by absolute path, and tells
+mpv's stream hook to use the same one.
+
+If a track still will not play, take ytmgo out of it — if this fails too, the
+problem is below ytmgo:
+
+```bash
+mpv --no-video "https://music.youtube.com/watch?v=dQw4w9WgXcQ"
+```
 
 ---
 
