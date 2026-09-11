@@ -317,6 +317,7 @@ Tab cycles focus through: search input → result list → queue panel → searc
 | `u` | Copy the track's YouTube Music link to the clipboard |
 | `i` | Open the **album** the selected song came from — including from an artist's page |
 | `A` | Open the **artist** of the selected track; on their page, switch songs ⇄ releases |
+| `a` | Queue every track of the open album |
 | `R` | Refresh recommendations |
 | `v` | Toggle the visualizer under the results list |
 | `y` | Toggle the lyrics pane under the queue (wheel over it to scroll) |
@@ -327,7 +328,7 @@ Tab cycles focus through: search input → result list → queue panel → searc
 | `Ctrl+↑` / `Ctrl+↓` | Move item up/down in queue |
 | `o` | Open download directory |
 | `?` | Open the Settings page (includes all shortcuts) |
-| `esc` | Cancel / back |
+| `esc` | Cancel, or step back one level: album → the artist's releases → your results |
 | `q` / `Ctrl+C` | Quit |
 
 ---

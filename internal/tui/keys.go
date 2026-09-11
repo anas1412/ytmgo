@@ -235,7 +235,17 @@ var Keys = KeyMap{
 // this list when it became a page: its way in is the [5] tab, which is
 // always visible in the header.
 func (k KeyMap) ShortHelp() []key.Binding {
+	// i and A earn their place here — they are how you get anywhere
+	// from a track — but their descriptions are written for the
+	// shortcuts panel, which has room to explain. Down here there is
+	// only room for the noun, so restate it without restating the key:
+	// the letter still comes from the binding itself.
+	short := func(b key.Binding, desc string) key.Binding {
+		return key.NewBinding(key.WithKeys(b.Keys()...), key.WithHelp(b.Help().Key, desc))
+	}
 	return []key.Binding{
+		short(k.AlbumInfo, "album"),
+		short(k.ArtistInfo, "artist"),
 		k.CopyLink,
 		k.Visualizer,
 		k.Lyrics,

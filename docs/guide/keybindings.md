@@ -17,7 +17,7 @@ Press `?` at any time to open Settings, which lists the full set.
 | `1` … `6` | Switch page: Stream, Favourites, Library, History, Downloads, Settings |
 | `L` | Jump straight to the Library page |
 | `?` | Open Settings, which lists every shortcut |
-| `esc` | Cancel, or leave an open album |
+| `esc` | Cancel, or step back one level: an album returns to the artist's releases, the artist returns to your results |
 | `q` / `Ctrl+C` | Quit |
 
 ## Playback
@@ -56,6 +56,7 @@ move on. `n` always advances, even with repeat-one enabled.
 | `R` | Refresh recommendations |
 | `i` | Open the **album** the selected song came from — including from an artist's page |
 | `A` | Open the **artist** of the selected track; on their page, switch songs ⇄ releases |
+| `a` | Queue every track of the open album |
 | `f` | Toggle favourite on the selected track |
 | `C` | Clear play history (History page) |
 
