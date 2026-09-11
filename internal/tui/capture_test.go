@@ -1,6 +1,9 @@
 package tui
 
 import (
+	"image"
+	"image/color"
+	"image/draw"
 	"os"
 	"testing"
 
@@ -77,6 +80,24 @@ func TestCaptureFrame(t *testing.T) {
 		}
 	}
 
+	// A solid sentinel rather than no image: dropping the art changes
+	// the layout (the text beside it shifts left when there is nothing
+	// to inset past), so a diff would flag half the strip. Same size,
+	// one colour — the art rectangles are then exactly the magenta.
+	if os.Getenv("YTMGO_CAPTURE_NOART") != "" {
+		fill := func(src image.Image) image.Image {
+			if src == nil {
+				return nil
+			}
+			b := src.Bounds()
+			out := image.NewRGBA(b)
+			draw.Draw(out, b, &image.Uniform{color.RGBA{255, 0, 255, 255}}, image.Point{}, draw.Src)
+			return out
+		}
+		m.albumArtImg = fill(m.albumArtImg)
+		m.coverImg = fill(m.coverImg)
+	}
+
 	// Set the profile last: the helpers above touch it, and a frame
 	// rendered under the default (no TTY under `go test`) downsamples
 	// the accent to basic ANSI, which is what made the cursor row come
@@ -84,6 +105,14 @@ func TestCaptureFrame(t *testing.T) {
 	lipgloss.SetColorProfile(termenv.TrueColor)
 	termenv.SetDefaultOutput(termenv.NewOutput(os.Stdout, termenv.WithProfile(termenv.TrueColor)))
 	ApplyTheme("tokyo-night") // rebuild the package styles under that profile
+
+	// The art rectangles get the real covers composited in afterwards
+	// at full resolution — half-blocks are ten pixels wide, which is
+	// what a terminal without the kitty graphics protocol is stuck
+	// with, not what the app looks like in one that has it.
+	if u := os.Getenv("YTMGO_CAPTURE_URLS"); u != "" {
+		_ = os.WriteFile(u, []byte(m.albumArtURL+"\n"+m.coverURL+"\n"), 0o644)
+	}
 
 	if err := os.WriteFile(out, []byte(m.View()), 0o644); err != nil {
 		t.Fatal(err)
