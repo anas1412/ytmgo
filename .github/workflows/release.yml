@@ -89,14 +89,54 @@ jobs:
           sha256sum "$asset" | tee "${asset}.sha256"
           ls -la "$asset" "${asset}.sha256"
 
-      - name: Upload release asset
+      # Hand the artifact to the release job rather than publishing from
+      # here. Four matrix jobs calling the release action at once is a
+      # race: each one looks for a release on this tag, all four find
+      # none, and more than one creates it — which is how v1.0.2 and
+      # v1.1.0 each ended up with a stray draft beside the real release,
+      # both stamped the same second.
+      - name: Hand the artifact to the release job
+        uses: actions/upload-artifact@v4
+        with:
+          name: ytmgo_${{ matrix.asset_os }}_${{ matrix.arch }}
+          path: |
+            ytmgo_${{ matrix.asset_os }}_${{ matrix.arch }}.tar.gz
+            ytmgo_${{ matrix.asset_os }}_${{ matrix.arch }}.tar.gz.sha256
+          if-no-files-found: error
+          retention-days: 1
+
+  # ───────────────────────────────────────────────────────────────────
+  # Publish the release — one job, so one release
+  # ───────────────────────────────────────────────────────────────────
+  release:
+    name: publish the release
+    runs-on: ubuntu-latest
+    needs: [build]
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+
+    steps:
+      - name: Collect every platform's artifact
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Check all four platforms arrived
+        run: |
+          set -euo pipefail
+          ls -la dist
+          # Eight files: four tarballs and their checksums. Publishing a
+          # partial set would ship a release the installer cannot use on
+          # some architectures.
+          n=$(find dist -type f | wc -l)
+          [ "$n" -eq 8 ] || { echo "expected 8 files, found $n"; exit 1; }
+
+      - name: Publish
         uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ github.ref_name }}
           generate_release_notes: true
-          files: |
-            ytmgo_${{ matrix.asset_os }}_${{ matrix.arch }}.tar.gz
-            ytmgo_${{ matrix.asset_os }}_${{ matrix.arch }}.tar.gz.sha256
+          files: dist/*
 
   # ───────────────────────────────────────────────────────────────────
   # Publish to Arch User Repository
@@ -104,7 +144,7 @@ jobs:
   aur:
     name: publish to AUR
     runs-on: ubuntu-latest
-    needs: [build]
+    needs: [release]
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
 
     steps:
