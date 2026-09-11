@@ -623,9 +623,13 @@ func AlbumTracks(browseID string) (Album, error) {
 			t.VideoID = digString(item, "overlay", "musicItemThumbnailOverlayRenderer", "content",
 				"musicPlayButtonRenderer", "playNavigationEndpoint", "watchEndpoint", "videoId")
 		}
-		// Duration sits in the fixed (right-hand) column.
+		// Duration sits in the fixed (right-hand) column; the album's
+		// rows leave col1 empty (every track shares the byline above)
+		// and put the play count in col2.
 		t.Duration = parseClock(digString(item, "fixedColumns", 0,
 			"musicResponsiveListItemFixedColumnRenderer", "text", "runs", 0, "text"))
+		t.Plays = digString(item, "flexColumns", 2,
+			"musicResponsiveListItemFlexColumnRenderer", "text", "runs", 0, "text")
 		if t.VideoID == "" || t.Title == "" {
 			continue
 		}

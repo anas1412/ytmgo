@@ -138,14 +138,16 @@ func openAlbumCmd(a ytmusic.Album, seq int) tea.Cmd {
 				cover = full.CoverURL
 			}
 			tracks = append(tracks, search.Result{
-				ID:            t.VideoID,
-				Title:         t.Title,
-				Uploader:      t.Artist,
-				Album:         full.Title,
-				Duration:      t.Duration,
-				URL:           ytmusic.WatchURL(t.VideoID),
-				CoverURL:      cover,
-				AlbumBrowseID: full.BrowseID,
+				ID:             t.VideoID,
+				Title:          t.Title,
+				Uploader:       t.Artist,
+				Album:          full.Title,
+				Duration:       t.Duration,
+				URL:            ytmusic.WatchURL(t.VideoID),
+				CoverURL:       cover,
+				AlbumBrowseID:  full.BrowseID,
+				ArtistBrowseID: full.ArtistBrowseID,
+				Plays:          t.Plays,
 			})
 		}
 		return AlbumTracksMsg{Album: full, Tracks: tracks, Seq: seq}

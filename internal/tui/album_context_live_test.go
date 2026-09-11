@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"strings"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -108,4 +109,54 @@ func TestArtistKeyResolvesThroughTheAlbum(t *testing.T) {
 		t.Errorf("A opened %q, want YUI", msg.Artist.Name)
 	}
 	t.Logf("A with no artist id → %s, %d songs", msg.Artist.Name, len(msg.Songs))
+}
+
+// The strip has to say what each key does at the level it is on, and
+// call the artist's songs what they are: the screenshot showed
+// "100 tracks · 6:48:21 · [A] releases" with no way back advertised.
+func TestBrowseStripLabelsEachLevel(t *testing.T) {
+	if testing.Short() {
+		t.Skip("short mode: skipping network test")
+	}
+	m := worstCaseModel(t, 150, 40)
+	msg := openArtistCmd("UCRr1xG_2WIDs18a6cIiCxeA", m.artistSeq+1)()
+	m.artistSeq++
+	nm, _ := m.handleArtistLoaded(msg.(ArtistLoadedMsg))
+	m = nm.(Model)
+
+	songs := strings.Join(m.browseStrip(120, m.streamTracks()), "\n")
+	for _, want := range []string{"top tracks", "[A] releases", "[esc] back"} {
+		if !strings.Contains(songs, want) {
+			t.Errorf("top songs strip is missing %q:\n%s", want, songs)
+		}
+	}
+
+	// Releases, then an album inside them.
+	nm, _ = m.handleKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'A'}})
+	m = nm.(Model)
+	nm, cmd := m.handleKey(tea.KeyMsg{Type: tea.KeyEnter})
+	m = nm.(Model)
+	am, ok := cmd().(AlbumTracksMsg)
+	if !ok {
+		t.Fatalf("opening a release produced %T", cmd())
+	}
+	nm, _ = m.handleAlbumTracks(am)
+	m = nm.(Model)
+
+	inside := strings.Join(m.browseStrip(120, m.streamTracks()), "\n")
+	if !strings.Contains(inside, "[esc] releases") {
+		t.Errorf("an album inside an artist does not say esc goes back to the releases:\n%s", inside)
+	}
+
+	// Play counts belong on album rows too, not only on the top songs.
+	withPlays := 0
+	for _, r := range m.albumTracks {
+		if r.Plays != "" {
+			withPlays++
+		}
+	}
+	if withPlays != len(m.albumTracks) {
+		t.Errorf("%d of %d album tracks carry a play count", withPlays, len(m.albumTracks))
+	}
+	t.Logf("album %q rows carry plays, e.g. %q", m.openAlbum.Title, m.albumTracks[0].Plays)
 }

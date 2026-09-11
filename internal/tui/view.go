@@ -1095,9 +1095,21 @@ func (m Model) browseStrip(rowW int, tracks []search.Result) []string {
 		if len(tracks) == 1 {
 			trackWord = "track"
 		}
+		onArtistSongs := m.openArtist != nil && m.openAlbum == nil
+		if onArtistSongs {
+			// These are the artist's most-played, not their catalogue.
+			trackWord = "top " + trackWord
+		}
 		third = fmt.Sprintf("%d %s · %s", len(tracks), trackWord, formatTotalDuration(total))
-		if m.openArtist != nil && m.openAlbum == nil {
-			third += "  ·  [A] releases"
+		switch {
+		case onArtistSongs:
+			third += "  ·  [A] releases · [esc] back"
+		case m.openArtist != nil:
+			// An album sitting inside an artist page: esc steps back
+			// into the discography it was opened from.
+			third += "  ·  [esc] releases"
+		default:
+			third += "  ·  [esc] back"
 		}
 	}
 
