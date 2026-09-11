@@ -72,7 +72,8 @@ type Downloader struct {
 	progress chan ProgressEvent
 	ctx      context.Context // cancelled by Close; kills running yt-dlp/ffmpeg
 	cancel   context.CancelFunc
-	format   string // output format: "m4a" or "mp3"
+	format   string         // output format: "m4a" or "mp3"
+	wg       sync.WaitGroup // Close waits on the worker through this
 }
 
 // New creates a downloader. format is the output audio format ("m4a" or "mp3").
@@ -88,6 +89,7 @@ func New(outDir, format string) *Downloader {
 		cancel:   cancel,
 		format:   format,
 	}
+	d.wg.Add(1)
 	go d.worker(outDir)
 	return d
 }
@@ -134,26 +136,26 @@ func (d *Downloader) EnqueueAs(trackID, title, uploader, url, outDir, coverURL, 
 	// Check if file already downloaded
 	expected := filepath.Join(outDir, stemFor(uploader, title, nameStem)+ext)
 	if _, err := os.Stat(expected); err == nil {
-		d.progress <- ProgressEvent{
+		d.send(ProgressEvent{
 			TrackID:  trackID,
 			Title:    title,
 			Uploader: uploader,
 			Progress: 100,
 			Status:   StatusSkipped,
 			FilePath: expected,
-		}
+		})
 		return
 	}
 	// Also check by scanning dir for any file containing the track ID
 	if fp := findExisting(outDir, trackID); fp != "" {
-		d.progress <- ProgressEvent{
+		d.send(ProgressEvent{
 			TrackID:  trackID,
 			Title:    title,
 			Uploader: uploader,
 			Progress: 100,
 			Status:   StatusSkipped,
 			FilePath: fp,
-		}
+		})
 		return
 	}
 
@@ -227,12 +229,19 @@ func (d *Downloader) Jobs() []*Job {
 	return cp
 }
 
-// Close shuts down the downloader and kills any running yt-dlp/ffmpeg.
+// Close shuts down the downloader and kills any running yt-dlp/ffmpeg,
+// then waits for the worker to actually stop. It used to cancel and
+// return immediately, so a job could still be writing into the download
+// directory after the app believed it had shut down — which is how a
+// test's temporary directory came back "not empty" while it was being
+// removed, and how a quit mid-download could leave a partial file.
 func (d *Downloader) Close() {
 	d.cancel()
+	d.wg.Wait()
 }
 
 func (d *Downloader) worker(outDir string) {
+	defer d.wg.Done()
 	for {
 		select {
 		case <-d.ctx.Done():
@@ -240,6 +249,17 @@ func (d *Downloader) worker(outDir string) {
 		case job := <-d.jobCh:
 			d.runJob(job, outDir)
 		}
+	}
+}
+
+// send delivers a progress event, unless the downloader is shutting
+// down. A bare send on the buffered channel pins the worker forever
+// once the buffer fills with no reader — and Close now waits for that
+// worker, so the hang would become a hang on quit.
+func (d *Downloader) send(ev ProgressEvent) {
+	select {
+	case d.progress <- ev:
+	case <-d.ctx.Done():
 	}
 }
 
@@ -299,7 +319,7 @@ func (d *Downloader) runJob(job *Job, outDir string) {
 	// Ensure output directory exists
 	if err := os.MkdirAll(outDir, 0755); err != nil {
 		d.setJobStatus(job, StatusFailed, fmt.Errorf("create download dir: %w", err))
-		d.progress <- ProgressEvent{TrackID: job.TrackID, Status: StatusFailed, Err: job.Err}
+		d.send(ProgressEvent{TrackID: job.TrackID, Status: StatusFailed, Err: job.Err})
 		return
 	}
 
@@ -309,7 +329,7 @@ func (d *Downloader) runJob(job *Job, outDir string) {
 		result, err := ytresolve.Resolve(job.Uploader, job.Title)
 		if err != nil {
 			d.setJobStatus(job, StatusFailed, fmt.Errorf("ytresolve: %w", err))
-			d.progress <- ProgressEvent{TrackID: job.TrackID, Title: job.Title, Uploader: job.Uploader, Status: StatusFailed, Err: job.Err}
+			d.send(ProgressEvent{TrackID: job.TrackID, Title: job.Title, Uploader: job.Uploader, Status: StatusFailed, Err: job.Err})
 			return
 		}
 		videoURL = result.WebpageURL
@@ -319,7 +339,7 @@ func (d *Downloader) runJob(job *Job, outDir string) {
 	}
 	if videoURL == "" {
 		d.setJobStatus(job, StatusFailed, fmt.Errorf("no video URL for %s - %s", job.Uploader, job.Title))
-		d.progress <- ProgressEvent{TrackID: job.TrackID, Title: job.Title, Uploader: job.Uploader, Status: StatusFailed, Err: job.Err}
+		d.send(ProgressEvent{TrackID: job.TrackID, Title: job.Title, Uploader: job.Uploader, Status: StatusFailed, Err: job.Err})
 		return
 	}
 
@@ -354,13 +374,13 @@ func (d *Downloader) runJob(job *Job, outDir string) {
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		d.setJobStatus(job, StatusFailed, fmt.Errorf("yt-dlp stdout pipe: %w", err))
-		d.progress <- ProgressEvent{TrackID: job.TrackID, Title: job.Title, Uploader: job.Uploader, Status: StatusFailed, Err: job.Err}
+		d.send(ProgressEvent{TrackID: job.TrackID, Title: job.Title, Uploader: job.Uploader, Status: StatusFailed, Err: job.Err})
 		return
 	}
 
 	if err := cmd.Start(); err != nil {
 		d.setJobStatus(job, StatusFailed, fmt.Errorf("yt-dlp start: %w", err))
-		d.progress <- ProgressEvent{TrackID: job.TrackID, Title: job.Title, Uploader: job.Uploader, Status: StatusFailed, Err: job.Err}
+		d.send(ProgressEvent{TrackID: job.TrackID, Title: job.Title, Uploader: job.Uploader, Status: StatusFailed, Err: job.Err})
 		return
 	}
 
@@ -375,13 +395,13 @@ func (d *Downloader) runJob(job *Job, outDir string) {
 				var pct float64
 				fmt.Sscanf(m[1], "%f", &pct)
 				d.setJobProgress(job, pct)
-				d.progress <- ProgressEvent{
+				d.send(ProgressEvent{
 					TrackID:  job.TrackID,
 					Title:    job.Title,
 					Uploader: job.Uploader,
 					Progress: pct,
 					Status:   StatusDownloading,
-				}
+				})
 			}
 		}
 	}()
@@ -390,7 +410,7 @@ func (d *Downloader) runJob(job *Job, outDir string) {
 	if err := cmd.Wait(); err != nil {
 		<-progressDone
 		d.setJobStatus(job, StatusFailed, fmt.Errorf("yt-dlp failed: %w", err))
-		d.progress <- ProgressEvent{TrackID: job.TrackID, Title: job.Title, Uploader: job.Uploader, Status: StatusFailed, Err: job.Err}
+		d.send(ProgressEvent{TrackID: job.TrackID, Title: job.Title, Uploader: job.Uploader, Status: StatusFailed, Err: job.Err})
 		return
 	}
 	<-progressDone
@@ -416,7 +436,7 @@ func (d *Downloader) runJob(job *Job, outDir string) {
 			// gets a clear error instead of a silent empty folder.
 			d.setJobStatus(job, StatusFailed, fmt.Errorf("yt-dlp completed but no output file found for %s - %s (expected: %s.*)",
 				job.Uploader, job.Title, titleBase))
-			d.progress <- ProgressEvent{TrackID: job.TrackID, Title: job.Title, Uploader: job.Uploader, Status: StatusFailed, Err: job.Err}
+			d.send(ProgressEvent{TrackID: job.TrackID, Title: job.Title, Uploader: job.Uploader, Status: StatusFailed, Err: job.Err})
 			return
 		}
 	}
@@ -435,14 +455,14 @@ func (d *Downloader) runJob(job *Job, outDir string) {
 	}
 
 	d.finishJob(job, outPath)
-	d.progress <- ProgressEvent{
+	d.send(ProgressEvent{
 		TrackID:  job.TrackID,
 		Title:    job.Title,
 		Uploader: job.Uploader,
 		Progress: 100,
 		Status:   StatusDone,
 		FilePath: job.FilePath,
-	}
+	})
 }
 
 func sanitizeFilename(s string) string {

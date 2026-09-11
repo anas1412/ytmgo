@@ -29,7 +29,7 @@ func TestCaptureFrame(t *testing.T) {
 	m.queue.Clear()
 	m.activePage = PageStream
 	m.activePanel = PanelSearch
-	m.searchFocused = false // the cursor row is only highlighted when the list has focus
+	m.searchFocused = false      // the cursor row is only highlighted when the list has focus
 	m.settings.ShowHints = false // a clean frame: the hints are for using it, not for looking at it
 	version.Version = "v1.1.1"
 
