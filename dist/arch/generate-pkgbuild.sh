@@ -67,7 +67,7 @@ check() {
 package() {
   cd "\$srcdir/\$pkgname-\$pkgver"
   install -Dm755 ytmgo "\$pkgdir/usr/bin/ytmgo"
-  install -Dm644 ytmgo-icon.png "\$pkgdir/usr/share/pixmaps/ytmgo.png"
+  install -Dm644 ytmgo-icon.png "\$pkgdir/usr/share/icons/hicolor/256x256/apps/ytmgo.png"
   # MIT carries its own copyright line, so Arch wants the text shipped
   # rather than pointed at /usr/share/licenses/common.
   install -Dm644 LICENSE "\$pkgdir/usr/share/licenses/\$pkgname/LICENSE"
@@ -80,6 +80,8 @@ Exec=ytmgo
 Icon=ytmgo
 Terminal=true
 Categories=AudioVideo;Audio;Music;Player;
+Keywords=music;youtube;player;terminal;tui;audio;
+StartupNotify=false
 EOF
 }
 PKGBUILD_EOF

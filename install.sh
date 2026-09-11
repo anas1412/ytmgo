@@ -223,6 +223,8 @@ Exec=$INSTALL_DIR/$BINARY
 $icon_line
 Terminal=true
 Categories=AudioVideo;Audio;Music;Player;
+Keywords=music;youtube;player;terminal;tui;audio;
+StartupNotify=false
 DESKTOP_EOF
     $SUDO install -m 0644 "$tmp/ytmgo.desktop" "$app_dir/ytmgo.desktop"
     # Mint/GNOME cache launcher entries; without this the item can take
