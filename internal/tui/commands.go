@@ -58,6 +58,24 @@ func searchCmd(query string, limit int) tea.Cmd {
 	}
 }
 
+// playlistCmd fetches a pasted playlist link and hands its tracks to
+// the results panel, so a link behaves like any other search: the same
+// list, the same keys, the same `a` to queue it all.
+func playlistCmd(ref search.PlaylistRef) tea.Cmd {
+	return func() tea.Msg {
+		title, results, missed, err := search.PlaylistTracks(ref)
+		if err != nil {
+			return SearchResultsMsg{Error: err}
+		}
+		notice := fmt.Sprintf("%s — %d tracks", title, len(results))
+		if missed > 0 {
+			notice = fmt.Sprintf("%s — %d tracks, %d not found on YouTube",
+				title, len(results), missed)
+		}
+		return SearchResultsMsg{Results: results, Notice: notice}
+	}
+}
+
 // historySeeds returns the most recent unique videoIds from play
 // history (newest first). Legacy entries (TIDAL numeric IDs, library
 // file paths) are skipped: they can't seed a YouTube Music radio.

@@ -34,9 +34,12 @@ func (m Model) handleSearchResults(msg SearchResultsMsg) (tea.Model, tea.Cmd) {
 		m.results = msg.Results
 		m.searchCursor = 0
 		m.searchOffset = 0
-		if len(msg.Results) > 0 {
+		switch {
+		case msg.Notice != "":
+			m.setStatus(msg.Notice)
+		case len(msg.Results) > 0:
 			m.setStatus(fmt.Sprintf("Found %d results", len(msg.Results)))
-		} else {
+		default:
 			m.setStatus("No results found")
 		}
 	}

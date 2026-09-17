@@ -97,6 +97,10 @@ type (
 	SearchResultsMsg struct {
 		Results []search.Result
 		Error   error
+		// Notice replaces the "Found N results" line when the results
+		// came from somewhere that can say more — a pasted playlist
+		// names itself and reports what it could not resolve.
+		Notice string
 	}
 
 	// RecommendationsMsg carries the list of recommended tracks.

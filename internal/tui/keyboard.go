@@ -5,6 +5,7 @@ import (
 
 	"ytmgo/internal/player"
 	"ytmgo/internal/queue"
+	"ytmgo/internal/search"
 	ver "ytmgo/internal/version"
 
 	"github.com/charmbracelet/bubbles/key"
@@ -48,6 +49,12 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.err = nil
 				m.resetStreamCursor()
 				m.results = nil
+				// A pasted playlist link fills the same panel as a
+				// search; anything else is a search.
+				if ref, ok := search.ParsePlaylist(query); ok {
+					m.setStatus("Fetching playlist…")
+					return m, playlistCmd(ref)
+				}
 				return m, searchCmd(query, m.settings.SearchLimit)
 			}
 			// Empty query submitted — bring the recommendations back.
@@ -376,19 +383,38 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		// same reason A does: with the focus in the queue, the subject
 		// is the highlighted queue track, not the album beside it.
 		if m.browsingHere() && m.openAlbum != nil && len(m.albumTracks) > 0 {
-			var cmd tea.Cmd
-			for i, r := range m.albumTracks {
-				t := m.resolveTrack(r)
-				if i == 0 {
-					cmd = m.enqueueAndMaybePlay(t)
-					continue
-				}
-				m.queue.Add(t)
-			}
+			cmd := m.queueAll(m.albumTracks)
 			m.setStatus(fmt.Sprintf("Queued %d tracks from %s", len(m.albumTracks), m.openAlbum.Title))
-			return m, tea.Batch(cmd, saveQueueCmd(m.db, m.queue))
+			return m, cmd
 		}
 		return m, m.openAlbumOfSelected()
+
+	case "e":
+		// Enqueue the whole list on screen. A pasted playlist is the
+		// reason it exists — adding a hundred tracks one Enter at a time
+		// is not adding a playlist — but it reads the same on a search
+		// or an artist's songs, so it is not special-cased to playlists.
+		//
+		// Like a and A it needs the cursor in the list: with the focus
+		// in the queue, the subject is the queue, not the list beside it.
+		if !m.browsingHere() {
+			return m, nil
+		}
+		list := m.results
+		if m.streamShowsTracks() {
+			list = m.streamTracks()
+		} else if m.albumMode {
+			// The list on screen is releases, not tracks.
+			m.setStatus("Open an album to queue its tracks")
+			return m, nil
+		}
+		if len(list) == 0 {
+			m.setStatus("Nothing to queue")
+			return m, nil
+		}
+		cmd := m.queueAll(list)
+		m.setStatus(fmt.Sprintf("Queued %d tracks", len(list)))
+		return m, cmd
 
 	case "v":
 		// The visualizer: the spectrum beneath the results, on every

@@ -208,3 +208,52 @@ func TestLiveLyrics(t *testing.T) {
 		t.Errorf("lyrics are %d bytes, expected a full song", len(text))
 	}
 }
+
+// TestLivePlaylist fetches a real playlist. A playlist page reuses the
+// songs-search row renderer inside a differently named shelf, so this
+// guards both the shelf lookup and the duration backfill that the
+// search rows do not carry.
+func TestLivePlaylist(t *testing.T) {
+	if testing.Short() {
+		t.Skip("short mode: skipping network test")
+	}
+	// A large public playlist — the shape a user actually pastes in.
+	p, err := PlaylistTracks("PLFgquLnL59alCl_2TQvOiD5Vgm1hCaGSI")
+	if err != nil {
+		t.Skipf("live playlist unavailable: %v", err)
+	}
+	if p.Title == "" {
+		t.Error("playlist has no title")
+	}
+	if len(p.Tracks) < 5 {
+		t.Fatalf("got %d tracks, want a full playlist", len(p.Tracks))
+	}
+	for i, tr := range p.Tracks {
+		if !IsVideoID(tr.VideoID) {
+			t.Errorf("track %d: bad videoId %q", i, tr.VideoID)
+		}
+		if tr.Title == "" || tr.Artist == "" {
+			t.Errorf("track %d: missing metadata: %+v", i, tr)
+		}
+		if tr.Duration <= 0 {
+			t.Errorf("track %d (%q): no duration — the fixed-column backfill missed", i, tr.Title)
+		}
+	}
+	t.Logf("playlist %q: %d tracks, first %q by %q (%ds)",
+		p.Title, len(p.Tracks), p.Tracks[0].Title, p.Tracks[0].Artist, p.Tracks[0].Duration)
+}
+
+// An album's auto-generated OLAK5uy_ playlist carries no header, so the
+// title is best-effort; the tracks must still come through.
+func TestLiveAlbumPlaylistHasTracksWithoutTitle(t *testing.T) {
+	if testing.Short() {
+		t.Skip("short mode: skipping network test")
+	}
+	p, err := PlaylistTracks("OLAK5uy_kmzoSOa_tCizE-r4sweNz91d9qBv1UCVY")
+	if err != nil {
+		t.Skipf("live playlist unavailable: %v", err)
+	}
+	if len(p.Tracks) < 5 || p.Tracks[0].Duration <= 0 {
+		t.Fatalf("album playlist came back thin: %d tracks, first dur %ds", len(p.Tracks), p.Tracks[0].Duration)
+	}
+}

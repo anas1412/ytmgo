@@ -901,3 +901,60 @@ func parseSongRows(root interface{}, artist string) []Track {
 	}
 	return out
 }
+
+// ─── playlists ──────────────────────────────────────────────────────
+
+// Playlist is a fetched playlist and its tracks, in playlist order.
+type Playlist struct {
+	ID     string
+	Title  string
+	Tracks []Track
+}
+
+// PlaylistTracks fetches a playlist by its id (PL…, OLAK5uy_…, RDCLAK5uy_…)
+// and returns its tracks in order.
+//
+// A playlist page is the album page with one renderer renamed: the rows
+// are the same musicResponsiveListItemRenderer the songs search returns,
+// so parseSearchItem reads them as they are. The shelf around them is
+// musicPlaylistShelfRenderer rather than musicShelfRenderer, and the
+// duration sits in the fixed right-hand column instead of the byline.
+func PlaylistTracks(playlistID string) (Playlist, error) {
+	p := Playlist{ID: playlistID}
+	root, err := post("browse", map[string]interface{}{
+		"context":  clientContext(),
+		"browseId": "VL" + strings.TrimPrefix(playlistID, "VL"),
+	})
+	if err != nil {
+		return p, err
+	}
+
+	if header := findKey(root, "musicResponsiveHeaderRenderer"); header != nil {
+		p.Title = digString(header, "title", "runs", 0, "text")
+	}
+
+	shelf := findKey(root, "musicPlaylistShelfRenderer")
+	if shelf == nil {
+		return p, fmt.Errorf("ytmusic playlist: no tracklist in response")
+	}
+	contents, _ := dig(shelf, "contents").([]interface{})
+	for _, c := range contents {
+		item := dig(c, "musicResponsiveListItemRenderer")
+		if item == nil {
+			continue
+		}
+		t, ok := parseSearchItem(item)
+		if !ok {
+			continue
+		}
+		if t.Duration == 0 {
+			t.Duration = parseClock(digString(item, "fixedColumns", 0,
+				"musicResponsiveListItemFixedColumnRenderer", "text", "runs", 0, "text"))
+		}
+		p.Tracks = append(p.Tracks, t)
+	}
+	if len(p.Tracks) == 0 {
+		return p, fmt.Errorf("ytmusic playlist: no playable tracks found")
+	}
+	return p, nil
+}
