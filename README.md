@@ -23,8 +23,11 @@ curl -fsSL https://raw.githubusercontent.com/anas1412/ytmgo/main/install.sh | ba
 ```
 
 It detects your system automatically:
-- **Arch Linux** — installs via `paru` or `yay` from the AUR (falls back to binary)
+- **Arch Linux** — installs `ytmgo-bin` via `paru` or `yay` (falls back to `ytmgo`, then to the binary)
 - **Other Linux / macOS** — downloads the static binary and installs deps
+
+Either way you get the same prebuilt binary — nothing is compiled unless
+you ask for it.
 
 > Override the install dir: `YTMGO_INSTALL_DIR=/opt/bin curl ... | bash`
 

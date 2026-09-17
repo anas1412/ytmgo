@@ -67,21 +67,27 @@ elif [ -f /etc/os-release ]; then
   grep -qi 'cachyos'  /etc/os-release  && is_arch=true
 fi
 if [ "$os" = "Linux" ] && [ "$is_arch" = true ] && [ -z "${YTMGO_VERSION:-}" ] && [ -z "${YTMGO_INSTALL_DIR:-}" ]; then
-  if command -v paru >/dev/null 2>&1; then
-    info "Detected Arch Linux + paru — installing via AUR…"
-    paru -S --noconfirm ytmgo
-    success "Installed ytmgo via paru"
+  helper=""
+  command -v paru >/dev/null 2>&1 && helper=paru
+  [ -z "$helper" ] && command -v yay >/dev/null 2>&1 && helper=yay
+  if [ -n "$helper" ]; then
+    # ytmgo-bin installs the same static binary this script would fetch
+    # by hand, so the AUR route costs no more than the manual one. The
+    # plain ytmgo package compiles instead, which pulls the whole Go
+    # toolchain — a fine thing to choose, a poor thing to be given.
+    # It is still the fallback: -bin is young, and an AUR package can
+    # be missing or briefly broken.
+    pkg=ytmgo-bin
+    info "Detected Arch Linux + $helper — installing $pkg via AUR…"
+    if ! $helper -S --noconfirm "$pkg"; then
+      warn "$pkg unavailable — falling back to ytmgo (builds from source)."
+      pkg=ytmgo
+      $helper -S --noconfirm "$pkg"
+    fi
+    success "Installed $pkg via $helper"
     echo ""
     info "To uninstall later:"
-    echo "  paru -R ytmgo"
-    exit 0
-  elif command -v yay >/dev/null 2>&1; then
-    info "Detected Arch Linux + yay — installing via AUR…"
-    yay -S --noconfirm ytmgo
-    success "Installed ytmgo via yay"
-    echo ""
-    info "To uninstall later:"
-    echo "  yay -R ytmgo"
+    echo "  $helper -R $pkg"
     exit 0
   else
     warn "Arch Linux detected but no AUR helper found (paru/yay)."
@@ -359,6 +365,11 @@ if [ ${#missing[@]} -gt 0 ]; then
   # Pick the right package manager. Note: order matters — brew on Linux
   # also installs to /usr/local so we check it first on macOS only.
   pm_cmd=""
+  # Root has no use for sudo and often has no sudo: a container or a
+  # root shell would fail on "sudo: command not found" rather than on
+  # anything to do with packages.
+  pm_sudo="sudo"
+  [ "$(id -u)" -eq 0 ] && pm_sudo=""
   case "$os" in
     Linux)
       # Atomic Fedora first — Silverblue, Kinoite, Bazzite, Bluefin and
@@ -379,14 +390,14 @@ if [ ${#missing[@]} -gt 0 ]; then
         fi
         exit 1
       fi
-      if   command -v apt    >/dev/null 2>&1; then pm_cmd="sudo apt install -y mpv ffmpeg cava"
-      elif command -v dnf    >/dev/null 2>&1; then pm_cmd="sudo dnf install -y mpv ffmpeg cava"
-      elif command -v pacman >/dev/null 2>&1; then pm_cmd="sudo pacman -S --noconfirm mpv ffmpeg cava"
-      elif command -v apk    >/dev/null 2>&1; then pm_cmd="sudo apk add mpv ffmpeg cava"
+      if   command -v apt    >/dev/null 2>&1; then pm_cmd="$pm_sudo apt install -y"
+      elif command -v dnf    >/dev/null 2>&1; then pm_cmd="$pm_sudo dnf install -y"
+      elif command -v pacman >/dev/null 2>&1; then pm_cmd="$pm_sudo pacman -S --noconfirm"
+      elif command -v apk    >/dev/null 2>&1; then pm_cmd="$pm_sudo apk add"
       fi ;;
     Darwin)
       if command -v brew >/dev/null 2>&1; then
-        pm_cmd="brew install mpv ffmpeg cava"
+        pm_cmd="brew install"
       fi ;;
   esac
 
@@ -396,11 +407,27 @@ if [ ${#missing[@]} -gt 0 ]; then
     exit 1
   fi
 
-  info "Running: $pm_cmd"
-  if ! $pm_cmd; then
-    err "Package install failed."
-    err "Try running this yourself: $pm_cmd"
-    exit 1
+  info "Running: $pm_cmd ${missing[*]}"
+  if ! $pm_cmd "${missing[@]}"; then
+    # cava is the spectrum and nothing else — ytmgo says so and carries
+    # on without it. It is also the one of the three that older Debian
+    # and Ubuntu do not package, and a single unavailable name makes the
+    # whole command fail, which used to leave mpv and ffmpeg uninstalled
+    # too. Required first, then the nice-to-have on its own.
+    required=()
+    for dep in "${missing[@]}"; do
+      [ "$dep" = "cava" ] || required+=("$dep")
+    done
+    if [ ${#required[@]} -gt 0 ]; then
+      warn "That failed — retrying without the optional ones…"
+      if ! $pm_cmd "${required[@]}"; then
+        err "Package install failed."
+        err "Try running this yourself: $pm_cmd ${required[*]}"
+        exit 1
+      fi
+    fi
+    warn "cava is not packaged here, so the visualizer (v) stays off."
+    warn "Everything else works. Build it from https://github.com/karlstav/cava if you want it."
   fi
   success "Installed system dependencies"
 fi
