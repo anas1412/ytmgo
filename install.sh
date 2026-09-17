@@ -75,16 +75,42 @@ if [ "$os" = "Linux" ] && [ "$is_arch" = true ] && [ -z "${YTMGO_VERSION:-}" ] &
     # by hand, so the AUR route costs no more than the manual one. The
     # plain ytmgo package compiles instead, which pulls the whole Go
     # toolchain — a fine thing to choose, a poor thing to be given.
-    # It is still the fallback: -bin is young, and an AUR package can
-    # be missing or briefly broken.
-    pkg=ytmgo-bin
+    #
+    # Whichever is already installed is the one that gets updated. The
+    # two are the same program and conflict, and asking for ytmgo-bin
+    # over an installed ytmgo cannot work unattended: pacman takes the
+    # default answer under --noconfirm and the default is no, so every
+    # update printed "unresolvable package conflicts" and then quietly
+    # fell back. Switching means removing a package the user chose, so
+    # it is offered rather than done.
+    switch_hint=false
+    if pacman -Qq ytmgo-bin >/dev/null 2>&1; then
+      pkg=ytmgo-bin
+    elif pacman -Qq ytmgo >/dev/null 2>&1; then
+      pkg=ytmgo
+      switch_hint=true
+    else
+      pkg=ytmgo-bin
+    fi
     info "Detected Arch Linux + $helper — installing $pkg via AUR…"
     if ! $helper -S --noconfirm "$pkg"; then
+      # -bin is the newer package and the only one that might be missing
+      # from the AUR; ytmgo has been there all along, so a failure there
+      # is a real failure.
+      if [ "$pkg" != "ytmgo-bin" ]; then
+        err "$helper could not install $pkg."
+        exit 1
+      fi
       warn "$pkg unavailable — falling back to ytmgo (builds from source)."
       pkg=ytmgo
       $helper -S --noconfirm "$pkg"
     fi
     success "Installed $pkg via $helper"
+    if [ "$switch_hint" = true ]; then
+      echo ""
+      info "ytmgo-bin is the same build without compiling it. To switch:"
+      echo "  $helper -R ytmgo && $helper -S ytmgo-bin"
+    fi
     echo ""
     info "To uninstall later:"
     echo "  $helper -R $pkg"

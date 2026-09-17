@@ -23,7 +23,7 @@ curl -fsSL https://raw.githubusercontent.com/anas1412/ytmgo/main/install.sh | ba
 ```
 
 It detects your system automatically:
-- **Arch Linux** — installs `ytmgo-bin` via `paru` or `yay` (falls back to `ytmgo`, then to the binary)
+- **Arch Linux** — installs `ytmgo-bin` via `paru` or `yay`, or updates whichever of the two you already have
 - **Other Linux / macOS** — downloads the static binary and installs deps
 
 Either way you get the same prebuilt binary — nothing is compiled unless
@@ -43,6 +43,13 @@ yay -S ytmgo-bin  # the released binary, no Go toolchain needed
 `ytmgo` compiles from source and needs the Go toolchain (226 MB installed
 if you don't already have it). `ytmgo-bin` installs the same static binary
 the release publishes. Pick either — they conflict, so only one at a time.
+
+Already on `ytmgo`? Updates keep you there; nothing switches a package
+you chose. To move to the prebuilt one:
+
+```bash
+yay -R ytmgo && yay -S ytmgo-bin
+```
 
 ### Build from source
 

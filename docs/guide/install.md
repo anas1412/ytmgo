@@ -9,9 +9,10 @@ curl -fsSL https://raw.githubusercontent.com/anas1412/ytmgo/main/install.sh | ba
 The script works out what your system needs:
 
 - **Arch Linux** installs `ytmgo-bin` from the AUR through `paru` or
-  `yay` — the same prebuilt binary, so nothing is compiled. If that
-  package is unavailable it falls back to `ytmgo`, which builds from
-  source, and with no AUR helper at all it just fetches the binary.
+  `yay` — the same prebuilt binary, so nothing is compiled. If either
+  package is already installed it updates that one instead, so an
+  update never swaps out the package you chose. With no AUR helper at
+  all it just fetches the binary.
 - **Everything else (Linux, macOS)** downloads the release binary for
   your architecture, verifies its checksum, and installs it.
 
@@ -42,6 +43,13 @@ installed, if you do not already have it. `ytmgo-bin` installs the same
 static binary the GitHub release publishes, so there is nothing to
 build. They provide the same program and conflict with each other, so
 install whichever you prefer.
+
+Already have `ytmgo` and want the prebuilt one? Updates leave your
+choice alone, so the swap is yours to make:
+
+```bash
+paru -R ytmgo && paru -S ytmgo-bin
+```
 
 ## From source
 
