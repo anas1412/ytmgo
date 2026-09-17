@@ -49,7 +49,7 @@ func TestLiveArtistPageRenders(t *testing.T) {
 	if len(m.artistSongs) == 0 {
 		t.Fatal("the artist page loaded no songs")
 	}
-	if !strings.Contains(frame, m.artistSongs[0].Title) {
+	if want := onScreenPrefix(m.artistSongs[0].Title); !strings.Contains(frame, want) {
 		t.Errorf("the first song %q is not on screen", m.artistSongs[0].Title)
 	}
 
@@ -64,7 +64,7 @@ func TestLiveArtistPageRenders(t *testing.T) {
 	if len(albums) == 0 {
 		t.Fatal("the artist page loaded no releases")
 	}
-	if !strings.Contains(frame, albums[0].Title) {
+	if want := onScreenPrefix(albums[0].Title); !strings.Contains(frame, want) {
 		t.Errorf("the first release %q is not on screen", albums[0].Title)
 	}
 	// The header has to survive the switch — a grid of albums with no
@@ -86,6 +86,25 @@ func TestLiveArtistPageRenders(t *testing.T) {
 }
 
 func lineWidth(s string) int { return lipgloss.Width(s) }
+
+// onScreenPrefix is the leading part of a title a row is sure to show.
+// A title wider than the panel is truncated with an ellipsis, so
+// matching the whole string really asserts that the title is short —
+// and which song an artist is most played for changes on its own. This
+// failed the day Daft Punk's became "Get Lucky (Radio Edit - feat.
+// Pharrell Williams and Nile Rodgers)", with the row rendering exactly
+// as it should.
+//
+// Runes, not bytes: a title can be CJK, and half a rune matches
+// nothing.
+func onScreenPrefix(title string) string {
+	const safe = 20 // the panel shows about fifty at this width
+	r := []rune(title)
+	if len(r) > safe {
+		r = r[:safe]
+	}
+	return string(r)
+}
 
 // TestLiveArtistAlbumRoundTrip: opening a release from an artist page
 // and pressing esc must land back on that artist with everything
