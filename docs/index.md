@@ -51,6 +51,9 @@ features:
   - icon: '<svg class="lucide lucide-disc-3" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" > <circle cx="12" cy="12" r="10" /> <path d="M6 12c0-1.7.7-3.2 1.8-4.2" /> <circle cx="12" cy="12" r="2" /> <path d="M18 12c0 1.7-.7 3.2-1.8 4.2" /> </svg>'
     title: Whole albums
     details: Search albums, preview the tracklist, queue it or download the lot into its own numbered folder.
+  - icon: '<svg class="lucide lucide-list-music" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" > <path d="M21 15V6" /> <path d="M18.5 18a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z" /> <path d="M12 12H3" /> <path d="M16 6H3" /> <path d="M12 18H3" /> </svg>'
+    title: Playlists from anywhere
+    details: Paste a YouTube or Spotify playlist link into the search box. Its tracks fill the results, ready to queue with e.
   - icon: '<svg class="lucide lucide-palette" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" > <path d="M12 22a1 1 0 0 1 0-20 10 9 0 0 1 10 9 5 5 0 0 1-5 5h-2.25a1.75 1.75 0 0 0-1.4 2.8l.3.4a1.75 1.75 0 0 1-1.4 2.8z" /> <circle cx="13.5" cy="6.5" r=".5" fill="currentColor" /> <circle cx="17.5" cy="10.5" r=".5" fill="currentColor" /> <circle cx="6.5" cy="12.5" r=".5" fill="currentColor" /> <circle cx="8.5" cy="7.5" r=".5" fill="currentColor" /> </svg>'
     title: Eleven themes
     details: Borrow your terminal's own colours, use ytmgo's, or pick a full scheme such as gruvbox, nord, dracula or catppuccin.

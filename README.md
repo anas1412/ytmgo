@@ -85,6 +85,7 @@ The yt-dlp installed alongside ytmgo is offered for removal. Other system depend
 ## Features
 
 - **Native YouTube Music search** — Talks to YT Music's own API directly (no key, no login, no third-party proxy). Results carry exact video IDs, so playback starts on the right recording every time.
+- **Playlist import** — Paste a YouTube or Spotify playlist link into the search box and its tracks fill the results, ready to queue with `e`. Spotify has no playable audio, so its tracks are matched to YouTube Music on name and length — close enough is the same recording, an hour long is somebody's loop of it.
 - **Album preview** — Reach any release from its artist's page and open its tracklist, ready to queue or download in one key. The album's cover takes over the now-playing panel while you browse; nothing is queued until you ask.
 - **Artist pages** — Press `A` on any song to open whoever made it: their hundred most-played tracks, and `A` for their whole discography. Every release opens into its tracklist, so one song becomes a catalogue.
 - **Synced lyrics** — Press `y` to swap the spectrum for lyrics, with the current line highlighted as the song plays (via LRCLIB, plain-text fallback from YT Music). Cached locally, so replays are instant.
@@ -315,6 +316,7 @@ Tab cycles focus through: search input → result list → queue panel → searc
 | `r` | Cycle repeat: OFF → ONE → ALL |
 | `x` | Download selected track |
 | `u` | Copy the track's link (host set by **Copy Link As** in Settings) |
+| `e` | Queue every track in the list on screen |
 | `a` | Open the **album** the selected song came from. Inside an album, queue every song on it |
 | `A` | Open the **artist** of the selected track. On their page, switch songs ⇄ releases |
 | `R` | Refresh recommendations |

@@ -122,6 +122,24 @@ you stop adding to it.
 Both need something to go on. On a fresh install, play a few things
 first.
 
+## Importing a playlist
+
+Paste a playlist link into the search box and press Enter. Its tracks
+fill the results list like any search.
+
+```
+https://www.youtube.com/playlist?list=...
+https://open.spotify.com/playlist/...
+```
+
+A YouTube playlist comes across as it is. Spotify has no audio anyone
+else can play, so every track is looked up on YouTube Music by name and
+matched on length: a couple of seconds apart is the same recording, an
+hour apart is somebody's loop of it. Tracks with no match are skipped,
+and the status line says how many.
+
+Nothing is queued until you ask. `e` adds every track on screen.
+
 ## With the mouse
 
 Everything above works by clicking, too.

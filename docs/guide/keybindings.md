@@ -54,6 +54,7 @@ move on. `n` always advances, even with repeat-one enabled.
 | Key | Action |
 |-----|--------|
 | `R` | Refresh recommendations |
+| `e` | Queue every track in the list on screen |
 | `a` | Open the **album** the selected song came from. Inside an album, queue every song on it |
 | `A` | Open the **artist** of the selected track. On their page, switch songs ⇄ releases |
 | `f` | Toggle favourite on the selected track |
