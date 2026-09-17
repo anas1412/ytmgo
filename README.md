@@ -33,10 +33,13 @@ It detects your system automatically:
 The one-liner above handles this, but you can also install directly:
 
 ```bash
-yay -S ytmgo
-# or
-paru -S ytmgo
+yay -S ytmgo      # builds from source
+yay -S ytmgo-bin  # the released binary, no Go toolchain needed
 ```
+
+`ytmgo` compiles from source and needs the Go toolchain (226 MB installed
+if you don't already have it). `ytmgo-bin` installs the same static binary
+the release publishes. Pick either — they conflict, so only one at a time.
 
 ### Build from source
 

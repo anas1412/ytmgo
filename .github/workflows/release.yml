@@ -149,12 +149,23 @@ jobs:
   # Publish to Arch User Repository
   # ───────────────────────────────────────────────────────────────────
   aur:
-    name: publish to AUR
+    name: publish ${{ matrix.pkg }} to AUR
     runs-on: ubuntu-latest
     needs: [release]
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
     permissions:
       contents: read
+    strategy:
+      # One AUR repo per package, and one failing must not take the
+      # other down: ytmgo builds from source, ytmgo-bin ships the
+      # binaries this release just published.
+      fail-fast: false
+      matrix:
+        include:
+          - pkg: ytmgo
+            flags: ""
+          - pkg: ytmgo-bin
+            flags: "--bin"
 
     steps:
       - name: Checkout
@@ -167,7 +178,7 @@ jobs:
 
       - name: Generate PKGBUILD + .SRCINFO
         run: |
-          bash dist/arch/generate-pkgbuild.sh "${{ github.ref_name }}" --out /tmp/aur-pkg
+          bash dist/arch/generate-pkgbuild.sh "${{ github.ref_name }}" --out /tmp/aur-pkg ${{ matrix.flags }}
 
       - name: Push to AUR
         env:
@@ -201,7 +212,7 @@ jobs:
 
           # Clone AUR repo
           echo ">>> Cloning AUR repo..."
-          git clone ssh://aur@aur.archlinux.org/ytmgo.git /tmp/aur-repo
+          git clone ssh://aur@aur.archlinux.org/${{ matrix.pkg }}.git /tmp/aur-repo
           cd /tmp/aur-repo
 
           # Update files
@@ -213,8 +224,11 @@ jobs:
           if ! git diff --cached --quiet; then
             git commit -m "Update to ${{ github.ref_name }}"
             echo ">>> Pushing to AUR..."
-            git push origin master
-            echo "✓ AUR updated to ${{ github.ref_name }}"
+            # HEAD:master, not master: ytmgo-bin does not exist on the
+            # AUR until this first push, and a clone of an empty repo
+            # takes its branch name from the runner's git default.
+            git push origin HEAD:master
+            echo "✓ ${{ matrix.pkg }} updated to ${{ github.ref_name }}"
           else
             echo "No changes — AUR already up to date."
           fi

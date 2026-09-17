@@ -28,13 +28,18 @@ Override it with `YTMGO_INSTALL_DIR=/opt/bin curl ... | bash`.
 
 ## Arch Linux
 
-The one-liner handles this, but the package is on the AUR directly:
+The one-liner handles this, but both packages are on the AUR directly:
 
 ```bash
-paru -S ytmgo
-# or
-yay -S ytmgo
+paru -S ytmgo      # builds from source
+paru -S ytmgo-bin  # the released binary
 ```
+
+`ytmgo` compiles from source, which pulls in the Go toolchain — 226 MB
+installed, if you do not already have it. `ytmgo-bin` installs the same
+static binary the GitHub release publishes, so there is nothing to
+build. They provide the same program and conflict with each other, so
+install whichever you prefer.
 
 ## From source
 
