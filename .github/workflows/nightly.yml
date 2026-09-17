@@ -1,0 +1,159 @@
+name: nightly
+
+# A rolling build of main, published as a prerelease on the fixed tag
+# `latest`, so the download URLs never change:
+#
+#   https://github.com/anas1412/ytmgo/releases/download/latest/ytmgo_Linux_x86_64.tar.gz
+#
+# prerelease is what keeps this safe. install.sh resolves a version
+# through /releases/latest, which excludes prereleases, so a rolling
+# build can never be handed to somebody running the one-liner. Only
+# YTMGO_VERSION=latest reaches it, deliberately.
+
+on:
+  push:
+    branches: [main]
+    # Documentation moves on its own schedule; rebuilding four binaries
+    # for a README typo helps nobody.
+    paths-ignore:
+      - "docs/**"
+      - "**/*.md"
+      - "*.png"
+      - ".github/workflows/docs.yml"
+  workflow_dispatch:
+
+# Only the newest commit on main matters here: an older rolling build
+# finishing later would overwrite a newer one.
+concurrency:
+  group: nightly
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: build ${{ matrix.os }}/${{ matrix.arch }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: linux
+            arch: x86_64
+            goarch: amd64
+            asset_os: Linux   # capitalized to match install.sh's `uname -s`
+          - os: linux
+            arch: arm64
+            goarch: arm64
+            asset_os: Linux
+          - os: darwin
+            arch: x86_64
+            goarch: amd64
+            asset_os: Darwin
+          - os: darwin
+            arch: arm64
+            goarch: arm64
+            asset_os: Darwin
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0   # git describe needs the tags
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version: "1.22"
+          cache: true
+
+      - name: Work out the version
+        id: ver
+        run: |
+          set -euo pipefail
+          # e.g. v1.2.2-8-g3c10e7b: the last release, how far past it
+          # this is, and the commit. A bug report on a rolling build
+          # then says exactly what was running.
+          echo "version=$(git describe --tags --always)" >> "$GITHUB_OUTPUT"
+
+      - name: Build static binary
+        env:
+          VERSION:    ${{ steps.ver.outputs.version }}
+          COMMIT:     ${{ github.sha }}
+          BUILD_DATE: ${{ github.event.head_commit.timestamp }}
+          GOOS:       ${{ matrix.os == 'darwin' && 'darwin' || 'linux' }}
+          GOARCH:     ${{ matrix.goarch }}
+          CGO_ENABLED: "0"
+        run: |
+          set -euo pipefail
+          go build \
+            -trimpath \
+            -ldflags="-s -w \
+              -X 'ytmgo/internal/version.Version=$VERSION' \
+              -X 'ytmgo/internal/version.Commit=${COMMIT:0:7}' \
+              -X 'ytmgo/internal/version.BuildDate=$BUILD_DATE'" \
+            -o "ytmgo" \
+            .
+
+      - name: Package + checksum
+        run: |
+          set -euo pipefail
+          asset="ytmgo_${{ matrix.asset_os }}_${{ matrix.arch }}.tar.gz"
+          tar -czf "$asset" ytmgo
+          sha256sum "$asset" | tee "${asset}.sha256"
+
+      - name: Hand the artifact to the publish job
+        uses: actions/upload-artifact@v7
+        with:
+          name: ytmgo_${{ matrix.asset_os }}_${{ matrix.arch }}
+          path: |
+            ytmgo_${{ matrix.asset_os }}_${{ matrix.arch }}.tar.gz
+            ytmgo_${{ matrix.asset_os }}_${{ matrix.arch }}.tar.gz.sha256
+          if-no-files-found: error
+          retention-days: 1
+
+  publish:
+    name: publish the rolling build
+    runs-on: ubuntu-latest
+    needs: [build]
+    permissions:
+      contents: write
+
+    steps:
+      - name: Collect every platform's artifact
+        uses: actions/download-artifact@v8
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Check all four platforms arrived
+        run: |
+          set -euo pipefail
+          ls -la dist
+          n=$(find dist -type f | wc -l)
+          [ "$n" -eq 8 ] || { echo "expected 8 files, found $n"; exit 1; }
+
+      - name: Publish
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: latest
+          name: Rolling build
+          # Moves the tag to whatever main is now, rather than failing
+          # because `latest` already points somewhere else.
+          target_commitish: ${{ github.sha }}
+          prerelease: true
+          # Never the release GitHub calls latest: that pointer belongs
+          # to the newest real version, and install.sh follows it.
+          make_latest: false
+          body: |
+            The newest build of `main`, replaced on every push. Not a release.
+
+            Built from ${{ github.sha }}.
+
+            ```bash
+            YTMGO_VERSION=latest curl -fsSL https://raw.githubusercontent.com/anas1412/ytmgo/main/install.sh | bash
+            ```
+
+            To go back to a released version, run the installer again without
+            `YTMGO_VERSION`.
+          files: dist/*

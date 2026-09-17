@@ -31,6 +31,20 @@ you ask for it.
 
 > Override the install dir: `YTMGO_INSTALL_DIR=/opt/bin curl ... | bash`
 
+### Rolling build
+
+Every push to `main` publishes a prerelease on the `latest` tag — the
+newest code, not a release:
+
+```bash
+YTMGO_VERSION=latest curl -fsSL https://raw.githubusercontent.com/anas1412/ytmgo/main/install.sh | bash
+```
+
+It reports its own version as something like `v1.2.2-8-g3c10e7b`: the
+last release, how far past it you are, and the commit. Normal installs
+never see it — they follow the newest real release. Run the installer
+again without `YTMGO_VERSION` to go back.
+
 ### AUR (Arch Linux)
 
 The one-liner above handles this, but you can also install directly:

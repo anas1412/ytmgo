@@ -162,7 +162,12 @@ if [ -z "$VERSION" ]; then
     exit 1
   fi
 fi
-tag="v$VERSION"
+# The rolling build sits on a tag of its own rather than a version
+# number, so it is the one thing here that is not v-prefixed.
+case "$VERSION" in
+  latest) tag="latest" ;;
+  *)      tag="v$VERSION" ;;
+esac
 
 # ─── Version check (skip if already up to date) ──────────────────────
 FORCE="${YTMGO_FORCE:-}"

@@ -51,6 +51,26 @@ choice alone, so the swap is yours to make:
 paru -R ytmgo && paru -S ytmgo-bin
 ```
 
+## Rolling build
+
+Every push to `main` publishes a prerelease on the `latest` tag. It is
+the newest code rather than a release, so expect it to break
+occasionally:
+
+```bash
+YTMGO_VERSION=latest curl -fsSL https://raw.githubusercontent.com/anas1412/ytmgo/main/install.sh | bash
+```
+
+It names itself after the last release and the commit it was built
+from — `v1.2.2-8-g3c10e7b` — so a bug report says exactly what ran.
+
+::: tip This cannot reach you by accident
+The installer resolves versions through the newest *release*, and a
+prerelease is not one. Only asking for `YTMGO_VERSION=latest` gets you
+this build; running the installer again without it puts you back on a
+released version.
+:::
+
 ## From source
 
 Go 1.22 or newer:
