@@ -9,6 +9,7 @@ import (
 
 	"ytmgo/internal/player"
 	"ytmgo/internal/queue"
+	"ytmgo/internal/search"
 	"ytmgo/internal/settings"
 	"ytmgo/internal/visualizer"
 	"ytmgo/internal/ytmusic"
@@ -37,6 +38,22 @@ func (m *Model) enqueueAndMaybePlay(t queue.Track) tea.Cmd {
 	}
 	m.setStatus("Added to queue: " + t.Title)
 	return tea.Batch(cmds...)
+}
+
+// queueAll adds every track in list to the queue, in list order,
+// starting playback when nothing is playing. Shared by the album key
+// and the enqueue key so the two cannot drift apart.
+func (m *Model) queueAll(list []search.Result) tea.Cmd {
+	var cmd tea.Cmd
+	for i, r := range list {
+		t := m.resolveTrack(r)
+		if i == 0 {
+			cmd = m.enqueueAndMaybePlay(t)
+			continue
+		}
+		m.queue.Add(t)
+	}
+	return tea.Batch(cmd, saveQueueCmd(m.db, m.queue))
 }
 
 // activateSelection implements Enter / double-click for the focused

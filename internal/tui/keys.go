@@ -31,6 +31,7 @@ type KeyMap struct {
 	Download      key.Binding
 	Recs          key.Binding
 	Album         key.Binding
+	Enqueue       key.Binding
 	ArtistInfo    key.Binding
 	Visualizer    key.Binding
 	Lyrics        key.Binding
@@ -158,6 +159,10 @@ var Keys = KeyMap{
 	Album: key.NewBinding(
 		key.WithKeys("a"),
 		key.WithHelp("a", "album / queue all of it"),
+	),
+	Enqueue: key.NewBinding(
+		key.WithKeys("e"),
+		key.WithHelp("e", "queue every track listed"),
 	),
 	ArtistInfo: key.NewBinding(
 		key.WithKeys("A"),
@@ -296,6 +301,7 @@ func (k KeyMap) FullHelp() [][]key.Binding {
 			k.PageDownloads,
 			k.Recs,
 			k.Album,
+			k.Enqueue,
 			k.ArtistInfo,
 			k.Visualizer,
 			k.Lyrics,
