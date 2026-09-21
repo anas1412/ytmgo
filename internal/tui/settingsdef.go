@@ -189,7 +189,12 @@ var settingDefs = []settingDef{
 			case m.settings.LastFMSessionKey != "":
 				return "Tracks scrobble once heard halfway or for four minutes  (Enter disconnects)"
 			case m.lastfmToken != "":
-				return "Approve ytmgo in the browser tab that opened, then press Enter here"
+				// The link lives here, not only in the status line: the
+				// status fades in a few seconds and truncates a URL this
+				// long, and this row is on screen for as long as it takes
+				// the user to come back from the browser.
+				return "Click Allow on the Last.fm page (it opens in your browser and the link is on your clipboard), then press Enter here.  " +
+					lastfm.AuthURL(m.lastfmToken)
 			default:
 				return "Scrobble what you play to Last.fm — Enter opens the approval link, no password needed"
 			}

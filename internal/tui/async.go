@@ -465,8 +465,10 @@ func (m Model) handlePosition(msg PositionMsg) (tea.Model, tea.Cmd) {
 // ── Last.fm ──────────────────────────────────────────────────────────
 
 // handleLastFMToken has the token; the user now has to approve it. The
-// link goes to the clipboard when there is one, and into the status
-// line regardless, since that is the one place guaranteed to exist.
+// link is opened in the browser and put on the clipboard, each as best
+// effort, and the row's own description carries it for as long as the
+// approval is pending — the status line fades and truncates, and the
+// first version of this said a tab had opened when nothing had.
 func (m Model) handleLastFMToken(msg LastFMTokenMsg) (tea.Model, tea.Cmd) {
 	if msg.Error != nil {
 		m.setStatus("Last.fm: " + msg.Error.Error())
@@ -474,11 +476,18 @@ func (m Model) handleLastFMToken(msg LastFMTokenMsg) (tea.Model, tea.Cmd) {
 	}
 	m.lastfmToken = msg.Token
 	link := lastfm.AuthURL(msg.Token)
-	where := "open this link"
-	if clipboard.Copy(link) == nil {
-		where = "link copied — open it"
+	opened := openInOS(link) == nil
+	copied := clipboard.Copy(link) == nil
+	switch {
+	case opened && copied:
+		m.setStatus("Last.fm: opened in your browser (link also copied) — click Allow, then press Enter here again")
+	case opened:
+		m.setStatus("Last.fm: opened in your browser — click Allow, then press Enter here again")
+	case copied:
+		m.setStatus("Last.fm: link copied — open it, click Allow, then press Enter here again")
+	default:
+		m.setStatus("Last.fm: open the link shown under the row, click Allow, then press Enter here again")
 	}
-	m.setStatus("Last.fm: " + where + ", click Allow, then press Enter here again:  " + link)
 	return m, nil
 }
 

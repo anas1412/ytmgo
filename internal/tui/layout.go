@@ -37,8 +37,9 @@ func (m *Model) downloadDir() string {
 	return m.settings.ResolveDownloadDir()
 }
 
-// openInOS opens the given path in the system's default file manager
-// (xdg-open on Linux/BSD, open on macOS). Uses Start, not Run, so it
+// openInOS opens the given path or URL with the system's default handler
+// — file manager for a directory, browser for a link — via xdg-open on
+// Linux/BSD and open on macOS. Uses Start, not Run, so it
 // returns immediately without waiting for the launched process to exit.
 func openInOS(path string) error {
 	var cmd *exec.Cmd
