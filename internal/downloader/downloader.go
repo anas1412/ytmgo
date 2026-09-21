@@ -358,6 +358,10 @@ func (d *Downloader) runJob(job *Job, outDir string) {
 		"--audio-format", format, // output format: m4a or mp3
 		"--audio-quality", "0", // best quality
 		"--embed-thumbnail", // embed YouTube thumbnail as cover art
+		// Title, artist and album into the file itself, so it stays
+		// correct wherever it is moved or renamed, and the library reads
+		// it like any other tagged file instead of parsing the name.
+		"--embed-metadata",
 		// YouTube serves thumbnails as WebP, which ffmpeg cannot embed
 		// into m4a or mp3. Without converting first the embed fails and
 		// yt-dlp leaves the downloaded .webp sitting next to the audio.

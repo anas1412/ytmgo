@@ -240,7 +240,7 @@ func (m Model) handleLibraryScan(msg LibraryScanMsg) (tea.Model, tea.Cmd) {
 	// YouTube even though a local copy is now known to exist.
 	m.backfillQueueFromLibrary()
 	if len(msg.Tracks) > 0 {
-		m.setStatus(fmt.Sprintf("Library: %d downloaded tracks", len(msg.Tracks)))
+		m.setStatus(fmt.Sprintf("Library: %d tracks", len(msg.Tracks)))
 	}
 	return m, nil
 }

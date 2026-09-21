@@ -27,7 +27,7 @@ func historyEntryTrack(e db.PlayHistoryEntry) queue.Track {
 // Init satisfies tea.Model. It starts the tick for progress animation,
 // opens the database, and fetches recommendations.
 func (m Model) Init() tea.Cmd {
-	return tea.Batch(tickCmd(), initQueueFavoritesCmd(m.db), fetchQuoteCmd(m.quoteSeq), fetchRecommendationsCmd(m.recsSeq, m.settings.SearchLimit, m.db), scanLibraryCmd(m.downloadDir(), m.db), checkUpdateCmd(ver.Version), discordRPCInitCmd(m.settings.DiscordRPCEnabled), mprisInitCmd())
+	return tea.Batch(tickCmd(), initQueueFavoritesCmd(m.db), fetchQuoteCmd(m.quoteSeq), fetchRecommendationsCmd(m.recsSeq, m.settings.SearchLimit, m.db), scanLibraryCmd(m.downloadDir(), m.settings.ResolveLibraryDirs(), m.db), checkUpdateCmd(ver.Version), discordRPCInitCmd(m.settings.DiscordRPCEnabled), mprisInitCmd())
 }
 
 // Update satisfies tea.Model. It handles all messages without making

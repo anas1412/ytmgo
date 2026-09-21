@@ -34,12 +34,16 @@ func TestSettingsRoundTrip(t *testing.T) {
 	s.AutoplayEnabled = false
 	s.LastFMSessionKey = "sk-test"
 	s.LastFMUser = "someone"
+	s.LibraryDirs = "~/Music, /mnt/more"
 	if err := d.SaveSettings(s); err != nil {
 		t.Fatalf("SaveSettings: %v", err)
 	}
 	got, err := d.LoadSettings()
 	if err != nil {
 		t.Fatalf("reload: %v", err)
+	}
+	if got.LibraryDirs != "~/Music, /mnt/more" {
+		t.Fatalf("library dirs did not survive a round trip: %q", got.LibraryDirs)
 	}
 	if got.LastFMSessionKey != "sk-test" || got.LastFMUser != "someone" {
 		t.Fatalf("Last.fm session did not survive a round trip: key=%q user=%q", got.LastFMSessionKey, got.LastFMUser)
@@ -148,7 +152,7 @@ func TestLyricsCache(t *testing.T) {
 func TestLibraryCacheRoundTrip(t *testing.T) {
 	d := openTestDB(t)
 	in := library.DurationCache{
-		"/music/a.m4a": {Mtime: 100, DurationSec: 200},
+		"/music/a.m4a": {Mtime: 100, DurationSec: 200, Title: "T", Artist: "A", Album: "B"},
 		"/music/b.mp3": {Mtime: 300, DurationSec: 400},
 	}
 	if err := d.SaveLibraryCache(in); err != nil {
@@ -160,6 +164,9 @@ func TestLibraryCacheRoundTrip(t *testing.T) {
 	}
 	if len(got) != 2 || got["/music/a.m4a"].DurationSec != 200 || got["/music/b.mp3"].Mtime != 300 {
 		t.Fatalf("cache round trip mismatch: %+v", got)
+	}
+	if a := got["/music/a.m4a"]; a.Title != "T" || a.Artist != "A" || a.Album != "B" {
+		t.Fatalf("tags did not survive the round trip: %+v", a)
 	}
 }
 

@@ -66,6 +66,27 @@ var settingDefs = []settingDef{
 		},
 	},
 	{
+		// The user's own music, alongside whatever ytmgo downloaded. A
+		// change rescans straight away, so the Library page reflects it
+		// without a restart.
+		label: "Library Folders",
+		kind:  settingString,
+		value: func(m *Model) string {
+			if m.settings.LibraryDirs == "" {
+				return "none — downloads only"
+			}
+			return m.settings.LibraryDirs
+		},
+		desc:    staticDesc("Your own music folders, comma-separated (~ allowed), scanned with subfolders. Downloads are always included"),
+		editGet: func(m *Model) string { return m.settings.LibraryDirs },
+		editSet: func(m *Model, v string) tea.Cmd {
+			m.settings.LibraryDirs = v
+			m.libraryLoaded = false
+			return tea.Batch(saveSettingsCmd(m.db, m.settings),
+				scanLibraryCmd(m.downloadDir(), m.settings.ResolveLibraryDirs(), m.db))
+		},
+	},
+	{
 		label:   "Download Dir",
 		kind:    settingString,
 		value:   func(m *Model) string { return m.settings.DownloadDir },

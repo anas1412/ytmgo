@@ -118,7 +118,7 @@ The yt-dlp installed alongside ytmgo is offered for removal. Other system depend
 - **Synced lyrics** — Press `y` to swap the spectrum for lyrics, with the current line highlighted as the song plays (via LRCLIB, plain-text fallback from YT Music). Cached locally, so replays are instant.
 - **Autoplay radio** — When the queue runs dry, ytmgo queues what YouTube Music itself would play next, seeded from your listening history.
 - **Download in one key** — Press `x` on any track and it downloads. Queue-friendly, one at a time, with progress feedback.
-- **Favorites, history, library** — `f` to bookmark, a listening-history page, and a filterable page for everything on disk.
+- **Favorites, history, library** — `f` to bookmark, a listening-history page, and a filterable Library of everything on disk — your downloads, plus any music folders you point it at in Settings. Tags are read when a file has them; when it doesn't, the filename is the title.
 - **Full mouse support** — Click tabs, click panels, click the progress bar to seek. Most terminal apps can't do this.
 - **Media keys** — Play, pause, and skip with your keyboard's media keys, or from your desktop's media widget (Linux).
 - **Eleven themes** — `terminal` (the default) borrows your terminal's own ANSI colours, so ytmgo matches

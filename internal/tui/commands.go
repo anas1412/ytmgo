@@ -437,7 +437,7 @@ func fetchQuoteCmd(seq int) tea.Cmd {
 // scanLibraryCmd scans the downloads directory for existing audio files.
 // Durations are served from the SQLite cache; only new or changed files
 // hit ffprobe, and the fresh results are persisted for the next run.
-func scanLibraryCmd(dir string, database *db.DB) tea.Cmd {
+func scanLibraryCmd(downloads string, extra []string, database *db.DB) tea.Cmd {
 	return func() tea.Msg {
 		var cache library.DurationCache
 		if database != nil {
@@ -445,7 +445,7 @@ func scanLibraryCmd(dir string, database *db.DB) tea.Cmd {
 				cache = c
 			}
 		}
-		tracks, updates, err := library.ScanDir(dir, cache)
+		tracks, updates, err := library.Scan(downloads, extra, cache)
 		if err != nil {
 			// Non-fatal — just return empty library
 			return LibraryScanMsg{Tracks: []queue.Track{}}

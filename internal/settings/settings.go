@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 )
 
 // Playback mode constants.
@@ -48,6 +49,10 @@ type Settings struct {
 	// who is connected.
 	LastFMSessionKey string `json:"lastfm_session_key"`
 	LastFMUser       string `json:"lastfm_user"`
+	// LibraryDirs is the user's own music, as they typed it: folders
+	// separated by commas, ~ allowed. The downloads folder is always
+	// part of the library and is not listed here.
+	LibraryDirs string `json:"library_dirs"`
 }
 
 // Defaults returns a Settings with sane defaults.
@@ -162,4 +167,23 @@ func userDataDir() (string, error) {
 		return xdg, nil
 	}
 	return filepath.Join(home, ".local", "share"), nil
+}
+
+// ResolveLibraryDirs turns the typed list into paths: split on commas,
+// trimmed, ~ expanded, blanks dropped. Nothing is checked to exist —
+// the scanner treats a missing folder as an empty one.
+func (s *Settings) ResolveLibraryDirs() []string {
+	var out []string
+	home, _ := os.UserHomeDir()
+	for _, part := range strings.Split(s.LibraryDirs, ",") {
+		p := strings.TrimSpace(part)
+		if p == "" {
+			continue
+		}
+		if p == "~" || strings.HasPrefix(p, "~/") {
+			p = filepath.Join(home, strings.TrimPrefix(p, "~"))
+		}
+		out = append(out, filepath.Clean(p))
+	}
+	return out
 }

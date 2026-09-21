@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -1416,7 +1417,7 @@ func (m Model) renderLibrary(width, height int) string {
 			)
 		}
 		return styleEmpty.Width(width - 2).Height(height).Render(
-			"No downloaded tracks yet",
+			"Nothing here yet — download something, or add your music folders in Settings",
 		)
 	}
 
@@ -1455,7 +1456,9 @@ func (m Model) renderLibrary(width, height int) string {
 			dur = "0:00"
 		}
 		// Same fixed slot as the queue — every library track is on disk.
-		leftInfo := " ✓ " + artist
+		// The folder says whose file it is: downloads/, or one of the
+		// user's own.
+		leftInfo := " ✓ " + artist + "  " + styleTextDim.Render(filepath.Base(filepath.Dir(t.FilePath))+"/")
 		heart := ""
 		if m.favoriteSet[t.ID] {
 			heart = "♥  "

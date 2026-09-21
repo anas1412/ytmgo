@@ -28,7 +28,7 @@ func TestSettingsDoesNotDuplicateOnScreenToggles(t *testing.T) {
 func TestSettingsOrder(t *testing.T) {
 	want := []string{
 		"Playback Mode", "Default Volume",
-		"Download Dir", "Download Format",
+		"Library Folders", "Download Dir", "Download Format",
 		"Search Limit",
 		"Theme", "Show Quotes",
 		"Copy Link As", "Discord RPC", "Last.fm Scrobbling",

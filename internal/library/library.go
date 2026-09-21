@@ -3,6 +3,7 @@ package library
 import (
 	"encoding/json"
 	"fmt"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -14,96 +15,174 @@ import (
 // Track is an alias so library tracks are compatible with the queue.
 type Track = queue.Track
 
-// CacheEntry is a cached ffprobe result for one file.
+// CacheEntry is a cached ffprobe result for one file: its length and
+// whatever tags it carries. Empty tag fields mean the file has none.
 type CacheEntry struct {
 	Mtime       int64 // file modification time (unix seconds)
 	DurationSec int
+	Title       string
+	Artist      string
+	Album       string
 }
 
-// DurationCache maps a file path to its cached probe result.
+// DurationCache maps a file path to its cached probe result. The name
+// predates the tags; it is the probe cache.
 type DurationCache map[string]CacheEntry
 
-// ScanDir scans a directory for audio files and extracts metadata.
-// Title/artist are parsed from the filename. Durations come from the
-// provided cache when the file's mtime is unchanged; only new or
-// modified files are probed with ffprobe. The second return value holds
-// the fresh probe results for the caller to persist.
-func ScanDir(dir string, cache DurationCache) ([]Track, DurationCache, error) {
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return []Track{}, nil, nil
-		}
-		return nil, nil, fmt.Errorf("reading library dir: %w", err)
-	}
+// audioExts is what the scanner picks up. mpv plays all of these.
+var audioExts = map[string]bool{
+	".mp3": true, ".m4a": true, ".flac": true, ".ogg": true, ".opus": true, ".wav": true,
+}
 
+// Scan walks the downloads directory and every extra folder, recursively,
+// and returns the audio files it finds as tracks.
+//
+// Metadata comes from the file's tags when it has any. When it does not,
+// what happens depends on whose file it is. ytmgo named its own
+// downloads "Artist - Title", so reading that back is not a guess and
+// the split stays. A file from anywhere else is somebody's collection,
+// and "a - b" could be either way round: the whole filename becomes the
+// title and the artist is left blank, which is never wrong.
+//
+// Durations and tags come from the cache when the file's mtime is
+// unchanged; only new or modified files are probed. The second return
+// value holds the fresh probe results for the caller to persist.
+func Scan(downloads string, extra []string, cache DurationCache) ([]Track, DurationCache, error) {
 	var tracks []Track
 	updates := DurationCache{}
-	for _, e := range entries {
-		if e.IsDir() {
+	seen := map[string]bool{}
+
+	roots := append([]string{downloads}, extra...)
+	for i, root := range roots {
+		if root == "" {
 			continue
 		}
-		ext := strings.ToLower(filepath.Ext(e.Name()))
-		if ext != ".mp3" && ext != ".m4a" && ext != ".flac" && ext != ".ogg" && ext != ".wav" {
-			continue
-		}
+		isDownloads := i == 0
+		err := filepath.WalkDir(root, func(fpath string, d fs.DirEntry, err error) error {
+			if err != nil {
+				// An unreadable subfolder should cost its own contents,
+				// not the whole scan.
+				if d != nil && d.IsDir() {
+					return fs.SkipDir
+				}
+				return nil
+			}
+			if d.IsDir() || !audioExts[strings.ToLower(filepath.Ext(d.Name()))] {
+				return nil
+			}
+			if seen[fpath] {
+				return nil // a folder listed twice, or nested inside another
+			}
+			seen[fpath] = true
 
-		fpath := filepath.Join(dir, e.Name())
-		var mtime int64
-		if info, err := e.Info(); err == nil {
-			mtime = info.ModTime().Unix()
-		}
+			var mtime int64
+			if info, err := d.Info(); err == nil {
+				mtime = info.ModTime().Unix()
+			}
+			ce, ok := cache[fpath]
+			if !ok || ce.Mtime != mtime {
+				ce = probe(fpath)
+				ce.Mtime = mtime
+				updates[fpath] = ce
+			}
 
-		var duration int
-		if ce, ok := cache[fpath]; ok && ce.Mtime == mtime {
-			duration = ce.DurationSec
-		} else {
-			duration = probeDuration(fpath)
-			updates[fpath] = CacheEntry{Mtime: mtime, DurationSec: duration}
-		}
-		title, artist := parseFilename(e.Name())
+			title, artist, album := ce.Title, ce.Artist, ce.Album
+			if title == "" {
+				if isDownloads {
+					title, artist = parseFilename(d.Name())
+				} else {
+					title = strings.TrimSuffix(d.Name(), filepath.Ext(d.Name()))
+					artist = ""
+				}
+			}
 
-		tracks = append(tracks, Track{
-			ID:          fpath,
-			Title:       title,
-			Artist:      artist,
-			Duration:    formatDuration(duration),
-			DurationSec: duration,
-			FilePath:    fpath,
-			Downloaded:  true,
+			tracks = append(tracks, Track{
+				ID:          fpath,
+				Title:       title,
+				Artist:      artist,
+				Album:       album,
+				Duration:    formatDuration(ce.DurationSec),
+				DurationSec: ce.DurationSec,
+				FilePath:    fpath,
+				Downloaded:  true,
+			})
+			return nil
 		})
+		if err != nil && !os.IsNotExist(err) {
+			return nil, nil, fmt.Errorf("reading library dir %s: %w", root, err)
+		}
+	}
+	if tracks == nil {
+		tracks = []Track{}
 	}
 	return tracks, updates, nil
 }
 
-// probeDuration returns the duration in seconds using ffprobe.
-func probeDuration(path string) int {
+// probe asks ffprobe for the duration and the tags in one call. Tags
+// are read from the container and from the streams: MP3, M4A and FLAC
+// keep them on the container, but Ogg and Opus keep them on the stream,
+// and asking for only the first left every .opus looking untagged.
+// Keys are matched case-insensitively — Vorbis comments come back as
+// TITLE, not title.
+func probe(path string) CacheEntry {
 	cmd := exec.Command("ffprobe",
 		"-v", "quiet",
 		"-print_format", "json",
-		"-show_entries", "format=duration",
+		"-show_entries", "format=duration:format_tags=title,artist,album:stream_tags=title,artist,album",
 		path,
 	)
 	out, err := cmd.Output()
 	if err != nil {
-		return 0
+		return CacheEntry{}
 	}
 	var result struct {
 		Format struct {
-			Duration string `json:"duration"`
+			Duration string            `json:"duration"`
+			Tags     map[string]string `json:"tags"`
 		} `json:"format"`
+		Streams []struct {
+			Tags map[string]string `json:"tags"`
+		} `json:"streams"`
 	}
 	if err := json.Unmarshal(out, &result); err != nil {
-		return 0
+		return CacheEntry{}
 	}
-	if result.Format.Duration == "" {
-		return 0
+
+	var ce CacheEntry
+	if result.Format.Duration != "" {
+		var secs float64
+		if _, err := fmt.Sscanf(result.Format.Duration, "%f", &secs); err == nil {
+			ce.DurationSec = int(secs)
+		}
 	}
-	var secs float64
-	if _, err := fmt.Sscanf(result.Format.Duration, "%f", &secs); err != nil {
-		return 0
+	tagSets := [][]map[string]string{{result.Format.Tags}}
+	for _, s := range result.Streams {
+		tagSets = append(tagSets, []map[string]string{s.Tags})
 	}
-	return int(secs)
+	for _, set := range tagSets {
+		for _, tags := range set {
+			if ce.Title == "" {
+				ce.Title = tagValue(tags, "title")
+			}
+			if ce.Artist == "" {
+				ce.Artist = tagValue(tags, "artist")
+			}
+			if ce.Album == "" {
+				ce.Album = tagValue(tags, "album")
+			}
+		}
+	}
+	return ce
+}
+
+// tagValue finds key in tags regardless of case.
+func tagValue(tags map[string]string, key string) string {
+	for k, v := range tags {
+		if strings.EqualFold(k, key) {
+			return strings.TrimSpace(v)
+		}
+	}
+	return ""
 }
 
 // parseFilename tries to extract "Artist - Title" from a filename.

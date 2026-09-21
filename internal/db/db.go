@@ -202,6 +202,10 @@ func openAt(path string) (*DB, error) {
 	db.Exec(`ALTER TABLE settings ADD COLUMN copy_music_links INTEGER NOT NULL DEFAULT 0`)
 	db.Exec(`ALTER TABLE settings ADD COLUMN lastfm_session_key TEXT NOT NULL DEFAULT ''`)
 	db.Exec(`ALTER TABLE settings ADD COLUMN lastfm_user TEXT NOT NULL DEFAULT ''`)
+	db.Exec(`ALTER TABLE settings ADD COLUMN library_dirs TEXT NOT NULL DEFAULT ''`)
+	db.Exec(`ALTER TABLE library_cache ADD COLUMN title TEXT NOT NULL DEFAULT ''`)
+	db.Exec(`ALTER TABLE library_cache ADD COLUMN artist TEXT NOT NULL DEFAULT ''`)
+	db.Exec(`ALTER TABLE library_cache ADD COLUMN album TEXT NOT NULL DEFAULT ''`)
 	db.Exec(`ALTER TABLE favorites ADD COLUMN cover_url TEXT NOT NULL DEFAULT ''`)
 	db.Exec(`ALTER TABLE favorites ADD COLUMN url TEXT NOT NULL DEFAULT ''`)
 	db.Exec(`ALTER TABLE play_history ADD COLUMN cover_url TEXT NOT NULL DEFAULT ''`)
@@ -397,8 +401,8 @@ func (d *DB) ClearPlayHistory() error {
 func (d *DB) LoadSettings() (*settings.Settings, error) {
 	var s settings.Settings
 	var showQuotes, discordRPC, autoplayEnabled, showHints, vizOn, lyricsOn, copyMusic int
-	row := d.QueryRow(`SELECT playback_mode, default_volume, search_limit, download_dir, download_format, show_quotes, discord_rpc_enabled, autoplay_enabled, theme, show_hints, visualizer_on, lyrics_on, copy_music_links, lastfm_session_key, lastfm_user FROM settings WHERE id = 1`)
-	if err := row.Scan(&s.PlaybackMode, &s.DefaultVolume, &s.SearchLimit, &s.DownloadDir, &s.DownloadFormat, &showQuotes, &discordRPC, &autoplayEnabled, &s.Theme, &showHints, &vizOn, &lyricsOn, &copyMusic, &s.LastFMSessionKey, &s.LastFMUser); err != nil {
+	row := d.QueryRow(`SELECT playback_mode, default_volume, search_limit, download_dir, download_format, show_quotes, discord_rpc_enabled, autoplay_enabled, theme, show_hints, visualizer_on, lyrics_on, copy_music_links, lastfm_session_key, lastfm_user, library_dirs FROM settings WHERE id = 1`)
+	if err := row.Scan(&s.PlaybackMode, &s.DefaultVolume, &s.SearchLimit, &s.DownloadDir, &s.DownloadFormat, &showQuotes, &discordRPC, &autoplayEnabled, &s.Theme, &showHints, &vizOn, &lyricsOn, &copyMusic, &s.LastFMSessionKey, &s.LastFMUser, &s.LibraryDirs); err != nil {
 		return settings.Defaults(), fmt.Errorf("load settings: %w", err)
 	}
 	s.ShowQuotes = showQuotes != 0
@@ -414,8 +418,8 @@ func (d *DB) LoadSettings() (*settings.Settings, error) {
 // SaveSettings writes settings to the database.
 func (d *DB) SaveSettings(s *settings.Settings) error {
 	_, err := d.Exec(
-		`UPDATE settings SET playback_mode = ?, default_volume = ?, search_limit = ?, download_dir = ?, download_format = ?, show_quotes = ?, discord_rpc_enabled = ?, autoplay_enabled = ?, theme = ?, show_hints = ?, visualizer_on = ?, lyrics_on = ?, copy_music_links = ?, lastfm_session_key = ?, lastfm_user = ? WHERE id = 1`,
-		s.PlaybackMode, s.DefaultVolume, s.SearchLimit, s.DownloadDir, s.DownloadFormat, boolInt(s.ShowQuotes), boolInt(s.DiscordRPCEnabled), boolInt(s.AutoplayEnabled), s.Theme, boolInt(s.ShowHints), boolInt(s.VisualizerOn), boolInt(s.LyricsOn), boolInt(s.CopyMusicLinks), s.LastFMSessionKey, s.LastFMUser,
+		`UPDATE settings SET playback_mode = ?, default_volume = ?, search_limit = ?, download_dir = ?, download_format = ?, show_quotes = ?, discord_rpc_enabled = ?, autoplay_enabled = ?, theme = ?, show_hints = ?, visualizer_on = ?, lyrics_on = ?, copy_music_links = ?, lastfm_session_key = ?, lastfm_user = ?, library_dirs = ? WHERE id = 1`,
+		s.PlaybackMode, s.DefaultVolume, s.SearchLimit, s.DownloadDir, s.DownloadFormat, boolInt(s.ShowQuotes), boolInt(s.DiscordRPCEnabled), boolInt(s.AutoplayEnabled), s.Theme, boolInt(s.ShowHints), boolInt(s.VisualizerOn), boolInt(s.LyricsOn), boolInt(s.CopyMusicLinks), s.LastFMSessionKey, s.LastFMUser, s.LibraryDirs,
 	)
 	if err != nil {
 		return fmt.Errorf("save settings: %w", err)
@@ -504,7 +508,7 @@ func (d *DB) LoadCachedLyrics(trackID string) (text string, synced, found bool, 
 // which turns the startup scan from N subprocess spawns into zero for an
 // unchanged library.
 func (d *DB) LoadLibraryCache() (library.DurationCache, error) {
-	rows, err := d.Query(`SELECT file_path, mtime, duration_sec FROM library_cache`)
+	rows, err := d.Query(`SELECT file_path, mtime, duration_sec, title, artist, album FROM library_cache`)
 	if err != nil {
 		return nil, fmt.Errorf("load library cache: %w", err)
 	}
@@ -514,7 +518,7 @@ func (d *DB) LoadLibraryCache() (library.DurationCache, error) {
 	for rows.Next() {
 		var path string
 		var e library.CacheEntry
-		if err := rows.Scan(&path, &e.Mtime, &e.DurationSec); err != nil {
+		if err := rows.Scan(&path, &e.Mtime, &e.DurationSec, &e.Title, &e.Artist, &e.Album); err != nil {
 			return nil, fmt.Errorf("load library cache: scan: %w", err)
 		}
 		cache[path] = e
@@ -536,14 +540,14 @@ func (d *DB) SaveLibraryCache(updates library.DurationCache) error {
 	}
 	defer tx.Rollback()
 
-	stmt, err := tx.Prepare(`INSERT OR REPLACE INTO library_cache (file_path, mtime, duration_sec) VALUES (?, ?, ?)`)
+	stmt, err := tx.Prepare(`INSERT OR REPLACE INTO library_cache (file_path, mtime, duration_sec, title, artist, album) VALUES (?, ?, ?, ?, ?, ?)`)
 	if err != nil {
 		return fmt.Errorf("save library cache: prepare: %w", err)
 	}
 	defer stmt.Close()
 
 	for path, e := range updates {
-		if _, err := stmt.Exec(path, e.Mtime, e.DurationSec); err != nil {
+		if _, err := stmt.Exec(path, e.Mtime, e.DurationSec, e.Title, e.Artist, e.Album); err != nil {
 			return fmt.Errorf("save library cache: insert %q: %w", path, err)
 		}
 	}
