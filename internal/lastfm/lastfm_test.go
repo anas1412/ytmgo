@@ -53,11 +53,8 @@ func TestNotAuthorizedIsDistinct(t *testing.T) {
 	endpoint = srv.URL
 	defer func() { endpoint = old }()
 
-	// call refuses to run without a key; a test key is fine, the fake
-	// server does not check it.
-	if Configured() {
-		t.Skip("real key compiled in; this test drives a fake server")
-	}
+	// callWith takes its own credentials, so this never touches the
+	// real key: the fake server does not check them anyway.
 	err := callWith("k", "s", "GET", map[string]string{"method": "auth.getSession", "token": "t"}, nil)
 	if !errors.Is(err, ErrNotAuthorized) {
 		t.Fatalf("got %v, want ErrNotAuthorized", err)

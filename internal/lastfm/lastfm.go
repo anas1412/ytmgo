@@ -27,12 +27,11 @@ import (
 	"time"
 )
 
-// Register ytmgo at https://www.last.fm/api/account/create and paste the
-// two values here. Until they are set, Configured reports false and the
-// Settings row says so.
+// ytmgo's own Last.fm API account. If these are ever emptied, Configured
+// reports false and the Settings row says so rather than failing later.
 const (
-	apiKey    = ""
-	apiSecret = ""
+	apiKey    = "5dccbd49d803b8805b7ad0add8579568"
+	apiSecret = "22c811072e947bf9b04d56f12d6dc660"
 )
 
 // endpoint is a variable so a test can point it at a local server.
