@@ -33,7 +33,8 @@ type settingDef struct {
 	adjust   func(m *Model, dir int) tea.Cmd // +/- for number rows (dir = +1/-1)
 	editGet  func(m *Model) string           // current value for string rows
 	editSet  func(m *Model, v string) tea.Cmd
-	openBtn  bool // render the inline [Open] hint next to the value
+	remove   func(m *Model) tea.Cmd // backspace on the row, for list-like settings
+	openBtn  bool                   // render the inline [Open] hint next to the value
 }
 
 func staticDesc(s string) func(*Model) string {
@@ -66,25 +67,17 @@ var settingDefs = []settingDef{
 		},
 	},
 	{
-		// The user's own music, alongside whatever ytmgo downloaded. A
-		// change rescans straight away, so the Library page reflects it
-		// without a restart.
+		// The user's own music, alongside whatever ytmgo downloaded.
+		// Enter opens a folder browser rather than a text field: a path
+		// is a thing you walk to, not a thing you type. Backspace drops
+		// the last folder added. Any change rescans straight away.
 		label: "Library Folders",
-		kind:  settingString,
-		value: func(m *Model) string {
-			if m.settings.LibraryDirs == "" {
-				return "none — downloads only"
-			}
-			return m.settings.LibraryDirs
-		},
-		desc:    staticDesc("Your own music folders, comma-separated (~ allowed), scanned with subfolders. Downloads are always included"),
-		editGet: func(m *Model) string { return m.settings.LibraryDirs },
-		editSet: func(m *Model, v string) tea.Cmd {
-			m.settings.LibraryDirs = v
-			m.libraryLoaded = false
-			return tea.Batch(saveSettingsCmd(m.db, m.settings),
-				scanLibraryCmd(m.downloadDir(), m.settings.ResolveLibraryDirs(), m.db))
-		},
+		kind:  settingToggle,
+		value: func(m *Model) string { return m.libraryFoldersLabel() },
+		desc: staticDesc("Your own music, scanned with subfolders. Enter browses for a folder to add, backspace removes the last one. " +
+			"Downloads are always included"),
+		activate: func(m *Model) tea.Cmd { return m.openFolderPicker() },
+		remove:   func(m *Model) tea.Cmd { return m.removeLastLibraryFolder() },
 	},
 	{
 		label:   "Download Dir",

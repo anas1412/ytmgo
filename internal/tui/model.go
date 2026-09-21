@@ -19,6 +19,7 @@ import (
 	"ytmgo/internal/visualizer"
 	"ytmgo/internal/ytmusic"
 
+	"github.com/charmbracelet/bubbles/filepicker"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 )
@@ -429,6 +430,12 @@ type Model struct {
 	scrobbleStart time.Time
 	scrobbled     bool
 	lastfmToken   string
+
+	// ── Library folder picker (Settings) ──
+	// Open while the user browses for a folder to add; it owns the
+	// keyboard until space adds one or esc cancels.
+	folderPicker  filepicker.Model
+	pickingFolder bool
 	lastfmTokenAt time.Time // when the token was issued; the poll gives up after a while
 
 	// ── Now-playing panel (v) ──

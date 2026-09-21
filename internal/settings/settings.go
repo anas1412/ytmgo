@@ -177,6 +177,12 @@ func (s *Settings) ResolveLibraryDirs() []string {
 	home, _ := os.UserHomeDir()
 	for _, part := range strings.Split(s.LibraryDirs, ",") {
 		p := strings.TrimSpace(part)
+		// A folder dropped onto the terminal arrives however the
+		// terminal likes to paste it: quoted, as a file:// URL, or with
+		// spaces backslash-escaped. Take all three.
+		p = strings.TrimPrefix(p, "file://")
+		p = strings.Trim(p, `"'`)
+		p = strings.ReplaceAll(p, `\ `, " ")
 		if p == "" {
 			continue
 		}

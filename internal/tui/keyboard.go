@@ -95,6 +95,10 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	// ── Settings string editing: route letters/numbers to textinput ──
 	// Checked before global keys so typing "o" in a path field works.
+	if m.pickingFolder {
+		return m.handlePickerKey(msg)
+	}
+
 	if m.settingsEditField {
 		switch msg.String() {
 		case "esc":
@@ -237,6 +241,17 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		// Otherwise Esc does nothing outside edit mode.
+		return m, nil
+
+	case "backspace":
+		// Settings rows that hold a list — Library Folders — drop their
+		// last entry. Everywhere else backspace means nothing.
+		if m.activePage == PageSettings && !m.settingsEditField &&
+			m.settingsCursor >= 0 && m.settingsCursor < len(settingDefs) {
+			if rm := settingDefs[m.settingsCursor].remove; rm != nil {
+				return m, rm(&m)
+			}
+		}
 		return m, nil
 
 	// ── Panel navigation ─────────────────────────────────

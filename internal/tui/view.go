@@ -305,11 +305,16 @@ func (m Model) renderSettingsPanels() string {
 	titleW := max(1, panelWidth-5)
 	contentH := panelHeight - 2
 
-	// Left panel: Settings list (always focused — arrows navigate it)
+	// Left panel: Settings list (always focused — arrows navigate it),
+	// or the folder browser while a Library Folder is being added.
+	leftTitle, leftBody := "SETTINGS", m.renderSettingsList(panelWidth, contentH)
+	if m.pickingFolder {
+		leftTitle, leftBody = "ADD A LIBRARY FOLDER", m.renderFolderPicker(panelWidth, contentH)
+	}
 	leftPanel := boxTitled(
-		stylePanelTitle.Render(truncate("SETTINGS", titleW)),
+		stylePanelTitle.Render(truncate(leftTitle, titleW)),
 		panelBorderFocused.GetBorderTopForeground(),
-		m.renderSettingsList(panelWidth, contentH), panelWidth, contentH)
+		leftBody, panelWidth, contentH)
 
 	// Right panel: Keyboard shortcuts (always visible, view-only)
 	rightPanel := boxTitled(

@@ -71,6 +71,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if sync := next.syncNowPlaying(wasVisible); sync != nil {
 		cmd = tea.Batch(cmd, sync)
 	}
+	// The folder picker reads directories through messages of its own,
+	// so while it is open every non-key message is shown to it as well.
+	// Keys go to it directly from handleKey.
+	if next.pickingFolder {
+		if _, isKey := msg.(tea.KeyMsg); !isKey {
+			var pc tea.Cmd
+			next.folderPicker, pc = next.folderPicker.Update(msg)
+			cmd = tea.Batch(cmd, pc)
+		}
+	}
 	// The cover in the player bar follows the same pattern: appearing
 	// owes the terminal a transmit, disappearing owes it a delete.
 	if now := next.coverOnScreen(); now != wasCover {
@@ -116,6 +126,9 @@ func (m Model) dispatch(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// else.
 		m.searchInput.Width = searchInputWidth(m.width)
 		m.settingsEditInput.Width = searchInputWidth(m.width)
+		if m.pickingFolder {
+			m.folderPicker.Height = m.pickerHeight()
+		}
 		return m, nil
 
 	// ── Mouse events ─────────────────────────────────────────────
