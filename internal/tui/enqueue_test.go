@@ -15,7 +15,7 @@ var albumForTest = ytmusic.Album{BrowseID: "MPREb_x", Title: "An Album"}
 
 func enqueueModel(t *testing.T, n int) Model {
 	t.Helper()
-	t.Setenv("HOME", t.TempDir())
+	isolateUserDirs(t)
 	m := InitialModel()
 	m.npOn = false
 	// Playing, so enqueueing does not try to start mpv from a unit test.

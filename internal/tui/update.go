@@ -160,6 +160,14 @@ func (m Model) dispatch(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case SettingsSavedMsg:
 		return m.handleSettingsSaved(msg)
 
+	// ── Last.fm ──────────────────────────────────────────────────
+	case LastFMTokenMsg:
+		return m.handleLastFMToken(msg)
+	case LastFMSessionMsg:
+		return m.handleLastFMSession(msg)
+	case LastFMErrMsg:
+		return m.handleLastFMErr(msg)
+
 	// ── Database ready (SQLite opened, queue + favorites loaded) ──
 	case DbReadyMsg:
 		if msg.Error != nil {

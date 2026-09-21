@@ -26,7 +26,7 @@ import (
 // line, and a big queue (which lengthens the queue panel title).
 func worstCaseModel(t *testing.T, w, h int) Model {
 	t.Helper()
-	t.Setenv("HOME", t.TempDir())
+	isolateUserDirs(t)
 	m := InitialModel()
 	// Both panes are on by default now that the setting remembers them,
 	// and the resize below would make the spectrum visible — which
@@ -1374,4 +1374,16 @@ func TestEnterOnArtistFilterKeepsThePage(t *testing.T) {
 	if got := m.streamListLen(); got != len(m.results) {
 		t.Errorf("after leaving, the list shows %d rows but results hold %d", got, len(m.results))
 	}
+}
+
+// isolateUserDirs points every place ytmgo keeps state at one throwaway
+// directory. Faking HOME alone was not enough: the database lives under
+// XDG_DATA_HOME, so with that set — as it is on most Linux desktops —
+// the tests opened, and wrote to, the developer's real ytmgo.db.
+func isolateUserDirs(t *testing.T) {
+	t.Helper()
+	dir := t.TempDir()
+	t.Setenv("HOME", dir)
+	t.Setenv("XDG_DATA_HOME", dir)
+	t.Setenv("XDG_CONFIG_HOME", dir)
 }

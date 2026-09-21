@@ -109,7 +109,7 @@ func TestRelativeTime(t *testing.T) {
 // TestClearSearchRestoresRecommendations covers the clear-search flow:
 // a cached batch restores instantly; with no cache a fetch is issued.
 func TestClearSearchRestoresRecommendations(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	isolateUserDirs(t)
 	m := InitialModel()
 	m.recommendations = []search.Result{{ID: "aaaaaaaaaaa", Title: "Rec"}}
 	m.showingRecommendations = false
@@ -132,7 +132,7 @@ func TestClearSearchRestoresRecommendations(t *testing.T) {
 // TestStaleSearchResultsDropped: a search reply that lands after the
 // user cleared the search must not overwrite the recommendations.
 func TestStaleSearchResultsDropped(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	isolateUserDirs(t)
 	m := InitialModel()
 	m.showingRecommendations = true
 	m.results = []search.Result{{ID: "aaaaaaaaaaa", Title: "Rec"}}

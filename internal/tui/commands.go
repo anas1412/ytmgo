@@ -15,6 +15,7 @@ import (
 	"ytmgo/internal/coverart"
 	"ytmgo/internal/db"
 	"ytmgo/internal/downloader"
+	"ytmgo/internal/lastfm"
 	"ytmgo/internal/library"
 	"ytmgo/internal/lyrics"
 	"ytmgo/internal/mpris"
@@ -73,6 +74,51 @@ func playlistCmd(ref search.PlaylistRef) tea.Cmd {
 				title, len(results), missed)
 		}
 		return SearchResultsMsg{Results: results, Notice: notice}
+	}
+}
+
+// ─── Last.fm ────────────────────────────────────────────────────────
+
+func lastfmTrack(t queue.Track) lastfm.Track {
+	return lastfm.Track{Artist: t.Artist, Title: t.Title, Album: t.Album, Duration: t.DurationSec}
+}
+
+// lastfmNowPlayingCmd tells Last.fm a track has started. Silent on
+// success; a failure surfaces once in the status line.
+func lastfmNowPlayingCmd(sessionKey string, t queue.Track) tea.Cmd {
+	return func() tea.Msg {
+		if err := lastfm.NowPlaying(sessionKey, lastfmTrack(t)); err != nil {
+			return LastFMErrMsg{Op: "now playing", Error: err}
+		}
+		return nil
+	}
+}
+
+// lastfmScrobbleCmd records a play that began at startedAt.
+func lastfmScrobbleCmd(sessionKey string, t queue.Track, startedAt time.Time) tea.Cmd {
+	return func() tea.Msg {
+		if err := lastfm.Scrobble(sessionKey, lastfmTrack(t), startedAt); err != nil {
+			return LastFMErrMsg{Op: "scrobble", Error: err}
+		}
+		return nil
+	}
+}
+
+// lastfmTokenCmd starts connecting an account: the token the user
+// approves in a browser.
+func lastfmTokenCmd() tea.Cmd {
+	return func() tea.Msg {
+		tok, err := lastfm.GetToken()
+		return LastFMTokenMsg{Token: tok, Error: err}
+	}
+}
+
+// lastfmSessionCmd finishes connecting: trades the approved token for
+// the permanent key.
+func lastfmSessionCmd(token string) tea.Cmd {
+	return func() tea.Msg {
+		sess, err := lastfm.GetSession(token)
+		return LastFMSessionMsg{Session: sess, Error: err}
 	}
 }
 

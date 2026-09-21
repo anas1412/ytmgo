@@ -3,6 +3,7 @@ package tui
 import (
 	"fmt"
 
+	"ytmgo/internal/lastfm"
 	"ytmgo/internal/settings"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -161,6 +162,55 @@ var settingDefs = []settingDef{
 			m.settings.DiscordRPCEnabled = !m.settings.DiscordRPCEnabled
 			m.reinitDiscordRPC()
 			return saveSettingsCmd(m.db, m.settings)
+		},
+	},
+	{
+		// One row, four states: nothing to connect with, connected,
+		// waiting on the browser, or off. Enter does the one thing that
+		// state calls for.
+		label: "Last.fm Scrobbling",
+		kind:  settingToggle,
+		value: func(m *Model) string {
+			switch {
+			case !lastfm.Configured():
+				return "unavailable in this build"
+			case m.settings.LastFMSessionKey != "":
+				return "connected as " + m.settings.LastFMUser
+			case m.lastfmToken != "":
+				return "waiting for approval…"
+			default:
+				return "OFF"
+			}
+		},
+		desc: func(m *Model) string {
+			switch {
+			case !lastfm.Configured():
+				return "This build has no Last.fm API key, so there is nothing to connect to"
+			case m.settings.LastFMSessionKey != "":
+				return "Tracks scrobble once heard halfway or for four minutes  (Enter disconnects)"
+			case m.lastfmToken != "":
+				return "Approve ytmgo in the browser tab that opened, then press Enter here"
+			default:
+				return "Scrobble what you play to Last.fm — Enter opens the approval link, no password needed"
+			}
+		},
+		activate: func(m *Model) tea.Cmd {
+			switch {
+			case !lastfm.Configured():
+				m.setStatus("Last.fm: this build was made without an API key")
+				return nil
+			case m.settings.LastFMSessionKey != "":
+				m.settings.LastFMSessionKey = ""
+				m.settings.LastFMUser = ""
+				m.setStatus("Last.fm: disconnected")
+				return saveSettingsCmd(m.db, m.settings)
+			case m.lastfmToken != "":
+				m.setStatus("Last.fm: checking…")
+				return lastfmSessionCmd(m.lastfmToken)
+			default:
+				m.setStatus("Last.fm: requesting a link…")
+				return lastfmTokenCmd()
+			}
 		},
 	},
 }

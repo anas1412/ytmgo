@@ -128,6 +128,7 @@ The yt-dlp installed alongside ytmgo is offered for removal. Other system depend
   (and any transparency) alone.
 - **Now playing, everywhere** — Album art and the track's album sit in the player bar itself, on every page; `v` opens a live spectrum under your results. Art renders at full resolution on kitty, Ghostty and WezTerm, as coloured half-blocks elsewhere.
 - **Discord Rich Presence** — Show what you're listening to — track, artist, play status — live on your Discord profile.
+- **Last.fm scrobbling** — Connect once in Settings — ytmgo hands you a Last.fm link, you click Allow, and that's it; no password is ever typed into the app. Tracks scrobble once heard halfway or for four minutes, with the clean artist and title YouTube Music provides.
 - **Static binary, no bloat** — Pure Go, no Electron, no browser engine. Starts instantly, sips RAM, gets out of your way.
 
 ---

@@ -11,7 +11,7 @@ import (
 // openTestDB gives each test its own SQLite file via a fake HOME.
 func openTestDB(t *testing.T) *DB {
 	t.Helper()
-	t.Setenv("HOME", t.TempDir())
+	isolateUserDirs(t)
 	d, err := Open()
 	if err != nil {
 		t.Fatalf("Open: %v", err)
@@ -32,12 +32,17 @@ func TestSettingsRoundTrip(t *testing.T) {
 
 	s.DefaultVolume = 55
 	s.AutoplayEnabled = false
+	s.LastFMSessionKey = "sk-test"
+	s.LastFMUser = "someone"
 	if err := d.SaveSettings(s); err != nil {
 		t.Fatalf("SaveSettings: %v", err)
 	}
 	got, err := d.LoadSettings()
 	if err != nil {
 		t.Fatalf("reload: %v", err)
+	}
+	if got.LastFMSessionKey != "sk-test" || got.LastFMUser != "someone" {
+		t.Fatalf("Last.fm session did not survive a round trip: key=%q user=%q", got.LastFMSessionKey, got.LastFMUser)
 	}
 	if got.DefaultVolume != 55 || got.AutoplayEnabled {
 		t.Fatalf("settings not persisted: %+v", got)
@@ -235,4 +240,16 @@ func TestShowHintsRoundTrips(t *testing.T) {
 	if got.ShowHints {
 		t.Error("hidden hints came back shown — the column is not round-tripping")
 	}
+}
+
+// isolateUserDirs points every place ytmgo keeps state at one throwaway
+// directory. Faking HOME alone was not enough: the database lives under
+// XDG_DATA_HOME, so with that set — as it is on most Linux desktops —
+// the tests opened, and wrote to, the developer's real ytmgo.db.
+func isolateUserDirs(t *testing.T) {
+	t.Helper()
+	dir := t.TempDir()
+	t.Setenv("HOME", dir)
+	t.Setenv("XDG_DATA_HOME", dir)
+	t.Setenv("XDG_CONFIG_HOME", dir)
 }

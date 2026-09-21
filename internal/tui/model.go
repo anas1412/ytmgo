@@ -9,6 +9,7 @@ import (
 	"ytmgo/internal/db"
 	"ytmgo/internal/discordrpc"
 	"ytmgo/internal/downloader"
+	"ytmgo/internal/lastfm"
 	"ytmgo/internal/lyrics"
 	"ytmgo/internal/mpris"
 	"ytmgo/internal/player"
@@ -138,6 +139,25 @@ type (
 
 	// SettingsSavedMsg is sent after settings are persisted to disk.
 	SettingsSavedMsg struct {
+		Error error
+	}
+
+	// LastFMTokenMsg carries the token the user must approve on last.fm.
+	LastFMTokenMsg struct {
+		Token string
+		Error error
+	}
+
+	// LastFMSessionMsg carries the session key an approved token bought.
+	LastFMSessionMsg struct {
+		Session lastfm.Session
+		Error   error
+	}
+
+	// LastFMErrMsg reports a failed now-playing or scrobble call. Success
+	// is silent; there is nothing to say.
+	LastFMErrMsg struct {
+		Op    string
 		Error error
 	}
 
@@ -389,6 +409,16 @@ type Model struct {
 	// ── MPRIS (media keys / desktop integration) ──
 	mpris *mpris.Service
 
+	// ── Last.fm ──
+	// scrobbleStart is when the current track began, which is the
+	// timestamp a scrobble carries; scrobbled stops a track being
+	// submitted twice. lastfmToken is an approval in progress: issued
+	// by Last.fm, waiting for the user to click Allow in a browser,
+	// and traded for a session key when they come back and press Enter.
+	scrobbleStart time.Time
+	scrobbled     bool
+	lastfmToken   string
+
 	// ── Now-playing panel (v) ──
 	// One sub-panel beneath the results list, split left/right: album
 	// art beside the spectrum. Mirrors the queue/downloads split on the
@@ -600,6 +630,14 @@ func (m *Model) startTrackPlayback(playURL string, t queue.Track) tea.Cmd {
 	}
 	if m.db != nil {
 		cmds = append(cmds, recordPlayCmd(m.db, t))
+	}
+	// Last.fm: say what is playing, and start the clock the scrobble
+	// rule is measured against. Reset per track — repeat-one comes
+	// back through here too, and each play is its own scrobble.
+	m.scrobbleStart = time.Now()
+	m.scrobbled = false
+	if m.settings.LastFMSessionKey != "" {
+		cmds = append(cmds, lastfmNowPlayingCmd(m.settings.LastFMSessionKey, t))
 	}
 	// Keep the cover panel in step with what is playing.
 	if cmd := m.refreshCoverCmd(); cmd != nil {

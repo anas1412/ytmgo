@@ -8,7 +8,9 @@ import (
 	"strconv"
 	"time"
 
+	"ytmgo/internal/clipboard"
 	"ytmgo/internal/downloader"
+	"ytmgo/internal/lastfm"
 	"ytmgo/internal/lyrics"
 	"ytmgo/internal/player"
 	"ytmgo/internal/queue"
@@ -432,14 +434,74 @@ func (m Model) handlePosition(msg PositionMsg) (tea.Model, tea.Cmd) {
 		autoplayCmd = fetchAutoplayCmd(m.db)
 	}
 
+	// Last.fm counts a track once it has been heard long enough, and
+	// once only. Position is what the player reports, so a pause does
+	// not count and a seek moves the needle the way Last.fm's own
+	// clients let it.
+	var scrobbleCmd tea.Cmd
+	if m.settings.LastFMSessionKey != "" && !m.scrobbled &&
+		m.playerState == player.StatePlaying &&
+		lastfm.ShouldScrobble(m.position, m.duration) {
+		if t, ok := m.queue.Current(); ok {
+			m.scrobbled = true
+			scrobbleCmd = lastfmScrobbleCmd(m.settings.LastFMSessionKey, t, m.scrobbleStart)
+		}
+	}
+
 	// Keep listening
 	if m.player != nil {
 		cmds := []tea.Cmd{positionCmd(m.player)}
 		if autoplayCmd != nil {
 			cmds = append(cmds, autoplayCmd)
 		}
+		if scrobbleCmd != nil {
+			cmds = append(cmds, scrobbleCmd)
+		}
 		return m, tea.Batch(cmds...)
 	}
+	return m, scrobbleCmd
+}
+
+// ── Last.fm ──────────────────────────────────────────────────────────
+
+// handleLastFMToken has the token; the user now has to approve it. The
+// link goes to the clipboard when there is one, and into the status
+// line regardless, since that is the one place guaranteed to exist.
+func (m Model) handleLastFMToken(msg LastFMTokenMsg) (tea.Model, tea.Cmd) {
+	if msg.Error != nil {
+		m.setStatus("Last.fm: " + msg.Error.Error())
+		return m, nil
+	}
+	m.lastfmToken = msg.Token
+	link := lastfm.AuthURL(msg.Token)
+	where := "open this link"
+	if clipboard.Copy(link) == nil {
+		where = "link copied — open it"
+	}
+	m.setStatus("Last.fm: " + where + ", click Allow, then press Enter here again:  " + link)
+	return m, nil
+}
+
+// handleLastFMSession has the key, or the reason it does not.
+func (m Model) handleLastFMSession(msg LastFMSessionMsg) (tea.Model, tea.Cmd) {
+	if errors.Is(msg.Error, lastfm.ErrNotAuthorized) {
+		m.setStatus("Last.fm: not approved yet — open the link, click Allow, then press Enter again")
+		return m, nil
+	}
+	if msg.Error != nil {
+		m.lastfmToken = ""
+		m.setStatus("Last.fm: " + msg.Error.Error())
+		return m, nil
+	}
+	m.lastfmToken = ""
+	m.settings.LastFMSessionKey = msg.Session.Key
+	m.settings.LastFMUser = msg.Session.User
+	m.setStatus("Last.fm: connected as " + msg.Session.User + " — scrobbling on")
+	return m, saveSettingsCmd(m.db, m.settings)
+}
+
+func (m Model) handleLastFMErr(msg LastFMErrMsg) (tea.Model, tea.Cmd) {
+	m.setStatus("Last.fm " + msg.Op + " failed: " + msg.Error.Error())
 	return m, nil
 }
 

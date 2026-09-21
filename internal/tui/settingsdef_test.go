@@ -31,7 +31,7 @@ func TestSettingsOrder(t *testing.T) {
 		"Download Dir", "Download Format",
 		"Search Limit",
 		"Theme", "Show Quotes",
-		"Copy Link As", "Discord RPC",
+		"Copy Link As", "Discord RPC", "Last.fm Scrobbling",
 	}
 	if len(settingDefs) != len(want) {
 		t.Fatalf("the page has %d settings, this test knows %d", len(settingDefs), len(want))

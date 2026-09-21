@@ -42,6 +42,12 @@ type Settings struct {
 	// default: a youtube.com link opens anywhere, including for people
 	// without YouTube Music, and still plays the same recording.
 	CopyMusicLinks bool `json:"copy_music_links"`
+	// LastFMSessionKey is the permanent key Last.fm hands over once the
+	// user approves ytmgo; empty means scrobbling is off. LastFMUser is
+	// the account it belongs to, kept only so the Settings row can say
+	// who is connected.
+	LastFMSessionKey string `json:"lastfm_session_key"`
+	LastFMUser       string `json:"lastfm_user"`
 }
 
 // Defaults returns a Settings with sane defaults.
