@@ -193,7 +193,7 @@ var settingDefs = []settingDef{
 				// status fades in a few seconds and truncates a URL this
 				// long, and this row is on screen for as long as it takes
 				// the user to come back from the browser.
-				return "Click Allow on the Last.fm page (it opens in your browser and the link is on your clipboard), then press Enter here.  " +
+				return "Click Allow on the Last.fm page (it opens in your browser and the link is on your clipboard) — ytmgo connects on its own within seconds.  " +
 					lastfm.AuthURL(m.lastfmToken)
 			default:
 				return "Scrobble what you play to Last.fm — Enter opens the approval link, no password needed"
@@ -211,7 +211,7 @@ var settingDefs = []settingDef{
 				return saveSettingsCmd(m.db, m.settings)
 			case m.lastfmToken != "":
 				m.setStatus("Last.fm: checking…")
-				return lastfmSessionCmd(m.lastfmToken)
+				return lastfmSessionCmd(m.lastfmToken, false)
 			default:
 				m.setStatus("Last.fm: requesting a link…")
 				return lastfmTokenCmd()

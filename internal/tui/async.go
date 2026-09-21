@@ -475,27 +475,49 @@ func (m Model) handleLastFMToken(msg LastFMTokenMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	m.lastfmToken = msg.Token
+	m.lastfmTokenAt = time.Now()
 	link := lastfm.AuthURL(msg.Token)
 	opened := openInOS(link) == nil
 	copied := clipboard.Copy(link) == nil
 	switch {
 	case opened && copied:
-		m.setStatus("Last.fm: opened in your browser (link also copied) — click Allow, then press Enter here again")
+		m.setStatus("Last.fm: opened in your browser (link also copied) — click Allow and ytmgo will connect on its own")
 	case opened:
-		m.setStatus("Last.fm: opened in your browser — click Allow, then press Enter here again")
+		m.setStatus("Last.fm: opened in your browser — click Allow and ytmgo will connect on its own")
 	case copied:
-		m.setStatus("Last.fm: link copied — open it, click Allow, then press Enter here again")
+		m.setStatus("Last.fm: link copied — open it and click Allow; ytmgo will connect on its own")
 	default:
-		m.setStatus("Last.fm: open the link shown under the row, click Allow, then press Enter here again")
+		m.setStatus("Last.fm: open the link shown under the row and click Allow; ytmgo will connect on its own")
 	}
-	return m, nil
+	// From here the approval is watched for, not waited on.
+	return m, lastfmPollCmd(msg.Token)
+}
+
+// handleLastFMPoll is the tick: check, unless the token it was set for
+// is no longer the one pending.
+func (m Model) handleLastFMPoll(msg LastFMPollMsg) (tea.Model, tea.Cmd) {
+	if msg.Token == "" || msg.Token != m.lastfmToken {
+		return m, nil
+	}
+	return m, lastfmSessionCmd(msg.Token, true)
 }
 
 // handleLastFMSession has the key, or the reason it does not.
 func (m Model) handleLastFMSession(msg LastFMSessionMsg) (tea.Model, tea.Cmd) {
 	if errors.Is(msg.Error, lastfm.ErrNotAuthorized) {
-		m.setStatus("Last.fm: not approved yet — open the link, click Allow, then press Enter again")
-		return m, nil
+		if !msg.Polled {
+			m.setStatus("Last.fm: not approved yet — click Allow on the Last.fm page; ytmgo is watching for it")
+			return m, nil
+		}
+		if m.lastfmToken == "" {
+			return m, nil // disconnected, or a new link was asked for
+		}
+		if time.Since(m.lastfmTokenAt) > lastfmPollTimeout {
+			m.lastfmToken = ""
+			m.setStatus("Last.fm: no approval after 10 minutes — press Enter for a fresh link")
+			return m, nil
+		}
+		return m, lastfmPollCmd(m.lastfmToken)
 	}
 	if msg.Error != nil {
 		m.lastfmToken = ""

@@ -165,6 +165,8 @@ func (m Model) dispatch(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.handleLastFMToken(msg)
 	case LastFMSessionMsg:
 		return m.handleLastFMSession(msg)
+	case LastFMPollMsg:
+		return m.handleLastFMPoll(msg)
 	case LastFMErrMsg:
 		return m.handleLastFMErr(msg)
 

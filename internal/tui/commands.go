@@ -114,12 +114,30 @@ func lastfmTokenCmd() tea.Cmd {
 }
 
 // lastfmSessionCmd finishes connecting: trades the approved token for
-// the permanent key.
-func lastfmSessionCmd(token string) tea.Cmd {
+// the permanent key. polled marks a background check as opposed to the
+// user pressing Enter.
+func lastfmSessionCmd(token string, polled bool) tea.Cmd {
 	return func() tea.Msg {
 		sess, err := lastfm.GetSession(token)
-		return LastFMSessionMsg{Session: sess, Error: err}
+		return LastFMSessionMsg{Session: sess, Error: err, Polled: polled}
 	}
+}
+
+// lastfmPollInterval is how often a pending approval is checked. Last.fm
+// answers "not yet" cheaply, and a few seconds is well under the time it
+// takes to switch windows and click Allow.
+const lastfmPollInterval = 3 * time.Second
+
+// lastfmPollTimeout is how long the poll keeps asking before giving up
+// and handing the row back. The token itself lives an hour; nobody who
+// has not clicked in ten minutes is about to.
+const lastfmPollTimeout = 10 * time.Minute
+
+// lastfmPollCmd asks again after the interval.
+func lastfmPollCmd(token string) tea.Cmd {
+	return tea.Tick(lastfmPollInterval, func(time.Time) tea.Msg {
+		return LastFMPollMsg{Token: token}
+	})
 }
 
 // historySeeds returns the most recent unique videoIds from play

@@ -149,9 +149,20 @@ type (
 	}
 
 	// LastFMSessionMsg carries the session key an approved token bought.
+	// Polled says whether the check was the background poll or the user
+	// pressing Enter: an unapproved answer to the poll schedules the
+	// next one, the same answer to the user is told to them.
 	LastFMSessionMsg struct {
 		Session lastfm.Session
 		Error   error
+		Polled  bool
+	}
+
+	// LastFMPollMsg is the tick that asks Last.fm whether the token has
+	// been approved yet. It carries the token so a stale poll — the user
+	// disconnected, or asked for a fresh link — does nothing.
+	LastFMPollMsg struct {
+		Token string
 	}
 
 	// LastFMErrMsg reports a failed now-playing or scrobble call. Success
@@ -418,6 +429,7 @@ type Model struct {
 	scrobbleStart time.Time
 	scrobbled     bool
 	lastfmToken   string
+	lastfmTokenAt time.Time // when the token was issued; the poll gives up after a while
 
 	// ── Now-playing panel (v) ──
 	// One sub-panel beneath the results list, split left/right: album

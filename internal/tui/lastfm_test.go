@@ -3,6 +3,7 @@ package tui
 import (
 	"errors"
 	"testing"
+	"time"
 
 	"ytmgo/internal/lastfm"
 	"ytmgo/internal/player"
@@ -74,8 +75,7 @@ func TestSessionConnects(t *testing.T) {
 	}
 }
 
-// Not-yet-approved keeps the token, so Enter can try again after the
-// user clicks Allow; any other failure drops it.
+// Not-yet-approved keeps the token; any other failure drops it.
 func TestSessionNotApprovedKeepsToken(t *testing.T) {
 	m := scrobbleModel(t)
 	m.lastfmToken = "tok"
@@ -86,5 +86,52 @@ func TestSessionNotApprovedKeepsToken(t *testing.T) {
 	nm, _ = m.handleLastFMSession(LastFMSessionMsg{Error: errors.New("boom")})
 	if nm.(Model).lastfmToken != "" {
 		t.Fatal("token kept after a real failure")
+	}
+}
+
+// The approval is watched for: an unapproved answer to the background
+// poll schedules the next poll, while the same answer to the user's own
+// Enter only tells them — one chain, never two.
+func TestApprovalIsPolled(t *testing.T) {
+	m := scrobbleModel(t)
+	m.lastfmToken = "tok"
+	m.lastfmTokenAt = time.Now()
+	if _, cmd := m.handleLastFMSession(LastFMSessionMsg{Error: lastfm.ErrNotAuthorized, Polled: true}); cmd == nil {
+		t.Fatal("polled 'not yet' did not schedule the next poll")
+	}
+	if _, cmd := m.handleLastFMSession(LastFMSessionMsg{Error: lastfm.ErrNotAuthorized, Polled: false}); cmd != nil {
+		t.Fatal("the user's own Enter started a second poll chain")
+	}
+}
+
+// A poll for a token that is no longer pending — disconnected, or a
+// fresh link requested — must do nothing, or it would connect the wrong
+// approval or keep the old chain alive beside the new one.
+func TestStalePollIsIgnored(t *testing.T) {
+	m := scrobbleModel(t)
+	m.lastfmToken = "new"
+	if _, cmd := m.handleLastFMPoll(LastFMPollMsg{Token: "old"}); cmd != nil {
+		t.Fatal("a poll for a superseded token still checked it")
+	}
+	if _, cmd := m.handleLastFMPoll(LastFMPollMsg{Token: "new"}); cmd == nil {
+		t.Fatal("a poll for the pending token did not check it")
+	}
+	m.lastfmToken = ""
+	if _, cmd := m.handleLastFMPoll(LastFMPollMsg{Token: "new"}); cmd != nil {
+		t.Fatal("a poll kept going after disconnect")
+	}
+}
+
+// After the timeout the row is handed back rather than polled forever.
+func TestPollGivesUp(t *testing.T) {
+	m := scrobbleModel(t)
+	m.lastfmToken = "tok"
+	m.lastfmTokenAt = time.Now().Add(-lastfmPollTimeout - time.Second)
+	nm, cmd := m.handleLastFMSession(LastFMSessionMsg{Error: lastfm.ErrNotAuthorized, Polled: true})
+	if cmd != nil {
+		t.Fatal("still polling past the timeout")
+	}
+	if nm.(Model).lastfmToken != "" {
+		t.Fatal("token kept past the timeout; the row would show 'waiting' forever")
 	}
 }
