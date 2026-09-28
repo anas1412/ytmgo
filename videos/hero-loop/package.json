@@ -1,0 +1,11 @@
+{
+  "name": "hero-loop",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "npx --yes hyperframes@0.8.85 preview",
+    "check": "npx --yes hyperframes@0.8.85 check",
+    "render": "npx --yes hyperframes@0.8.85 render",
+    "publish": "npx --yes hyperframes@0.8.85 publish"
+  }
+}

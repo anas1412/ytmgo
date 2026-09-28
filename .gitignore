@@ -41,3 +41,6 @@ docs/public/uninstall.sh
 
 # Local agent scaffolding: launch configs and task worktrees.
 .claude/
+
+# HyperFrames render output (the site ships its own encode in docs/public).
+videos/*/renders/

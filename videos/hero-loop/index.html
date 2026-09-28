@@ -1,0 +1,682 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1920, height=1080" />
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <style>
+      /* ytmgo's own dark palette (internal/tui/theme.go, adaptive()). */
+      :root {
+        --page: #0a0a0f;
+        --win: #111118;
+        --border: #2a2a3e;
+        --accent: #7c3aed;
+        --accent-text: #a78bfa;
+        --mint: #06d6a0;
+        --pink: #f72585;
+        --text: #e0e0e0;
+        --mid: #9999aa;
+        --dim: #6e6e82;
+        --title: #ffffff;
+      }
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        width: 1920px;
+        height: 1080px;
+        overflow: hidden;
+        background: var(--page);
+      }
+      #root {
+        position: relative;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        background: var(--page);
+        font-family: "JetBrains Mono", monospace;
+        color: var(--text);
+        font-size: 26px;
+        line-height: 34px;
+      }
+      #stage {
+        position: absolute;
+        inset: 0;
+      }
+
+      /* ---- the >_y mark (first and last frame) ---- */
+      #logo {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      #logo svg {
+        display: block;
+        width: 300px;
+        height: 300px;
+      }
+
+      /* ---- terminal window ---- */
+      #win {
+        position: absolute;
+        top: 36px;
+        bottom: 36px;
+        left: 48px;
+        right: 48px;
+        background: var(--win);
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+      }
+      .titlebar {
+        height: 52px;
+        flex: none;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        position: relative;
+        border-bottom: 1px solid var(--border);
+        color: var(--mid);
+        font-size: 22px;
+        font-weight: 700;
+      }
+      .titlebar .mini {
+        position: absolute;
+        left: 20px;
+        top: 14px;
+        width: 24px;
+        height: 24px;
+      }
+      .titlebar .btns {
+        position: absolute;
+        right: 22px;
+        top: 0;
+        height: 52px;
+        display: flex;
+        align-items: center;
+        gap: 26px;
+        color: var(--dim);
+      }
+      .content {
+        flex: 1;
+        padding: 22px 28px;
+        display: flex;
+        flex-direction: column;
+      }
+      .searchrow {
+        height: 40px;
+        flex: none;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+      .search {
+        display: flex;
+        align-items: center;
+        color: var(--text);
+      }
+      .search .prompt {
+        color: var(--mint);
+        font-weight: 700;
+        margin-right: 16px;
+      }
+      .search .placeholder {
+        color: var(--dim);
+        position: absolute;
+      }
+      .search .field {
+        position: relative;
+        display: flex;
+        align-items: center;
+        min-width: 300px;
+        height: 34px;
+      }
+      #query {
+        white-space: pre;
+        color: var(--title);
+      }
+      #caret {
+        display: block;
+        width: 14px;
+        height: 30px;
+        background: var(--accent-text);
+        margin-left: 2px;
+      }
+      .tabs {
+        display: flex;
+        gap: 34px;
+        color: var(--dim);
+        font-size: 24px;
+      }
+      .tabs .on {
+        color: var(--mint);
+        font-weight: 700;
+        text-decoration: underline;
+        text-underline-offset: 6px;
+      }
+
+      .grid {
+        margin-top: 22px;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        grid-template-rows: 390px 220px;
+        gap: 26px 28px;
+      }
+      .panel {
+        position: relative;
+        border: 2px solid var(--border);
+        border-radius: 8px;
+      }
+      .panel.focus {
+        border-color: var(--accent);
+      }
+      .ptitle {
+        position: absolute;
+        top: -18px;
+        left: 18px;
+        padding: 0 10px;
+        background: var(--win);
+        color: var(--accent-text);
+        font-size: 22px;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        white-space: pre;
+      }
+      .ptitle .sub {
+        color: var(--mid);
+        font-weight: 400;
+      }
+      .rows {
+        position: absolute;
+        inset: 18px 0 0 0;
+      }
+      .row {
+        position: relative;
+        height: 68px;
+        padding: 0 22px;
+      }
+      .row .l1 {
+        color: var(--text);
+        white-space: pre;
+        overflow: hidden;
+      }
+      .row .l2 {
+        display: flex;
+        justify-content: space-between;
+        color: var(--dim);
+        padding-left: 44px;
+      }
+      #hl {
+        position: absolute;
+        left: 8px;
+        right: 8px;
+        top: 0;
+        height: 68px;
+        background: var(--accent);
+        border-radius: 4px;
+      }
+      #enter {
+        position: absolute;
+        right: 150px;
+        top: 148px;
+        height: 44px;
+        padding: 0 16px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        border-radius: 8px;
+        background: var(--title);
+        color: #111118;
+        font-size: 22px;
+        font-weight: 700;
+        box-shadow: 0 4px 0 #b9b9c8;
+      }
+      .queue .row .l1 .n {
+        color: var(--dim);
+      }
+      #nowq .l1 {
+        color: var(--mint);
+        font-weight: 700;
+      }
+      #nowq .l2 {
+        color: var(--mint);
+      }
+
+      .viz {
+        display: flex;
+        align-items: flex-end;
+        justify-content: space-between;
+        position: absolute;
+        left: 24px;
+        right: 24px;
+        top: 28px;
+        bottom: 18px;
+      }
+      .bar {
+        display: block;
+        width: 22px;
+        height: 6%;
+        border-radius: 2px 2px 0 0;
+        /* colour maps to absolute height, like the app's stacked blocks */
+        background: linear-gradient(to top, var(--accent) 0 50px, var(--mint) 50px 110px, var(--pink) 110px);
+        background-size: 100% 172px;
+        background-position: bottom;
+      }
+
+      .lyricwin {
+        position: absolute;
+        left: 22px;
+        right: 22px;
+        top: 20px;
+        height: 170px;
+        overflow: hidden;
+      }
+      #lyrics .ln {
+        height: 34px;
+        white-space: pre;
+        color: var(--dim);
+      }
+
+      .player {
+        margin-top: 26px;
+        height: 146px;
+        flex: none;
+        border: 2px solid var(--border);
+        border-radius: 8px;
+        padding: 16px 22px;
+        display: flex;
+        gap: 24px;
+        align-items: center;
+      }
+      #art {
+        display: block;
+        width: 108px;
+        height: 108px;
+        flex: none;
+        border-radius: 6px;
+        overflow: hidden;
+        position: relative;
+        background: linear-gradient(160deg, #2b1a5c 0%, #7c3aed 55%, #f72585 100%);
+      }
+      #art .sun {
+        position: absolute;
+        left: 30px;
+        top: 22px;
+        width: 48px;
+        height: 48px;
+        border-radius: 50%;
+        background: linear-gradient(#ffd6a0, #f72585);
+      }
+      #art .road {
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        height: 40px;
+        background: repeating-linear-gradient(90deg, #0d0d12 0 14px, #1a1a2e 14px 16px);
+      }
+      #art .grey {
+        position: absolute;
+        inset: 0;
+        background: #1a1a2e;
+      }
+      .pinfo {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+      .ptrack {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        height: 36px;
+      }
+      #playicon {
+        color: var(--mint);
+        font-size: 24px;
+      }
+      #ptitle {
+        color: var(--title);
+        font-weight: 700;
+        font-size: 28px;
+        white-space: pre;
+      }
+      #pempty {
+        color: var(--dim);
+        position: absolute;
+      }
+      .ptrackwrap {
+        position: relative;
+      }
+      .pctl {
+        display: flex;
+        justify-content: space-between;
+        color: var(--mid);
+        font-size: 22px;
+      }
+      .pctl .modes {
+        display: flex;
+        gap: 28px;
+      }
+      .pctl .modes .on {
+        color: var(--mint);
+      }
+      .prog {
+        display: flex;
+        align-items: center;
+        gap: 18px;
+        font-size: 22px;
+        color: var(--mid);
+      }
+      .track {
+        position: relative;
+        flex: 1;
+        height: 6px;
+        border-radius: 3px;
+        background: var(--border);
+      }
+      #fill {
+        display: block;
+        position: absolute;
+        left: 0;
+        top: 0;
+        bottom: 0;
+        width: 100%;
+        transform-origin: left center;
+        border-radius: 3px;
+        background: var(--accent-text);
+      }
+      #knob {
+        position: absolute;
+        top: -7px;
+        margin-left: -10px;
+        width: 20px;
+        height: 20px;
+        border-radius: 50%;
+        background: var(--accent-text);
+        left: 0;
+      }
+
+      .footer {
+        margin-top: 8px;
+        height: 34px;
+        flex: none;
+        display: flex;
+        gap: 18px;
+        font-size: 22px;
+        color: var(--dim);
+        white-space: pre;
+      }
+      .footer b {
+        color: var(--accent-text);
+      }
+      .footer .k {
+        color: var(--mint);
+        font-weight: 700;
+      }
+    </style>
+  </head>
+  <body>
+    <div
+      id="root"
+      data-composition-id="main"
+      data-start="0"
+      data-duration="12"
+      data-width="1920"
+      data-height="1080"
+    >
+      <div id="stage" class="clip" data-start="0" data-duration="12" data-track-index="0">
+        <div id="win">
+          <div class="titlebar">
+            <svg class="mini" viewBox="0 0 512 512">
+              <polyline points="45,300 135,357 45,414" fill="none" stroke="#06d6a0" stroke-width="44" />
+              <rect x="172" y="392" width="148" height="34" fill="#06d6a0" />
+              <path d="M245 62 V230 Q245 308 325 308 H400 M432 62 V340 Q432 430 345 432" fill="none" stroke="#7c3aed" stroke-width="78" />
+            </svg>
+            ytmgo
+            <div class="btns"><span>–</span><span>□</span><span>×</span></div>
+          </div>
+          <div class="content">
+            <div class="searchrow" id="p-search">
+              <div class="search">
+                <span class="prompt">&gt;</span>
+                <div class="field">
+                  <span class="placeholder" id="ph">Search</span>
+                  <span id="query"></span><span id="caret"></span>
+                </div>
+              </div>
+              <div class="tabs">
+                <span class="on">Stream</span><span>Favs</span><span>Library</span><span>History</span><span>Downloads</span><span>Settings</span>
+              </div>
+            </div>
+
+            <div class="grid">
+              <div class="panel focus" id="p-results">
+                <div class="ptitle">SEARCH RESULTS</div>
+                <div class="rows" id="results">
+                  <div id="hl"></div>
+                  <div class="row"><div class="l1"><span class="n">1. </span>Night Drive</div><div class="l2"><span>Neon Harbor</span><span>3:12</span></div></div>
+                  <div class="row"><div class="l1"><span class="n">2. </span>Night Drive (Slowed)</div><div class="l2"><span>Velvet Static</span><span>4:05</span></div></div>
+                  <div class="row"><div class="l1"><span class="n">3. </span>Nightdrive FM</div><div class="l2"><span>Kōsen</span><span>2:58</span></div></div>
+                  <div class="row"><div class="l1"><span class="n">4. </span>Night Drive Home</div><div class="l2"><span>Lumen Park</span><span>3:41</span></div></div>
+                  <div class="row"><div class="l1"><span class="n">5. </span>Drive All Night</div><div class="l2"><span>The Paper Moons</span><span>3:27</span></div></div>
+                  <div id="enter"><span>⏎</span><span>Enter</span></div>
+                </div>
+              </div>
+
+              <div class="panel queue" id="p-queue">
+                <div class="ptitle">QUEUE <span class="sub" id="qcount">4 · 12:22</span></div>
+                <div class="rows">
+                  <div class="row"><div class="l1"><span class="n">1. </span>Glass Harbour</div><div class="l2"><span>Mira Vale</span><span>3:08</span></div></div>
+                  <div class="row"><div class="l1"><span class="n">2. </span>Paper Planes at Dusk</div><div class="l2"><span>Soft Relay</span><span>2:44</span></div></div>
+                  <div class="row"><div class="l1"><span class="n">3. </span>Low Tide Signals</div><div class="l2"><span>Orbit Kid</span><span>3:31</span></div></div>
+                  <div class="row"><div class="l1"><span class="n">4. </span>Satellite Heart</div><div class="l2"><span>June Arcade</span><span>2:59</span></div></div>
+                  <div class="row" id="nowq"><div class="l1">▶ 5. Nightdrive FM</div><div class="l2"><span>Kōsen</span><span>2:58</span></div></div>
+                </div>
+              </div>
+
+              <div class="panel" id="p-viz">
+                <div class="ptitle">VISUALIZER</div>
+                <div class="viz" id="viz"></div>
+              </div>
+
+              <div class="panel" id="p-lyrics">
+                <div class="ptitle">LYRICS <span class="sub" id="lsub">Nightdrive FM</span></div>
+                <div class="lyricwin">
+                  <div id="lyrics">
+                    <div class="ln"></div>
+                    <div class="ln">city lights in the rear view</div>
+                    <div class="ln">radio hums a song we knew</div>
+                    <div class="ln">windows down and the air is new</div>
+                    <div class="ln">every mile a little closer to you</div>
+                    <div class="ln">static fading into blue</div>
+                    <div class="ln">keep on driving, we'll make it through</div>
+                    <div class="ln">just the hum and the long way home</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="player" id="p-player">
+              <div id="art"><div class="sun"></div><div class="road"></div><div class="grey"></div></div>
+              <div class="pinfo">
+                <div class="ptrackwrap">
+                  <span id="pempty">Nothing playing — search for something</span>
+                  <div class="ptrack" id="ptrack"><span id="playicon">▶</span><span id="ptitle"></span></div>
+                </div>
+                <div class="pctl">
+                  <span>◂◂ Prev   <span id="pp">▶ Play</span>   Next ▸▸</span>
+                  <span class="modes"><span class="on">∞ AUTO</span><span>⇄ SHFL</span><span>↻ OFF</span></span>
+                </div>
+                <div class="prog">
+                  <span id="tnow">0:00</span>
+                  <div class="track"><div id="fill"></div><div id="knob"></div></div>
+                  <span id="tend">2:58</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="footer" id="p-footer"><b>ytmgo</b><span>v1.4.0</span><span><span class="k">a</span> album</span><span>•</span><span><span class="k">A</span> artist</span><span>•</span><span><span class="k">v</span> visualizer</span><span>•</span><span><span class="k">y</span> lyrics</span><span>•</span><span><span class="k">?</span> help</span><span>•</span><span><span class="k">q</span> quit</span></div>
+          </div>
+        </div>
+
+        <div id="logo">
+          <svg viewBox="0 0 512 512">
+            <polyline points="45,300 135,357 45,414" fill="none" stroke="#06d6a0" stroke-width="44" />
+            <rect id="under" x="172" y="392" width="148" height="34" fill="#06d6a0" />
+            <path d="M245 62 V230 Q245 308 325 308 H400 M432 62 V340 Q432 430 345 432" fill="none" stroke="#7c3aed" stroke-width="78" />
+          </svg>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      const D = 12;
+      const tl = gsap.timeline({ paused: true });
+
+      // Seek-safe typing: text is a pure function of tween progress.
+      function type(el, str, at, dur) {
+        const p = { n: 0 };
+        tl.to(p, {
+          n: str.length,
+          duration: dur,
+          ease: "none",
+          onUpdate: () => (el.textContent = str.slice(0, Math.round(p.n))),
+        }, at);
+      }
+      function count(el, from, to, at, dur) {
+        const p = { s: from };
+        const fmt = (s) => Math.floor(s / 60) + ":" + String(Math.floor(s % 60)).padStart(2, "0");
+        tl.to(p, { s: to, duration: dur, ease: "none", onUpdate: () => (el.textContent = fmt(p.s)) }, at);
+      }
+
+      // ---------- blinking cursors (1s period, phase locked to absolute time) ----------
+      for (let t = 0; t < D; t += 1) {
+        tl.set("#under", { opacity: 1 }, t).set("#under", { opacity: 0 }, t + 0.5);
+      }
+      for (let t = 0; t < D; t += 1) {
+        tl.set("#caret", { opacity: 1 }, t).set("#caret", { opacity: 0 }, t + 0.5);
+      }
+
+      // ---------- open: mark gives way to the window (0.7 → 1.6) ----------
+      tl.fromTo("#logo svg", { scale: 1, opacity: 1 }, { scale: 0.55, opacity: 0, duration: 0.5, ease: "power2.in" }, 0.7);
+      tl.fromTo(
+        "#win",
+        { opacity: 0, scale: 0.9, clipPath: "inset(42% 44% 42% 44% round 16px)" },
+        { opacity: 1, scale: 1, clipPath: "inset(0% 0% 0% 0% round 16px)", duration: 0.75, ease: "expo.out" },
+        0.95
+      );
+      tl.fromTo(
+        ["#p-search", "#p-results", "#p-queue", "#p-viz", "#p-lyrics", "#p-player", "#p-footer"],
+        { opacity: 0, y: 18 },
+        { opacity: 1, y: 0, duration: 0.45, ease: "power3.out", stagger: 0.05 },
+        1.1
+      );
+      // results rows start hidden, cascade in once the query lands
+      tl.set(["#results .row", "#nowq"], { opacity: 0, x: -24 }, 0);
+      tl.set(["#hl", "#ptrack"], { opacity: 0 }, 0);
+      tl.set("#enter", { opacity: 0, scale: 0.6 }, 0);
+
+      // ---------- search (1.8 → 3.3) ----------
+      tl.set("#ph", { opacity: 1 }, 0).set("#ph", { opacity: 0 }, 1.8);
+      type(document.getElementById("query"), "night drive", 1.8, 0.95);
+      tl.to("#results .row", { opacity: 1, x: 0, duration: 0.4, ease: "power3.out", stagger: 0.07 }, 2.8);
+
+      // ---------- pick a track (3.5 → 4.4) ----------
+      const rows = document.querySelectorAll("#results .row");
+      const hlOn = (i, at) => {
+        tl.to("#hl", { y: i * 68, duration: 0.18, ease: "power2.out" }, at);
+        rows.forEach((r, j) => {
+          tl.to(r.querySelector(".l1"), { color: j === i ? "#ffffff" : "#e0e0e0", duration: 0.12 }, at);
+          tl.to(r.querySelector(".l2"), { color: j === i ? "#ddd6fe" : "#6e6e82", duration: 0.12 }, at);
+        });
+      };
+      tl.to("#hl", { opacity: 1, duration: 0.15 }, 3.5);
+      hlOn(0, 3.5);
+      hlOn(1, 3.8);
+      hlOn(2, 4.1);
+      tl.to("#enter", { opacity: 1, scale: 1, duration: 0.3, ease: "back.out(2.5)" }, 4.3);
+      tl.to("#enter", { y: 4, boxShadow: "0 0px 0 #b9b9c8", duration: 0.08, yoyo: true, repeat: 1 }, 4.6);
+      tl.to("#enter", { opacity: 0, scale: 0.9, duration: 0.25 }, 5.3);
+
+      // ---------- it plays (4.7 → 10.4) ----------
+      const PLAY = 4.7;
+      tl.to("#pempty", { opacity: 0, duration: 0.15 }, PLAY);
+      tl.to("#ptrack", { opacity: 1, duration: 0.15 }, PLAY);
+      type(document.getElementById("ptitle"), "Nightdrive FM — Kōsen", PLAY, 0.45);
+      tl.set(["#lyrics", "#lsub"], { opacity: 0 }, 0);
+      tl.to(["#lyrics", "#lsub"], { opacity: 1, duration: 0.3 }, PLAY);
+      tl.fromTo("#art .grey", { opacity: 1 }, { opacity: 0, duration: 0.4 }, PLAY);
+      tl.fromTo("#art .sun", { y: 30 }, { y: 0, duration: 0.9, ease: "power3.out" }, PLAY);
+      tl.set("#pp", { textContent: "▮▮ Pause", color: "#06d6a0" }, PLAY);
+      tl.set("#pp", { textContent: "▶ Play", color: "#9999aa" }, 0);
+      tl.to("#nowq", { opacity: 1, x: 0, duration: 0.4, ease: "power3.out" }, PLAY + 0.1);
+      tl.set("#qcount", { textContent: "5 · 15:20" }, PLAY + 0.1);
+      tl.set("#qcount", { textContent: "4 · 12:22" }, 0);
+      tl.fromTo("#p-results", { borderColor: "#7c3aed" }, { borderColor: "#2a2a3e", duration: 0.3 }, PLAY);
+      tl.fromTo("#p-player", { borderColor: "#2a2a3e" }, { borderColor: "#7c3aed", duration: 0.3 }, PLAY);
+
+      const trackW = document.querySelector(".track").offsetWidth;
+      tl.fromTo("#fill", { scaleX: 0 }, { scaleX: 0.22, duration: 5.7, ease: "none" }, PLAY);
+      tl.fromTo("#knob", { x: 0 }, { x: trackW * 0.22, duration: 5.7, ease: "none" }, PLAY);
+      count(document.getElementById("tnow"), 0, 38, PLAY, 5.7);
+
+      // lyrics: current line lights up and the column scrolls under it
+      const lns = document.querySelectorAll("#lyrics .ln");
+      const LYR = [PLAY + 0.2, 6.1, 7.3, 8.5, 9.7];
+      LYR.forEach((at, k) => {
+        const cur = k + 1;
+        tl.to("#lyrics", { y: -34 * Math.max(0, cur - 2), duration: 0.35, ease: "power2.out" }, at);
+        tl.to(lns[cur], { color: "#ffffff", fontWeight: 700, duration: 0.2 }, at);
+        if (cur > 1) tl.to(lns[cur - 1], { color: "#6e6e82", fontWeight: 400, duration: 0.2 }, at);
+      });
+
+      // visualizer: seeded, bass-weighted bars
+      let seed = 1337;
+      const rnd = () => {
+        seed |= 0; seed = (seed + 0x6d2b79f5) | 0;
+        let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+        t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+      };
+      const viz = document.getElementById("viz");
+      const N = 30, STEP = 0.125, END = 10.35;
+      for (let i = 0; i < N; i++) {
+        const b = document.createElement("div");
+        b.className = "bar";
+        viz.appendChild(b);
+        const weight = 1 - (i / N) * 0.55;
+        for (let t = PLAY + 0.15; t < END; t += STEP) {
+          const beat = Math.floor((t - PLAY) / 0.5) % 2 === 0 ? 1 : 0.72;
+          const h = Math.min(96, 8 + Math.pow(rnd(), 0.7) * 96 * weight * beat);
+          tl.to(b, { height: h + "%", duration: STEP, ease: "sine.inOut" }, t);
+        }
+        tl.to(b, { height: "6%", duration: 0.3, ease: "power2.in" }, END);
+      }
+
+      // ---------- close: window folds back into the mark (10.4 → 11.3) ----------
+      tl.to(
+        ["#p-footer", "#p-player", "#p-lyrics", "#p-viz", "#p-queue", "#p-results", "#p-search"],
+        { opacity: 0, y: -12, duration: 0.3, ease: "power2.in", stagger: 0.03 },
+        10.4
+      );
+      tl.to(
+        "#win",
+        { opacity: 0, scale: 0.9, clipPath: "inset(42% 44% 42% 44% round 16px)", duration: 0.5, ease: "expo.in" },
+        10.6
+      );
+      tl.to("#logo svg", { scale: 1, opacity: 1, duration: 0.5, ease: "power3.out" }, 10.95);
+
+      window.__timelines["main"] = tl;
+      tl.seek(0);
+    </script>
+  </body>
+</html>

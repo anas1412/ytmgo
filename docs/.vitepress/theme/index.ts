@@ -1,55 +1,7 @@
+import { h } from 'vue'
 import DefaultTheme from 'vitepress/theme'
-import type { Theme } from 'vitepress'
+import { withBase, type Theme } from 'vitepress'
 import './custom.css'
-
-// Clicking the terminal capture opens it full size. Written against the
-// DOM rather than pulled from a package: it is one overlay and two ways
-// to dismiss it, and a dependency for that would be a poor trade.
-//
-// Guarded on `document` because enhanceApp also runs during the static
-// build, where there is no DOM to attach anything to.
-function mountLightbox() {
-  if (typeof document === 'undefined') return
-
-  const open = (src: string, alt: string) => {
-    const box = document.createElement('div')
-    box.className = 'ytmgo-lightbox'
-    // Announced to assistive tech, and focusable so Escape reaches it
-    // even when the click came from a mouse.
-    box.setAttribute('role', 'dialog')
-    box.setAttribute('aria-modal', 'true')
-    box.setAttribute('aria-label', alt || 'Screenshot')
-    box.tabIndex = -1
-
-    const img = document.createElement('img')
-    img.src = src
-    img.alt = alt
-    box.appendChild(img)
-
-    const close = () => {
-      box.remove()
-      document.removeEventListener('keydown', onKey)
-    }
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') close()
-    }
-
-    box.addEventListener('click', close)
-    document.addEventListener('keydown', onKey)
-    document.body.appendChild(box)
-    box.focus()
-  }
-
-  // One delegated listener, so it keeps working across client-side
-  // navigation without re-binding on every route change.
-  document.addEventListener('click', (e) => {
-    const el = e.target as HTMLElement | null
-    if (!el || el.tagName !== 'IMG') return
-    if (!el.closest('.VPHero .image')) return
-    e.preventDefault()
-    open((el as HTMLImageElement).src, (el as HTMLImageElement).alt)
-  })
-}
 
 // The nav's "Releases" entry shows the current version instead of the
 // word. Read in the browser rather than baked in at build time, because
@@ -152,10 +104,33 @@ function mountReleaseVersion() {
   watch()
 }
 
+// The hero shows a silent motion loop of the app in place of the
+// screenshot (source: videos/hero-loop). Clicking pauses it, and it
+// stays paused for readers who ask for reduced motion.
+function heroVideo() {
+  return h('video', {
+    class: 'image-src',
+    src: withBase('/hero-loop.mp4'),
+    poster: withBase('/hero-loop-poster.jpg'),
+    autoplay: true,
+    muted: true,
+    loop: true,
+    playsinline: true,
+    'aria-label': 'ytmgo searching, queueing and playing a track in the terminal',
+    onPlayOnce: (e: Event) => {
+      if (matchMedia('(prefers-reduced-motion: reduce)').matches) (e.target as HTMLVideoElement).pause()
+    },
+    onClick: (e: Event) => {
+      const v = e.target as HTMLVideoElement
+      v.paused ? v.play() : v.pause()
+    },
+  })
+}
+
 export default {
   extends: DefaultTheme,
+  Layout: () => h(DefaultTheme.Layout, null, { 'home-hero-image': heroVideo }),
   enhanceApp() {
-    mountLightbox()
     mountReleaseVersion()
   },
 } satisfies Theme
