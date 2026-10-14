@@ -9,6 +9,9 @@ A terminal-based YouTube Music client written in Go. Search music, download audi
 ![Go Version](https://img.shields.io/badge/go-1.22+-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Version](https://img.shields.io/github/v/tag/anas1412/ytmgo?label=version&color=purple)
+![Downloads](https://img.shields.io/github/downloads/anas1412/ytmgo/total?label=downloads&color=orange)
+![Stars](https://img.shields.io/github/stars/anas1412/ytmgo?style=flat&color=yellow)
+[![AUR](https://img.shields.io/aur/version/ytmgo-bin?label=AUR&color=1793d1)](https://aur.archlinux.org/packages/ytmgo-bin)
 
 ---
 
