@@ -356,8 +356,11 @@ func (m *Model) playSelectedQueueItem() tea.Cmd {
 		m.queueCursor = m.queue.Len() - 1
 	}
 
-	t := m.queue.Tracks()[m.queueCursor]
-	m.queue.SetCurrentIndex(m.queueCursor)
+	idx := m.selectedQueueIndex()
+	t := m.queue.Tracks()[idx]
+	m.queue.SetCurrentIndex(idx)
+	// The track playing heads the list: the cursor goes with it.
+	m.queueCursor = m.queuePlaceOf(idx)
 
 	return m.resolveAndPlayCmd(t)
 }

@@ -18,6 +18,15 @@ type QueueState struct {
 	// Next is what plays after the current track, as the TUI's ⏭ shows
 	// it: none under repeat-one, at the end, or with nothing playing.
 	Next *queue.Track `json:"next"`
+	// Upcoming and Played are the queue as it plays (queue.Order):
+	// indices into Tracks of what is to come, in play order, shuffle
+	// included, and of what has played. The panel draws Current first,
+	// then Upcoming, then Played, as Spotify's queue does.
+	Upcoming []int `json:"upcoming"`
+	Played   []int `json:"played"`
+	// Landed is where the song just added went, or the first of several;
+	// -1 when nothing was added.
+	Landed int `json:"landed"`
 }
 
 // Step is the queue after moving to another track. Moved is false when
@@ -36,7 +45,8 @@ func (a *App) state() QueueState {
 	case a.q.IsRepeatAll():
 		repeat = "all"
 	}
-	s := QueueState{Tracks: a.q.Tracks(), Current: a.q.CurrentIndex(), Shuffle: a.q.IsShuffle(), Repeat: repeat}
+	s := QueueState{Tracks: a.q.Tracks(), Current: a.q.CurrentIndex(), Shuffle: a.q.IsShuffle(), Repeat: repeat, Landed: -1}
+	_, s.Upcoming, s.Played = a.q.Order()
 	if next, ok := a.q.PeekNext(); ok {
 		s.Next = &next
 	}
@@ -79,23 +89,46 @@ func (a *App) PlayNow(t queue.Track) QueueState {
 	return a.changed()
 }
 
-// Add puts t at the end of the queue.
+// Add puts t next, after the songs added before it (queue.AddNext), as
+// Spotify's "Add to queue"; Landed says where it went.
 func (a *App) Add(t queue.Track) QueueState {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	a.q.Add(t)
-	return a.changed()
+	return a.AddAll([]queue.Track{t})
 }
 
-// AddAll puts every track at the end of the queue, in order, saving
-// once: the TUI's e, which queues the whole list on screen.
+// AddAll puts every track next, in order, saving once: the TUI's e,
+// which queues the whole list on screen. Landed is the first of them.
 func (a *App) AddAll(ts []queue.Track) QueueState {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	for _, t := range ts {
-		a.q.Add(t)
+	return a.addAllLocked(ts)
+}
+
+func (a *App) addAllLocked(ts []queue.Track) QueueState {
+	landed := -1
+	for i, t := range ts {
+		if at := a.q.AddNext(t); i == 0 {
+			landed = at
+		}
 	}
-	return a.changed()
+	s := a.changed()
+	s.Landed = landed
+	return s
+}
+
+// PlayAll puts the tracks next and plays the first of them: an album's
+// or a playlist's Play.
+func (a *App) PlayAll(ts []queue.Track) QueueState {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	s := a.addAllLocked(ts)
+	if len(ts) == 0 {
+		return s
+	}
+	a.q.SetCurrentIndex(s.Landed)
+	landed := s.Landed
+	s = a.changed()
+	s.Landed = landed
+	return s
 }
 
 // Jump makes the track at i the playing one.

@@ -319,7 +319,7 @@ func (m Model) handleDownloadProgress(msg DownloadProgressMsg) (tea.Model, tea.C
 			for i, t := range tracks {
 				if t.ID == msg.TrackID && t.Downloaded && t.FilePath != "" {
 					m.queue.SetCurrentIndex(i)
-					m.queueCursor = i
+					m.queueCursor = m.queuePlaceOf(i)
 					playCmd := m.resolveAndPlayCmd(t)
 					if playCmd == nil {
 						// resolveAndPlayCmd already set m.err / m.playerState.
@@ -618,7 +618,7 @@ func (m Model) handleSongEnded(msg SongEndedMsg) (tea.Model, tea.Cmd) {
 		}
 
 		// Single source of truth: cursor follows the playing track.
-		m.queueCursor = m.queue.CurrentIndex()
+		m.queueCursor = m.queuePlaceOf(m.queue.CurrentIndex())
 		m.clampQueueOffset()
 
 		playCmd := m.resolveAndPlayCmd(t)
@@ -667,7 +667,7 @@ func (m Model) handleAutoplayResults(msg AutoplayResultsMsg) (tea.Model, tea.Cmd
 	firstIdx := m.queue.Len() - len(msg.Tracks)
 	if firstIdx >= 0 {
 		m.queue.SetCurrentIndex(firstIdx)
-		m.queueCursor = firstIdx
+		m.queueCursor = m.queuePlaceOf(firstIdx)
 	}
 	cmds := []tea.Cmd{saveQueueCmd(m.db, m.queue)}
 	playCmd := m.resolveAndPlayCmd(msg.Tracks[0])

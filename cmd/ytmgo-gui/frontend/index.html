@@ -1965,6 +1965,23 @@
         position: relative;
         padding: 0 8px 12px;
       }
+      .q-section {
+        margin: 14px 6px 6px;
+        color: var(--mid);
+        font-size: 12px;
+        font-weight: 600;
+      }
+      .q-section:first-child {
+        margin-top: 4px;
+      }
+      /* What has played steps back, as on Spotify. */
+      .q-row.played {
+        opacity: 0.55;
+      }
+      .q-row.played:hover,
+      .q-row.played:focus-visible {
+        opacity: 1;
+      }
       .q-row {
         display: grid;
         grid-template-columns: 22px 40px minmax(0, 1fr) auto 26px;
@@ -2427,6 +2444,7 @@
         PlayNow,
         Add,
         AddAll,
+        PlayAll,
         Jump,
         Remove,
         Clear,
@@ -3022,6 +3040,10 @@
         $("next").title = qs.next ? `Next: ${qs.next.title} (n)` : "Next (n)";
       }
 
+      // The queue as Spotify shows it: the song playing first, then what
+      // comes next in the order it will play (shuffle included), then what
+      // has played. Go works out the order (queue.Order); rows keep the
+      // song's place in the queue as data-index.
       function renderQueue(follow = false) {
         const body = $("panel-body");
         if (layout.tab !== "queue") return;
@@ -3029,26 +3051,13 @@
           body.dataset.shows = "queue";
           $("follow")?.remove();
         }
-        // The same songs in the same order, only another one playing (a
-        // song starting, next, previous): swap the two rows that changed
-        // rather than rebuild the list and every cover in it, which is
-        // work the page would be doing just as a song starts.
-        const sig = qs.tracks.map((t) => t.id).join("\n") + "|" + clearArmed;
-        const list0 = body.querySelector(".q-list");
-        if (list0 && list0.dataset.sig === sig && landed < 0) {
-          for (const row of list0.querySelectorAll(".q-row")) {
-            const i = +row.dataset.index;
-            if (row.classList.contains("current") !== (i === qs.current)) row.replaceWith(queueRow(qs.tracks[i], i));
-          }
-          const cur = list0.children[qs.current];
-          if (follow && cur) cur.scrollIntoView({ block: "nearest" });
-          return;
-        }
         if (!qs.tracks.length) {
           notice(body, "Your queue is empty", "Songs you play or add show up here, with what comes next. Drag a song here to queue it.");
           return;
         }
         const keep = body.scrollTop;
+        const upcoming = qs.upcoming || [];
+        const played = qs.played || [];
         const secs = qs.tracks.reduce((n, t) => n + (t.duration_sec || 0), 0);
         const head = el("div", "q-summary");
         const count = `${qs.tracks.length} ${qs.tracks.length === 1 ? "song" : "songs"}`;
@@ -3059,28 +3068,40 @@
         clear.addEventListener("click", clearQueue);
         head.append(clear);
 
-        const list = el("ol", "q-list");
-        list.dataset.sig = sig;
+        const list = el("div", "q-list");
         list.setAttribute("aria-label", "Queue");
-        qs.tracks.forEach((t, i) => list.append(queueRow(t, i)));
+        const section = (title, n) => list.append(el("div", "q-section", n == null ? title : `${title} · ${n}`));
+        if (qs.current >= 0) {
+          section("Now playing");
+          list.append(queueRow(qs.tracks[qs.current], qs.current, "now"));
+        }
+        if (upcoming.length) {
+          section(qs.current >= 0 ? "Next up" : "Up next", upcoming.length);
+          upcoming.forEach((i, k) => list.append(queueRow(qs.tracks[i], i, "up", k + 1)));
+        }
+        if (played.length) {
+          section("Played", played.length);
+          // Newest first: what just played sits nearest the top.
+          [...played].reverse().forEach((i) => list.append(queueRow(qs.tracks[i], i, "played")));
+        }
         body.replaceChildren(head, list);
-        body.scrollTop = keep;
-        const cur = list.children[qs.current];
-        if (follow && cur) cur.scrollIntoView({ block: "nearest" });
+        body.scrollTop = follow ? 0 : keep;
         if (landed >= 0) {
-          list.children[landed]?.classList.add("landed");
-          list.children[landed]?.scrollIntoView({ block: "nearest" });
+          const row = list.querySelector(`.q-row[data-index="${landed}"]`);
+          row?.classList.add("landed");
+          row?.scrollIntoView({ block: "nearest" });
           landed = -1;
         }
       }
 
-      function queueRow(t, i) {
-        const row = el("li", "q-row" + (i === qs.current ? " current" : ""));
+      // part is "now", "up" (with its place, n) or "played".
+      function queueRow(t, i, part = "up", n = 0) {
+        const row = el("div", `q-row ${part}` + (i === qs.current ? " current" : ""));
         row.tabIndex = 0;
         row.dataset.index = i;
         row.dataset.id = t.id;
         row.title = albumOf(t) ? `${t.title}, ${t.artist}, from ${albumOf(t)}` : `${t.title}, ${t.artist}`;
-        const num = el("span", "q-num", i === qs.current ? "▶" : String(i + 1));
+        const num = el("span", "q-num", part === "now" ? "▶" : part === "up" ? String(n) : "");
         const who = el("div", "q-who");
         const artist = el("div", "q-artist");
         if (t.downloaded) {
@@ -3133,7 +3154,9 @@
           } else if (e.key === "ArrowUp" || e.key === "ArrowDown" || e.key === "j" || e.key === "k") {
             e.preventDefault();
             e.stopPropagation();
-            focusRow(i + (e.key === "ArrowUp" || e.key === "k" ? -1 : 1));
+            // As drawn: the row above or below, whatever its place.
+            const rows = [...$("panel-body").querySelectorAll(".q-row")];
+            rows[rows.indexOf(row) + (e.key === "ArrowUp" || e.key === "k" ? -1 : 1)]?.focus();
           }
         });
         draggable(row, () => ({ kind: "queue", index: i, track: t }));
@@ -3175,13 +3198,14 @@
       async function enqueue(t, button) {
         if (!t) return;
         if (playState === "stopped") begin(t);
+        // Added songs come next (Go's Add); landed says where it went.
         let s = await Add(t);
         if (playState === "stopped") {
-          s = await Jump(s.tracks.length - 1);
+          s = await Jump(s.landed);
           setQueue(s);
           start();
         } else {
-          landed = s.tracks.length - 1;
+          landed = s.landed;
           setQueue(s);
         }
         tick(button || pane.querySelectorAll(".list .track")[results.indexOf(t)]?.querySelector(".add"));
@@ -3211,16 +3235,14 @@
       async function queueAll() {
         if (!results.length) return;
         if (playState === "stopped") begin(results[0]);
-        let s = await AddAll(results);
-        const first = s.tracks.length - results.length;
         if (playState === "stopped") {
-          s = await Jump(first);
-          setQueue(s);
+          setQueue(await PlayAll(results));
           start();
-        } else {
-          landed = first;
-          setQueue(s);
+          return;
         }
+        const s = await AddAll(results);
+        landed = s.landed;
+        setQueue(s);
       }
 
       // ── Drag and drop ────────────────────────────────────────────────
@@ -3283,12 +3305,16 @@
           line?.remove();
           return;
         }
-        const rows = [...body.querySelectorAll(".q-row")];
-        let at = rows.findIndex((r) => {
+        // A song lands among Next up: before the first of its rows whose
+        // middle is below the pointer, or after the last, which is the end
+        // of the queue. drag.at is that place in the queue.
+        const rows = [...body.querySelectorAll(".q-row.up")];
+        let k = rows.findIndex((r) => {
           const b = r.getBoundingClientRect();
           return drag.py < b.top + b.height / 2;
         });
-        if (at < 0) at = rows.length;
+        if (k < 0) k = rows.length;
+        const at = k < rows.length ? +rows[k].dataset.index : rows.length ? +rows[rows.length - 1].dataset.index + 1 : qs.tracks.length;
         drag.at = at;
         const list = body.querySelector(".q-list");
         const noop = drag.kind === "queue" && (at === drag.index || at === drag.index + 1);
@@ -3300,7 +3326,9 @@
           line = el("div", "drop-line");
           list.append(line);
         }
-        line.style.top = `${at < rows.length ? rows[at].offsetTop : rows[rows.length - 1].offsetTop + rows[rows.length - 1].offsetHeight}px`;
+        // Under the row playing when nothing is to come yet.
+        const after = rows[rows.length - 1] || list.querySelector(".q-row.now");
+        line.style.top = `${k < rows.length ? rows[k].offsetTop : after ? after.offsetTop + after.offsetHeight : 0}px`;
       }
 
       // Near the top or bottom edge of the queue, it scrolls, faster the
@@ -4180,9 +4208,7 @@
         if (!tracks.length) return;
         if (from) PlayedFrom(from);
         begin(tracks[0]);
-        let s = await AddAll(tracks);
-        s = await Jump(s.tracks.length - tracks.length);
-        setQueue(s);
+        setQueue(await PlayAll(tracks));
         start();
       }
 

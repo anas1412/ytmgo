@@ -1,6 +1,9 @@
 package queue
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func mkQueue(n int) *Queue {
 	q := New()
@@ -244,5 +247,74 @@ func TestPrevWrapsWithRepeatAll(t *testing.T) {
 	q.ToggleRepeatAll()
 	if got, ok := q.Prev(); !ok || got.ID != "c" {
 		t.Errorf("Prev at top with repeat-all = %q/%v, want c/true", got.ID, ok)
+	}
+}
+
+func titles(q *Queue, idx []int) string {
+	ts := q.Tracks()
+	var out []string
+	for _, i := range idx {
+		out = append(out, ts[i].Title)
+	}
+	return strings.Join(out, " ")
+}
+
+// Songs added come right after the one playing, in the order added;
+// with nothing playing they go at the end.
+func TestAddNext(t *testing.T) {
+	q := New()
+	for _, s := range []string{"a", "b", "c"} {
+		q.AddNext(Track{ID: s, Title: s})
+	}
+	q.SetCurrentIndex(0)
+	q.AddNext(Track{ID: "x", Title: "x"})
+	q.AddNext(Track{ID: "y", Title: "y"})
+	cur, next, played := q.Order()
+	if cur != 0 || titles(q, next) != "x y b c" || len(played) != 0 {
+		t.Fatalf("cur %d, next %q, played %v", cur, titles(q, next), played)
+	}
+	// Once the song changes, the next add goes right after the new one.
+	q.Next()
+	q.AddNext(Track{ID: "z", Title: "z"})
+	cur, next, played = q.Order()
+	if q.Tracks()[cur].Title != "x" || titles(q, next) != "z y b c" || titles(q, played) != "a" {
+		t.Fatalf("after next: %q now, next %q, played %q", q.Tracks()[cur].Title, titles(q, next), titles(q, played))
+	}
+}
+
+// Under shuffle, an added song is next in the shuffled order, not
+// dropped somewhere random.
+func TestAddNextUnderShuffle(t *testing.T) {
+	q := New()
+	for _, s := range []string{"a", "b", "c", "d", "e"} {
+		q.Add(Track{ID: s, Title: s})
+	}
+	q.ToggleShuffle()
+	q.Next() // starts somewhere in the shuffle
+	q.AddNext(Track{ID: "x", Title: "x"})
+	q.AddNext(Track{ID: "y", Title: "y"})
+	_, next, played := q.Order()
+	if len(next) < 2 || titles(q, next[:2]) != "x y" {
+		t.Fatalf("next %q", titles(q, next))
+	}
+	if len(next)+len(played)+1 != q.Len() {
+		t.Fatalf("order lost tracks: %d next, %d played, %d tracks", len(next), len(played), q.Len())
+	}
+	if tr, _ := q.Skip(); tr.Title != "x" {
+		t.Errorf("played %q next, want x", tr.Title)
+	}
+	if tr, _ := q.Skip(); tr.Title != "y" {
+		t.Errorf("then %q, want y", tr.Title)
+	}
+}
+
+// With nothing playing, the whole queue is to come.
+func TestOrderNothingPlaying(t *testing.T) {
+	q := New()
+	q.Add(Track{Title: "a"})
+	q.Add(Track{Title: "b"})
+	cur, next, played := q.Order()
+	if cur != -1 || titles(q, next) != "a b" || len(played) != 0 {
+		t.Errorf("%d %q %v", cur, titles(q, next), played)
 	}
 }

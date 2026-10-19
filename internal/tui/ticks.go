@@ -21,7 +21,7 @@ func (m Model) handleTick(msg tickMsg) (tea.Model, tea.Cmd) {
 		if m.position >= m.duration {
 			m.position = 0
 			if t, ok := m.queue.Next(); ok {
-				m.queueCursor = m.queue.CurrentIndex()
+				m.queueCursor = m.queuePlaceOf(m.queue.CurrentIndex())
 				m.duration = float64(t.DurationSec)
 				m.setStatus("Now playing: " + t.Title)
 			} else {

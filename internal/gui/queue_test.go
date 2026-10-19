@@ -1,6 +1,7 @@
 package gui
 
 import (
+	"strings"
 	"testing"
 
 	"ytmgo/internal/queue"
@@ -297,5 +298,49 @@ func TestToggleAutoplaySaves(t *testing.T) {
 	on := a.Autoplay()
 	if a.ToggleAutoplay() == on || saved != 1 {
 		t.Errorf("toggle from %v: saved %d", on, saved)
+	}
+}
+
+func idsAt(s QueueState, idx []int) string {
+	var out []string
+	for _, i := range idx {
+		out = append(out, s.Tracks[i].ID)
+	}
+	return strings.Join(out, " ")
+}
+
+// Added songs come next, in the order added, as Spotify's queue; the
+// state says where each landed, and lists the queue as it plays.
+func TestAddGoesNext(t *testing.T) {
+	a, _ := queueApp(t)
+	a.AddAll([]queue.Track{{ID: "a"}, {ID: "b"}, {ID: "c"}})
+	a.Jump(0)
+	if s := a.Add(queue.Track{ID: "x"}); s.Landed != 1 || idsAt(s, s.Upcoming) != "x b c" {
+		t.Fatalf("landed %d, upcoming %q", s.Landed, idsAt(s, s.Upcoming))
+	}
+	s := a.Add(queue.Track{ID: "y"})
+	if s.Landed != 2 || idsAt(s, s.Upcoming) != "x y b c" || len(s.Played) != 0 {
+		t.Fatalf("landed %d, upcoming %q, played %v", s.Landed, idsAt(s, s.Upcoming), s.Played)
+	}
+	s = a.Skip().QueueState
+	if idsAt(s, []int{s.Current}) != "x" || idsAt(s, s.Played) != "a" {
+		t.Errorf("after skip: playing %q, played %q", idsAt(s, []int{s.Current}), idsAt(s, s.Played))
+	}
+}
+
+// Play on an album plays its first song now, the rest next.
+func TestPlayAll(t *testing.T) {
+	a, _ := queueApp(t)
+	a.AddAll([]queue.Track{{ID: "a"}, {ID: "b"}})
+	a.Jump(0)
+	s := a.PlayAll([]queue.Track{{ID: "p1"}, {ID: "p2"}})
+	if idsAt(s, []int{s.Current}) != "p1" || idsAt(s, s.Upcoming) != "p2 b" || idsAt(s, s.Played) != "a" {
+		t.Fatalf("playing %q, upcoming %q, played %q", idsAt(s, []int{s.Current}), idsAt(s, s.Upcoming), idsAt(s, s.Played))
+	}
+	// With nothing playing, the songs go at the end, and the first plays.
+	b, _ := queueApp(t)
+	b.AddAll([]queue.Track{{ID: "a"}})
+	if s := b.PlayAll([]queue.Track{{ID: "p1"}, {ID: "p2"}}); idsAt(s, []int{s.Current}) != "p1" {
+		t.Errorf("nothing playing: playing %q", idsAt(s, []int{s.Current}))
 	}
 }

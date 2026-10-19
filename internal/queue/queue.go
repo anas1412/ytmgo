@@ -43,6 +43,10 @@ type Queue struct {
 	repeat       bool  // repeat current track
 	repeatAll    bool  // repeat queue
 	shuffleOrder []int // shuffled indices when shuffle is on
+	// added is how many songs AddNext put after the track playing since
+	// it began (addedFor), so the next one goes after them.
+	added    int
+	addedFor int
 }
 
 func New() *Queue {
@@ -56,6 +60,68 @@ func (q *Queue) Add(t Track) {
 	if q.shuffle {
 		q.rebuildShuffleOrder()
 	}
+}
+
+// AddNext puts t right after the track playing, after the songs added
+// before it, as Spotify's "Add to queue" does: added songs come next,
+// in the order they were added. With nothing playing it goes at the
+// end. Under shuffle it is next in the shuffled order too. It returns
+// where t went.
+func (q *Queue) AddNext(t Track) int {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	if q.currentIndex < 0 || q.currentIndex >= len(q.tracks) {
+		q.tracks = append(q.tracks, t)
+		if q.shuffle {
+			q.shuffleOrder = append(q.shuffleOrder, len(q.tracks)-1)
+		}
+		return len(q.tracks) - 1
+	}
+	if q.addedFor != q.currentIndex {
+		q.added, q.addedFor = 0, q.currentIndex
+	}
+	at := min(q.currentIndex+1+q.added, len(q.tracks))
+	q.tracks = append(q.tracks[:at], append([]Track{t}, q.tracks[at:]...)...)
+	q.added++
+	if q.shuffle && len(q.shuffleOrder) > 0 {
+		pos := 0
+		for i, ti := range q.shuffleOrder {
+			if ti >= at {
+				q.shuffleOrder[i]++
+			}
+			if ti == q.currentIndex {
+				pos = i
+			}
+		}
+		slot := min(pos+q.added, len(q.shuffleOrder))
+		q.shuffleOrder = append(q.shuffleOrder[:slot], append([]int{at}, q.shuffleOrder[slot:]...)...)
+	}
+	return at
+}
+
+// Order is the queue as it plays: the track playing (-1 for none), the
+// tracks to come in the order they will play, shuffle included, and
+// those already played, oldest first. Each is an index into Tracks.
+func (q *Queue) Order() (current int, next, played []int) {
+	q.mu.RLock()
+	defer q.mu.RUnlock()
+	order := q.shuffleOrder
+	if !q.shuffle || len(order) != len(q.tracks) {
+		order = make([]int, len(q.tracks))
+		for i := range order {
+			order[i] = i
+		}
+	}
+	pos := -1
+	for i, ti := range order {
+		if ti == q.currentIndex {
+			pos = i
+		}
+	}
+	if pos < 0 {
+		return -1, append([]int{}, order...), []int{}
+	}
+	return q.currentIndex, append([]int{}, order[pos+1:]...), append([]int{}, order[:pos]...)
 }
 
 func (q *Queue) AddFront(t Track) {

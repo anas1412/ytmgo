@@ -548,8 +548,8 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			if m.libraryCursor >= 0 && m.libraryCursor < len(tracks) {
 				return m, m.toggleFavorite(tracks[m.libraryCursor])
 			}
-		case m.activePanel == PanelQueue && m.queue.Len() > 0 && m.queueCursor >= 0 && m.queueCursor < m.queue.Len():
-			t := m.queue.Tracks()[m.queueCursor]
+		case m.activePanel == PanelQueue && m.selectedQueueIndex() >= 0:
+			t := m.queue.Tracks()[m.selectedQueueIndex()]
 			return m, m.toggleFavorite(t)
 		default:
 			// Stream page: search results, recommendations, or an open
@@ -655,10 +655,10 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		// made the key silently dead on Favs, Library, History and
 		// Downloads while the row sat there highlighted.
 		case m.activePage != PageSettings && m.activePanel == PanelQueue && m.queue.Len() > 0:
-			if m.queueCursor < 0 || m.queueCursor >= m.queue.Len() {
+			if m.selectedQueueIndex() < 0 {
 				return m, nil
 			}
-			t := m.queue.Tracks()[m.queueCursor]
+			t := m.queue.Tracks()[m.selectedQueueIndex()]
 			m.ensureDownloader()
 			if m.downloader.HasPendingJob(t.ID) {
 				m.setStatus("Already in download queue: " + t.Title)
@@ -752,7 +752,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	case "d", "delete":
 		if m.activePanel == PanelQueue && m.queue.Len() > 0 {
-			idx := m.queueCursor
+			idx := m.selectedQueueIndex()
 			removed := m.queue.Remove(idx)
 			if removed && m.queue.Len() == 0 {
 				m.queueCursor = 0
@@ -860,18 +860,30 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "r":
 		return m, m.cycleRepeatAction()
 
-	case "ctrl+up":
-		if m.activePage == PageStream && m.activePanel == PanelQueue && m.queueCursor > 0 {
-			m.queue.MoveUp(m.queueCursor)
-			m.queueCursor--
+	// ctrl+↑/↓ reorder what comes next, in play order: a song stays
+	// among the songs to come, never moving over the one playing. Under
+	// shuffle the list is the shuffled order, which a move in the queue
+	// would not change, so it does nothing there.
+	case "ctrl+up", "ctrl+down":
+		idx := m.selectedQueueIndex()
+		cur := m.queue.CurrentIndex()
+		if m.activePage != PageStream || m.activePanel != PanelQueue || idx < 0 || m.queue.IsShuffle() || idx <= cur {
+			return m, nil
 		}
-		return m, saveQueueCmd(m.db, m.queue)
-
-	case "ctrl+down":
-		if m.activePage == PageStream && m.activePanel == PanelQueue && m.queueCursor < m.queue.Len()-1 {
-			m.queue.MoveDown(m.queueCursor)
-			m.queueCursor++
+		to := idx + 1
+		if msg.String() == "ctrl+up" {
+			to = idx - 1
 		}
+		if to <= cur || to >= m.queue.Len() {
+			return m, nil
+		}
+		if to < idx {
+			m.queue.MoveUp(idx)
+		} else {
+			m.queue.MoveDown(idx)
+		}
+		m.queueCursor = m.queuePlaceOf(to)
+		m.clampQueueOffset()
 		return m, saveQueueCmd(m.db, m.queue)
 	}
 

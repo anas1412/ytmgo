@@ -25,11 +25,12 @@ import (
 // playing it starts playback of the new track. Always persists the queue.
 func (m *Model) enqueueAndMaybePlay(t queue.Track) tea.Cmd {
 	m.autoplayFired = false
-	m.queue.Add(t)
+	// Next, after the songs added before it, as Spotify's queue.
+	at := m.queue.AddNext(t)
 	cmds := []tea.Cmd{saveQueueCmd(m.db, m.queue)}
 	if m.playerState == player.StateStopped {
-		m.queue.SetCurrentIndex(m.queue.Len() - 1)
-		m.queueCursor = m.queue.CurrentIndex()
+		m.queue.SetCurrentIndex(at)
+		m.queueCursor = m.queuePlaceOf(m.queue.CurrentIndex())
 		m.clampQueueOffset()
 		if playCmd := m.resolveAndPlayCmd(t); playCmd != nil {
 			cmds = append(cmds, playCmd)
@@ -51,7 +52,7 @@ func (m *Model) queueAll(list []search.Result) tea.Cmd {
 			cmd = m.enqueueAndMaybePlay(t)
 			continue
 		}
-		m.queue.Add(t)
+		m.queue.AddNext(t)
 	}
 	return tea.Batch(cmd, saveQueueCmd(m.db, m.queue))
 }
@@ -214,7 +215,7 @@ func (m *Model) nextTrack() tea.Cmd {
 	if _, ok := m.queue.Skip(); !ok {
 		return nil
 	}
-	m.queueCursor = m.queue.CurrentIndex()
+	m.queueCursor = m.queuePlaceOf(m.queue.CurrentIndex())
 	if playCmd := m.playSelectedQueueItem(); playCmd != nil {
 		return tea.Batch(playCmd, saveQueueCmd(m.db, m.queue))
 	}
@@ -239,7 +240,7 @@ func (m *Model) prevTrack() tea.Cmd {
 	if _, ok := m.queue.Prev(); !ok {
 		return nil
 	}
-	m.queueCursor = m.queue.CurrentIndex()
+	m.queueCursor = m.queuePlaceOf(m.queue.CurrentIndex())
 	if playCmd := m.playSelectedQueueItem(); playCmd != nil {
 		return tea.Batch(playCmd, saveQueueCmd(m.db, m.queue))
 	}
@@ -330,8 +331,9 @@ func (m *Model) selectedTrack() (queue.Track, bool) {
 		return queue.Track{}, false
 
 	case m.activePanel == PanelQueue && m.queue.Len() > 0:
-		idx := min(m.queueCursor, m.queue.Len()-1)
-		return m.queue.Tracks()[idx], true
+		if idx := m.selectedQueueIndex(); idx >= 0 {
+			return m.queue.Tracks()[idx], true
+		}
 
 	case m.activePage == PageFavorites:
 		if m.favCursor >= 0 && m.favCursor < len(m.favorites) {

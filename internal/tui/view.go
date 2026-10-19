@@ -1696,14 +1696,16 @@ func (m Model) renderQueue(width, height int) string {
 	if maxItems < 1 {
 		maxItems = 1
 	}
+	// Spotify's order (queueorder.go): playing, next, then played.
+	order, live := m.queueOrder()
 	start := m.queueOffset
 	end := start + maxItems
-	if end > len(tracks) {
-		end = len(tracks)
+	if end > len(order) {
+		end = len(order)
 	}
 
-	for i := start; i < end; i++ {
-		lines = append(lines, m.formatQueueRow(i-start, tracks[i], width-2))
+	for pos := start; pos < end; pos++ {
+		lines = append(lines, m.formatQueueRow(pos, live, tracks[order[pos]], width-2))
 	}
 
 	if ind := scrollIndicator(start, len(tracks)-end, m.queueCursor+1, len(tracks)); ind != "" {
@@ -1724,20 +1726,25 @@ func (m Model) renderQueue(width, height int) string {
 	return result
 }
 
-func (m Model) formatQueueRow(idx int, t queue.Track, width int) string {
-	// idx is the relative position within the visible window (0, 1, 2…).
-	// Convert to absolute for comparisons with model-level indices.
-	absIdx := m.queueOffset + idx
+// formatQueueRow draws the row at place pos in the panel's order; live
+// is how many places are the playing track and what comes next.
+func (m Model) formatQueueRow(pos, live int, t queue.Track, width int) string {
+	isPlaying := pos == 0 && m.queue.CurrentIndex() >= 0
+	played := pos >= live
 
-	indicator := "  "
-	isPlaying := absIdx == m.queue.CurrentIndex()
-	if isPlaying {
-		indicator = "▶ "
+	// ▶ on the track playing; what comes next is numbered from 1, in
+	// the order it will play; what has played is marked, not numbered.
+	var prefix string
+	switch {
+	case isPlaying:
+		prefix = "▶ "
+	case played:
+		prefix = "  · "
+	case m.queue.CurrentIndex() >= 0:
+		prefix = fmt.Sprintf("  %d. ", pos)
+	default:
+		prefix = fmt.Sprintf("  %d. ", pos+1)
 	}
-
-	// Absolute numbering: every track shows its real position (1..N)
-	// so the display number always matches the scrollbar cursor position.
-	prefix := fmt.Sprintf("%s%d. ", indicator, m.queueOffset+idx+1)
 	maxTitle := width - lipgloss.Width(prefix)
 	title := t.Title
 	if maxTitle > 3 {
@@ -1770,8 +1777,13 @@ func (m Model) formatQueueRow(idx int, t queue.Track, width int) string {
 	}
 	info := leftInfo + strings.Repeat(" ", spacing) + rightInfo
 
-	isSelected := m.activePanel == PanelQueue && absIdx == m.queueCursor
-	return renderListItemBlock(line, info, isSelected, isPlaying, width)
+	isSelected := m.activePanel == PanelQueue && pos == m.queueCursor
+	row := renderListItemBlock(line, info, isSelected, isPlaying, width)
+	if played && !isSelected {
+		// What has played steps back, as on Spotify.
+		row = lipgloss.NewStyle().Faint(true).Render(row)
+	}
+	return row
 }
 
 func renderListItemBlock(line, info string, isSelected, isPlaying bool, width int) string {

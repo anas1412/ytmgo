@@ -419,8 +419,10 @@ Not done: updates (3), signing (4), winget and Scoop (6).
   show in Search, gets a **Save as playlist** button that saves them under
   the playlist's own name.
 - **Right panel:** song and artist details after the Lyrics tab. Opened by clicking the cover in the player bar.
-- **Queue order, in both apps:** the queue reads upside down. Fix it in
-  the TUI and the GUI alike, with songs added going to the top.
+- ~~**Queue order, in both apps:**~~ Done, Spotify's way, in both: the
+  track playing first, then what comes next in play order (shuffle
+  included), then what has played. Adding a song puts it next, after
+  songs added before it (`queue.AddNext`, `queue.Order`).
 
 ## Open decisions
 
