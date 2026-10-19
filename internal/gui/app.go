@@ -60,6 +60,8 @@ type App struct {
 	album    func(browseID string) (ytmusic.Album, error)
 	artist   func(browseID string) (ytmusic.ArtistPage, error)
 	playlist func(search.PlaylistRef) (title string, results []search.Result, missed int, err error)
+	// located is the page ids Locate found, by library.MatchKey.
+	located map[string]queue.Track
 	// home is ytmusic.HomeFeed.
 	home func(params string) (ytmusic.Home, error)
 	// recordSource and sources are the database's recent albums and

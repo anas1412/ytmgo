@@ -2483,6 +2483,7 @@
         SetDownloadFormat,
         SetPlaybackMode,
         ShareLink,
+        Locate,
         MediaBase,
         SetCopyMusicLinks,
         Presence,
@@ -2723,11 +2724,8 @@
           dl.title = "Downloaded";
           artist.append(dl);
         }
-        // On an artist's own page their name would lead nowhere new.
-        const toArtist = view !== "artist" && (r.artist_browse_id || r.album_browse_id);
-        const by = r.artist || (view === "library" ? "Unknown artist" : "");
-        artist.append(toArtist ? pageLink(by, () => openArtistOf(r)) : by);
-        who.append(el("div", "title", r.title), artist);
+        artist.append(r.artist ? artistLink(r) : view === "library" ? "Unknown artist" : "");
+        who.append(titleLink(r, "title"), artist);
         who.title = `${r.title}, ${r.artist}`;
         let album;
         if (view === "album") {
@@ -2742,7 +2740,7 @@
           album.title = r.file_path;
         } else {
           album = el("div", "album");
-          album.append(r.album_browse_id && albumOf(r) ? pageLink(albumOf(r), () => openAlbumOf(r)) : albumOf(r));
+          album.append(albumOf(r) ? pageLink(albumOf(r), () => openAlbumOf(r)) : "");
           album.title = albumOf(r);
         }
 
@@ -3109,8 +3107,8 @@
           dl.title = "Downloaded";
           artist.append(dl);
         }
-        artist.append(t.artist || "");
-        who.append(el("div", "q-title", t.title), artist);
+        artist.append(artistLink(t, true));
+        who.append(titleLink(t, "q-title", true), artist);
         const time = el("span", "q-time");
         if (favSet.has(t.id)) time.append(qFav());
         time.append(t.duration || duration(t.duration_sec));
@@ -3434,8 +3432,8 @@
         heart.onclick = () => toggleFav(t, heart);
         paintHeart(heart);
         const text = $("np-text");
-        $("np-title").textContent = t.title;
-        $("np-sub").textContent = t.artist;
+        $("np-title").replaceChildren(t.title ? pageLink(t.title, () => openAlbumOf(t)) : "");
+        $("np-sub").replaceChildren(t.artist ? pageLink(t.artist, () => openArtistOf(t)) : "");
         text.title = albumOf(t) ? `${t.title}, ${t.artist}, from ${albumOf(t)}` : `${t.title}, ${t.artist}`;
         text.classList.remove("change");
         void text.offsetWidth; // restart the entrance for each new track
@@ -4054,19 +4052,48 @@
         }
       }
 
+      // A song saved without page ids (history, older favourites, library
+      // files) is found on YouTube Music first (Go's Locate), while its
+      // page is already showing as loading.
+      const NO_PAGE = "YouTube Music has no page for it";
       function openAlbumOf(t) {
-        if (!t.album_browse_id) {
-          say(`No album page for “${albumOf(t) || t.title}”`);
-          return;
-        }
-        openPage("album", () => fetchAlbum(t.album_browse_id), albumOf(t));
+        openPage(
+          "album",
+          async () => {
+            const id = t.album_browse_id || (await Locate(t)).album_browse_id;
+            if (!id) throw JSON.stringify({ kind: "unavailable", detail: NO_PAGE });
+            return fetchAlbum(id);
+          },
+          albumOf(t) || t.title,
+        );
       }
       function openArtistOf(t) {
-        if (t.artist_browse_id) openPage("artist", () => fetchArtist(t.artist_browse_id), t.artist);
-        // Songs saved before they carried an artist id reach the artist
-        // through their album, as in the TUI.
-        else if (t.album_browse_id) openPage("artist", () => fetchArtistOfAlbum(t.album_browse_id), t.artist);
-        else say(`No artist page for “${t.artist || t.title}”`);
+        openPage(
+          "artist",
+          async () => {
+            if (t.artist_browse_id) return fetchArtist(t.artist_browse_id);
+            // Songs saved before they carried an artist id reach the
+            // artist through their album, as in the TUI.
+            if (t.album_browse_id) return fetchArtistOfAlbum(t.album_browse_id);
+            const l = await Locate(t);
+            if (l.artist_browse_id) return fetchArtist(l.artist_browse_id);
+            if (l.album_browse_id) return fetchArtistOfAlbum(l.album_browse_id);
+            throw JSON.stringify({ kind: "unavailable", detail: NO_PAGE });
+          },
+          t.artist,
+        );
+      }
+      // A song's names as links, Spotify's way: the title opens the
+      // album it is from, the artist the artist's page. In the main
+      // view, not on that very page, where they would lead nowhere new;
+      // the queue and the player link wherever the main view is (always).
+      const titleLink = (t, cls, always = false) =>
+        (!always && view === "album") || !t.title ? el("div", cls, t.title || "") : wrapLink(cls, t.title, () => openAlbumOf(t));
+      const artistLink = (t, always = false) => ((!always && view === "artist") || !t.artist ? t.artist || "" : pageLink(t.artist, () => openArtistOf(t)));
+      function wrapLink(cls, text, open) {
+        const d = el("div", cls);
+        d.append(pageLink(text, open));
+        return d;
       }
 
       // "51 min", "1 hr 4 min": an album's length, the way a header says it.
@@ -5045,6 +5072,8 @@
 
       function songCard(t) {
         const c = cardShell("song", artOf(t), t.title, t.artist, () => playTrack(t), () => playTrack(t));
+        // The card plays; its artist line opens the artist.
+        if (t.artist) c.querySelector(".c-sub").replaceChildren(artistLink(t, true));
         draggable(c, () => ({ kind: "result", index: -1, track: t }));
         return c;
       }

@@ -412,7 +412,11 @@ Not done: updates (3), signing (4), winget and Scoop (6).
   (`ytmusic.HomeFeed`, its moods and shelves), quick tiles and your
   recommendations; Search shows moods to browse when empty. Playlists of
   your own have a placeholder in the sidebar.
-- **Clickable links everywhere:** song names, artists and albums are clickable in every view.
+- ~~**Clickable links everywhere:**~~ Done in the GUI: a song's title opens
+  its album, its artist the artist's page, its album name the album, in
+  every list, the queue, the player bar and song cards. Songs saved
+  without page ids (history, older favourites, library files) are found
+  on YouTube Music first (`Locate`, once per song).
 - **Follow and like:** follow artists, and like albums.
 - **Favourites tabs:** Songs, Artists and Albums.
 - **Playlists:** the logic and the UI. A pasted YouTube or Spotify playlist link, once its songs

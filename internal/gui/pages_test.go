@@ -4,6 +4,7 @@ import (
 	"errors"
 	"testing"
 
+	"ytmgo/internal/queue"
 	"ytmgo/internal/search"
 	"ytmgo/internal/settings"
 	"ytmgo/internal/ytmusic"
@@ -71,5 +72,32 @@ func TestSearchPlaylistLink(t *testing.T) {
 	f, err := a.Search("https://open.spotify.com/playlist/37i9dQZF1DXcBWIGoYBM5M")
 	if err != nil || f.Playlist != "Late night" || f.Missed != 2 || len(f.Tracks) != 1 || gotRef.Source != "spotify" {
 		t.Errorf("%+v, %v, %+v", f, err, gotRef)
+	}
+}
+
+// A song saved without page ids gets them from a search for it, made
+// once: the result that is the same song, though not the first.
+func TestLocate(t *testing.T) {
+	searches := 0
+	a := &App{settings: settings.Defaults(), search: func(q string, limit int) ([]search.Result, error) {
+		searches++
+		return []search.Result{
+			{ID: "x", Title: "Other Song", Uploader: "Djo", AlbumBrowseID: "MPREb_other", ArtistBrowseID: "UCdjo"},
+			{ID: "y", Title: "End of Beginning", Uploader: "Djo", Album: "DECIDE", AlbumBrowseID: "MPREb_decide", ArtistBrowseID: "UCdjo"},
+		}, nil
+	}}
+	song := queue.Track{ID: "y", Title: "End of Beginning", Artist: "Djo"}
+	for i := 0; i < 2; i++ {
+		got, err := a.Locate(song)
+		if err != nil || got.AlbumBrowseID != "MPREb_decide" || got.ArtistBrowseID != "UCdjo" || got.Album != "DECIDE" {
+			t.Fatalf("got %+v, %v", got, err)
+		}
+	}
+	if searches != 1 {
+		t.Errorf("searched %d times, want once", searches)
+	}
+	// A song that has both ids asks nobody.
+	if _, err := a.Locate(queue.Track{AlbumBrowseID: "a", ArtistBrowseID: "b"}); err != nil || searches != 1 {
+		t.Errorf("searched for a song with its ids: %d, %v", searches, err)
 	}
 }

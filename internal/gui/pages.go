@@ -4,6 +4,7 @@ import (
 	"errors"
 	"strings"
 
+	"ytmgo/internal/library"
 	"ytmgo/internal/queue"
 	"ytmgo/internal/search"
 )
@@ -119,3 +120,45 @@ var (
 	errNoAlbum  = errors.New("no album page for this song")
 	errNoArtist = errors.New("no artist page for this song")
 )
+
+// Locate fills in the artist and album page ids of a song saved without
+// them (history keeps only a song's id, title and artist; older
+// favourites and library files carry none), so its names can open
+// pages too. It searches YouTube Music for the song, once per song,
+// and takes the result that is the same song, or the first.
+func (a *App) Locate(t queue.Track) (queue.Track, error) {
+	if t.ArtistBrowseID != "" && t.AlbumBrowseID != "" {
+		return t, nil
+	}
+	key := library.MatchKey(t)
+	a.mu.Lock()
+	found, ok := a.located[key]
+	a.mu.Unlock()
+	if !ok {
+		results, err := a.search(strings.TrimSpace(t.Artist+" "+t.Title), 5)
+		if err != nil {
+			return t, problem(err)
+		}
+		for i, r := range results {
+			if c := r.ToTrack(); i == 0 || library.MatchKey(c) == key {
+				found = c
+				if library.MatchKey(c) == key {
+					break
+				}
+			}
+		}
+		a.mu.Lock()
+		if a.located == nil {
+			a.located = map[string]queue.Track{}
+		}
+		a.located[key] = found
+		a.mu.Unlock()
+	}
+	if t.ArtistBrowseID == "" {
+		t.ArtistBrowseID = found.ArtistBrowseID
+	}
+	if t.AlbumBrowseID == "" {
+		t.AlbumBrowseID, t.Album = found.AlbumBrowseID, found.Album
+	}
+	return t, nil
+}
