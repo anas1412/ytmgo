@@ -3,7 +3,7 @@
 // Nothing is linked in: the clipboard belongs to the display server, and
 // every platform already ships a command that talks to it. Shelling out
 // to that command keeps ytmgo free of cgo and of a dependency that would
-// have to know about Wayland, X11 and macOS separately.
+// have to know about Wayland and X11 separately.
 package clipboard
 
 import (
@@ -27,7 +27,6 @@ var tools = []struct {
 	{"wl-copy", nil},
 	{"xclip", []string{"-selection", "clipboard"}},
 	{"xsel", []string{"--clipboard", "--input"}},
-	{"pbcopy", nil}, // macOS
 }
 
 // Copy writes s to the system clipboard.

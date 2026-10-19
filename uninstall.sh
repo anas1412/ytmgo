@@ -155,9 +155,6 @@ fi
 # question — so this removes the database and log by name, never the
 # directory. ~/.config/ytmgo is where both lived before v1.
 DATA_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/ytmgo"
-if [ "$(uname -s)" = "Darwin" ]; then
-  DATA_DIR="$HOME/Library/Application Support/ytmgo"
-fi
 LEGACY_DIR="$HOME/.config/ytmgo"
 
 if [ "$KEEP_USER_DATA" = true ]; then
@@ -184,7 +181,7 @@ REMOVE_DOWNLOADS=false
 
 if [ "$KEEP_DOWNLOADS" = true ]; then
   warn "Skipping download removal (--keep-downloads was passed)."
-elif [ -d "$HOME/.local/share/ytmgo/downloads" ] || [ -d "$HOME/Library/Application Support/ytmgo/downloads" ] || { [ -n "${XDG_DATA_HOME:-}" ] && [ -d "$XDG_DATA_HOME/ytmgo/downloads" ]; }; then
+elif [ -d "$HOME/.local/share/ytmgo/downloads" ] || { [ -n "${XDG_DATA_HOME:-}" ] && [ -d "$XDG_DATA_HOME/ytmgo/downloads" ]; }; then
   if ask "Remove downloaded audio files?" false; then
     REMOVE_DOWNLOADS=true
   else
@@ -199,8 +196,7 @@ if [ "$REMOVE_DOWNLOADS" = true ]; then
   # whether that goes was a separate question in step 2.
   for d in \
     "$HOME/.local/share/ytmgo/downloads" \
-    "${XDG_DATA_HOME:+$XDG_DATA_HOME/ytmgo/downloads}" \
-    "$HOME/Library/Application Support/ytmgo/downloads"
+    "${XDG_DATA_HOME:+$XDG_DATA_HOME/ytmgo/downloads}"
   do
     [ -n "$d" ] || continue
     if [ -d "$d" ]; then
@@ -214,8 +210,7 @@ fi
 # Tidy up a ytmgo data directory that both steps have now emptied.
 for d in \
   "$HOME/.local/share/ytmgo" \
-  "${XDG_DATA_HOME:+$XDG_DATA_HOME/ytmgo}" \
-  "$HOME/Library/Application Support/ytmgo"
+  "${XDG_DATA_HOME:+$XDG_DATA_HOME/ytmgo}"
 do
   [ -n "$d" ] && [ -d "$d" ] && rmdir "$d" 2>/dev/null || true
 done
@@ -241,4 +236,3 @@ info "System dependencies (mpv, ffmpeg, cava) were left untouched."
 info "Remove them manually if not needed:"
 echo "  apt:   sudo apt remove mpv ffmpeg cava"
 echo "  dnf:   sudo dnf remove mpv ffmpeg cava"
-echo "  brew:  brew uninstall mpv ffmpeg cava"

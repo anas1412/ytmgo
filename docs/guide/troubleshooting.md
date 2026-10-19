@@ -23,7 +23,7 @@ curl -fsSL https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_linu
   -o ~/.local/bin/yt-dlp && chmod +x ~/.local/bin/yt-dlp
 ```
 
-Use `yt-dlp_macos` on macOS, or `yt-dlp_linux_aarch64` on arm64.
+Use `yt-dlp_linux_aarch64` on arm64.
 
 You do **not** need to remove the packaged copy or change your `PATH`.
 ytmgo runs the yt-dlp sitting beside its own binary by absolute path, so
@@ -73,7 +73,6 @@ it, `v` says so and names the command for your package manager:
 sudo apt install cava      # Debian, Ubuntu, Mint
 sudo dnf install cava      # Fedora
 sudo pacman -S cava        # Arch
-brew install cava          # macOS
 ```
 
 If cava is installed and the pane is still empty, cava itself is not
@@ -84,15 +83,12 @@ in ytmgo.
 ## Copying a link says there is no clipboard tool
 
 `u` shells out to whatever your session provides — `wl-copy` on Wayland,
-`xclip` or `xsel` on X11, `pbcopy` on macOS. With none of them present
-it tells you:
+`xclip` or `xsel` on X11. With none of them present it tells you:
 
 ```bash
 sudo apt install wl-clipboard    # Wayland
 sudo apt install xclip           # X11
 ```
-
-macOS always has `pbcopy`.
 
 ## No album art
 
@@ -145,8 +141,6 @@ Media keys and the desktop's now-playing widget work over
 [MPRIS](https://specifications.freedesktop.org/mpris-spec/latest/), which
 needs a D-Bus session bus. Without one — a bare TTY, most SSH sessions, a
 container — ytmgo starts normally and simply does not register.
-
-This is also why it is Linux-only: macOS has no MPRIS.
 
 ## No lyrics for a track
 

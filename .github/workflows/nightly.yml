@@ -13,7 +13,7 @@ name: nightly
 on:
   push:
     branches: [main]
-    # Documentation moves on its own schedule; rebuilding four binaries
+    # Documentation moves on its own schedule; rebuilding two binaries
     # for a README typo helps nobody.
     paths-ignore:
       - "docs/**"
@@ -46,14 +46,6 @@ jobs:
             arch: arm64
             goarch: arm64
             asset_os: Linux
-          - os: darwin
-            arch: x86_64
-            goarch: amd64
-            asset_os: Darwin
-          - os: darwin
-            arch: arm64
-            goarch: arm64
-            asset_os: Darwin
 
     steps:
       - name: Checkout
@@ -81,7 +73,7 @@ jobs:
           VERSION:    ${{ steps.ver.outputs.version }}
           COMMIT:     ${{ github.sha }}
           BUILD_DATE: ${{ github.event.head_commit.timestamp }}
-          GOOS:       ${{ matrix.os == 'darwin' && 'darwin' || 'linux' }}
+          GOOS:       ${{ matrix.os }}
           GOARCH:     ${{ matrix.goarch }}
           CGO_ENABLED: "0"
         run: |
@@ -126,12 +118,12 @@ jobs:
           path: dist
           merge-multiple: true
 
-      - name: Check all four platforms arrived
+      - name: Check both platforms arrived
         run: |
           set -euo pipefail
           ls -la dist
           n=$(find dist -type f | wc -l)
-          [ "$n" -eq 8 ] || { echo "expected 8 files, found $n"; exit 1; }
+          [ "$n" -eq 4 ] || { echo "expected 4 files, found $n"; exit 1; }
 
       - name: Publish
         uses: softprops/action-gh-release@v3

@@ -13,7 +13,7 @@ The script works out what your system needs:
   package is already installed it updates that one instead, so an
   update never swaps out the package you chose. With no AUR helper at
   all it just fetches the binary.
-- **Everything else (Linux, macOS)** downloads the release binary for
+- **Every other distribution** downloads the release binary for
   your architecture, verifies its checksum, and installs it.
 
 On Linux it also installs a desktop entry and icon, so ytmgo appears in
@@ -88,7 +88,7 @@ go build -o ytmgo .
 | | |
 |---|---|
 | **Linux**, any distribution | x86_64 and arm64 |
-| **macOS** | Intel and Apple Silicon |
+| macOS | Not supported |
 | Windows | Not supported |
 
 *Any distribution* is meant literally: the binary is built with cgo off,
@@ -96,14 +96,12 @@ so it is statically linked and depends on no system C library. It runs
 the same on glibc and on musl — Alpine included — and needs nothing
 backported.
 
-Two things are Linux-only inside the app. **Media keys and the desktop
-media widget** work over MPRIS, which is D-Bus, so on macOS they simply
-do nothing — everything else behaves identically. And the **spectrum**
-needs cava to find a monitor of your audio output, which PipeWire and
+**Media keys and the desktop media widget** work over MPRIS, which needs
+a D-Bus session bus. The **spectrum** needs cava to find a monitor of your audio output, which PipeWire and
 PulseAudio both provide automatically; on a bare ALSA setup cava needs a
 loopback configured by hand. Nothing else cares which audio stack you
 run: playback goes through mpv, which picks its own output — PipeWire,
-PulseAudio, ALSA, JACK, sndio or CoreAudio.
+PulseAudio, ALSA, JACK or sndio.
 
 Windows is not supported and is not planned. ytmgo runs mpv, yt-dlp and
 ffmpeg as child processes and has to kill a whole tree when a download
@@ -135,12 +133,6 @@ Fedora:
 sudo dnf install mpv ffmpeg cava
 ```
 
-macOS:
-
-```bash
-brew install mpv ffmpeg cava
-```
-
 ::: tip yt-dlp comes from upstream, not your package manager
 `yt-dlp` is the one dependency a distro package actively breaks. YouTube
 changes, yt-dlp patches within days, and a frozen archive does not
@@ -166,7 +158,7 @@ curl -fsSL https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_linu
   -o ~/.local/bin/yt-dlp && chmod +x ~/.local/bin/yt-dlp
 ```
 
-Use `yt-dlp_macos` on macOS, or `yt-dlp_linux_aarch64` on arm64. From
+Use `yt-dlp_linux_aarch64` on arm64. From
 then on `yt-dlp -U` updates it in place.
 
 ## Updating
@@ -183,7 +175,6 @@ Everything ytmgo keeps between runs sits in one directory:
 | Platform | Directory |
 |---|---|
 | Linux | `$XDG_DATA_HOME/ytmgo`, or `~/.local/share/ytmgo` |
-| macOS | `~/Library/Application Support/ytmgo` |
 
 It holds `ytmgo.db` — settings, favourites, play history and the saved
 queue — plus `downloads/` and a log.

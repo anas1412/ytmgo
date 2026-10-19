@@ -19,7 +19,7 @@ Full documentation: **https://anas1412.github.io/ytmgo/**
 
 ## Install
 
-### One-liner (Linux / macOS)
+### One-liner (Linux)
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/anas1412/ytmgo/main/install.sh | bash
@@ -27,7 +27,7 @@ curl -fsSL https://raw.githubusercontent.com/anas1412/ytmgo/main/install.sh | ba
 
 It detects your system automatically:
 - **Arch Linux** — installs `ytmgo-bin` via `paru` or `yay`, or updates whichever of the two you already have
-- **Other Linux / macOS** — downloads the static binary and installs deps
+- **Other Linux** — downloads the static binary and installs deps
 
 Either way you get the same prebuilt binary — nothing is compiled unless
 you ask for it.
@@ -153,7 +153,7 @@ or one of the nine built-in themes:
 
 ## Supported systems
 
-**Linux (any distribution) and macOS**, on x86_64 and arm64. Windows is
+**Linux (any distribution)**, on x86_64 and arm64. macOS and Windows are
 not supported.
 
 The binary is built with cgo off, so it is statically linked and depends
@@ -162,10 +162,8 @@ Alpine included. Playback goes through mpv, which picks its own audio
 output, so PipeWire, PulseAudio, ALSA, JACK and sndio all work without
 configuration.
 
-Two features are Linux-only: **media keys** (MPRIS is D-Bus, so on macOS
-they do nothing) and the **spectrum**, which needs cava to find a monitor
-of your output — automatic on PipeWire and PulseAudio, a hand-configured
-loopback on bare ALSA.
+The **spectrum** needs cava to find a monitor of your output — automatic
+on PipeWire and PulseAudio, a hand-configured loopback on bare ALSA.
 
 ## Prerequisites
 
@@ -189,9 +187,6 @@ These are required for playback and downloads:
 # Debian / Ubuntu
 sudo apt install mpv ffmpeg cava
 
-# macOS
-brew install mpv ffmpeg cava
-
 # Arch Linux
 sudo pacman -S mpv ffmpeg cava
 ```
@@ -204,7 +199,7 @@ curl -fsSL https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_linu
   -o ~/.local/bin/yt-dlp && chmod +x ~/.local/bin/yt-dlp
 ```
 
-Use `yt-dlp_macos` on macOS, or `yt-dlp_linux_aarch64` on arm64. After
+Use `yt-dlp_linux_aarch64` on arm64. After
 that, `yt-dlp -U` updates it in place.
 
 Put it next to the `ytmgo` binary and it is picked up regardless of

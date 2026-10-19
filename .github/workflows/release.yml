@@ -1,14 +1,12 @@
 name: release
 
-# Build static binaries for 4 OS/arch combos and attach them to a
+# Build static binaries for 2 OS/arch combos and attach them to a
 # GitHub Release whenever you push a tag like `v0.2.0`.
 # Also publishes the updated PKGBUILD to the Arch User Repository (AUR).
 #
 # Asset naming follows the convention expected by install.sh:
 #   ytmgo_Linux_x86_64.tar.gz
 #   ytmgo_Linux_arm64.tar.gz
-#   ytmgo_Darwin_x86_64.tar.gz
-#   ytmgo_Darwin_arm64.tar.gz
 # Each tarball contains a single `ytmgo` binary + a `ytmgo_<asset>.sha256`
 # sidecar so install.sh can verify the download.
 
@@ -46,14 +44,6 @@ jobs:
             arch: arm64
             goarch: arm64
             asset_os: Linux
-          - os: darwin
-            arch: x86_64
-            goarch: amd64
-            asset_os: Darwin
-          - os: darwin
-            arch: arm64
-            goarch: arm64
-            asset_os: Darwin
 
     steps:
       - name: Checkout
@@ -72,7 +62,7 @@ jobs:
           VERSION:    ${{ github.ref_name }}
           COMMIT:     ${{ github.sha }}
           BUILD_DATE: ${{ github.event.repository.updated_at }}
-          GOOS:       ${{ matrix.os == 'darwin' && 'darwin' || 'linux' }}
+          GOOS:       ${{ matrix.os }}
           GOARCH:     ${{ matrix.goarch }}
           CGO_ENABLED: "0"
         run: |
@@ -95,8 +85,8 @@ jobs:
           ls -la "$asset" "${asset}.sha256"
 
       # Hand the artifact to the release job rather than publishing from
-      # here. Four matrix jobs calling the release action at once is a
-      # race: each one looks for a release on this tag, all four find
+      # here. Matrix jobs calling the release action at once is a
+      # race: each one looks for a release on this tag, all of them find
       # none, and more than one creates it — which is how v1.0.2 and
       # v1.1.0 each ended up with a stray draft beside the real release,
       # both stamped the same second.
@@ -128,15 +118,15 @@ jobs:
           path: dist
           merge-multiple: true
 
-      - name: Check all four platforms arrived
+      - name: Check both platforms arrived
         run: |
           set -euo pipefail
           ls -la dist
-          # Eight files: four tarballs and their checksums. Publishing a
+          # Four files: two tarballs and their checksums. Publishing a
           # partial set would ship a release the installer cannot use on
           # some architectures.
           n=$(find dist -type f | wc -l)
-          [ "$n" -eq 8 ] || { echo "expected 8 files, found $n"; exit 1; }
+          [ "$n" -eq 4 ] || { echo "expected 4 files, found $n"; exit 1; }
 
       - name: Publish
         uses: softprops/action-gh-release@v3

@@ -44,12 +44,12 @@ jobs:
       - name: go vet
         run: go vet ./...
 
-      # The four targets the release actually ships. Without this, a
+      # The targets the release actually ships. Without this, a
       # platform only breaks at tag time, on a runner nobody is watching
       # — which is how POSIX-only process handling reached main.
       - name: cross-compile every supported target
         run: |
-          for t in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64; do
+          for t in linux/amd64 linux/arm64; do
             echo "building $t"
             GOOS=${t%/*} GOARCH=${t#*/} CGO_ENABLED=0 go build -o /dev/null ./... || exit 1
           done

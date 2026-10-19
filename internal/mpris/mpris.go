@@ -6,7 +6,7 @@
 //   - the TUI pushes state in with Publish (title, artist, art, status)
 //   - external control (play/pause/next/prev) arrives on Commands()
 //
-// Everything is best-effort: no session bus (headless, macOS) means
+// Everything is best-effort: no session bus (headless, SSH) means
 // Start returns an error the caller treats as "feature unavailable".
 package mpris
 

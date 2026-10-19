@@ -17,8 +17,8 @@
 #   2. Downloads the matching static binary from the GitHub Release
 #   3. Installs it to a directory on PATH (or prints the export command)
 #   4. Installs yt-dlp from upstream, and any missing mpv/ffmpeg/cava via
-#      your package manager — uses sudo for system PMs, no sudo for brew.
-#      You'll see the exact command before it runs.
+#      your package manager, with sudo. You'll see the exact command
+#      before it runs.
 
 set -euo pipefail
 
@@ -45,8 +45,7 @@ uname_arch=$(uname -m)
 
 case "$uname_os" in
   Linux)  os="Linux" ;;
-  Darwin) os="Darwin" ;;
-  *) err "Unsupported OS: $uname_os (only Linux and macOS)"; exit 1 ;;
+  *) err "Unsupported OS: $uname_os (only Linux)"; exit 1 ;;
 esac
 
 case "$uname_arch" in
@@ -323,7 +322,6 @@ install_ytdlp() {
   case "$os/$(uname -m)" in
     Linux/x86_64)          asset="yt-dlp_linux" ;;
     Linux/aarch64|Linux/arm64) asset="yt-dlp_linux_aarch64" ;;
-    Darwin/*)              asset="yt-dlp_macos" ;;
     *)                     asset="yt-dlp" ;;   # the python zipapp, needs python3
   esac
   local url="https://github.com/yt-dlp/yt-dlp/releases/latest/download/$asset"
@@ -372,7 +370,7 @@ install_ytdlp || warn "Continuing without yt-dlp — downloads and playback will
 
 # ─── System deps check + install ───────────────────────────────────
 # Auto-install any missing mpv/ffmpeg/cava via the user's package
-# manager. Uses sudo for system PMs (apt/dnf/pacman/apk) — not for brew.
+# manager. Uses sudo for system PMs (apt/dnf/pacman/apk).
 #
 # yt-dlp is deliberately NOT in that list; see install_ytdlp below.
 missing=()                        # init for `set -u` (line 154 reads ${#missing[@]})
@@ -393,8 +391,7 @@ if [ ${#missing[@]} -gt 0 ]; then
   warn "Installing them now via your package manager…"
   echo ""
 
-  # Pick the right package manager. Note: order matters — brew on Linux
-  # also installs to /usr/local so we check it first on macOS only.
+  # Pick the right package manager.
   pm_cmd=""
   # Root has no use for sudo and often has no sudo: a container or a
   # root shell would fail on "sudo: command not found" rather than on
@@ -425,10 +422,6 @@ if [ ${#missing[@]} -gt 0 ]; then
       elif command -v dnf    >/dev/null 2>&1; then pm_cmd="$pm_sudo dnf install -y"
       elif command -v pacman >/dev/null 2>&1; then pm_cmd="$pm_sudo pacman -S --noconfirm"
       elif command -v apk    >/dev/null 2>&1; then pm_cmd="$pm_sudo apk add"
-      fi ;;
-    Darwin)
-      if command -v brew >/dev/null 2>&1; then
-        pm_cmd="brew install"
       fi ;;
   esac
 

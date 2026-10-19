@@ -2,7 +2,6 @@ package tui
 
 import (
 	"os/exec"
-	"runtime"
 
 	"ytmgo/internal/downloader"
 	"ytmgo/internal/player"
@@ -38,18 +37,11 @@ func (m *Model) downloadDir() string {
 }
 
 // openInOS opens the given path or URL with the system's default handler
-// — file manager for a directory, browser for a link — via xdg-open on
-// Linux/BSD and open on macOS. Uses Start, not Run, so it
-// returns immediately without waiting for the launched process to exit.
+// — file manager for a directory, browser for a link — via xdg-open.
+// Uses Start, not Run, so it returns immediately without waiting for the
+// launched process to exit.
 func openInOS(path string) error {
-	var cmd *exec.Cmd
-	switch runtime.GOOS {
-	case "darwin":
-		cmd = exec.Command("open", path)
-	default:
-		cmd = exec.Command("xdg-open", path)
-	}
-	return cmd.Start()
+	return exec.Command("xdg-open", path).Start()
 }
 
 // panelHeight returns how many terminal lines the panel area occupies.
