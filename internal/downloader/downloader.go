@@ -14,8 +14,8 @@ import (
 	"sync"
 	"time"
 
+	"ytmgo/internal/deps"
 	"ytmgo/internal/proc"
-	"ytmgo/internal/ytdlp"
 	"ytmgo/internal/ytresolve"
 )
 
@@ -357,8 +357,14 @@ func (d *Downloader) runJob(job *Job, outDir string) {
 		"--no-playlist",
 		videoURL,
 	}
+	// yt-dlp finds ffmpeg on PATH by itself, and on Windows ytmgo's copy
+	// is not on PATH at all. Point it at ours when there is one. The
+	// directory, not the binary, so it finds ffprobe there too.
+	if deps.Bundled("ffmpeg") {
+		args = append([]string{"--ffmpeg-location", filepath.Dir(deps.Path("ffmpeg"))}, args...)
+	}
 
-	cmd := proc.CommandContext(d.ctx, ytdlp.Path(), args...)
+	cmd := proc.CommandContext(d.ctx, deps.Path("yt-dlp"), args...)
 
 	// yt-dlp writes progress to stdout (stderr carries only warnings and
 	// errors), so the percentage must be parsed from stdout.
@@ -483,8 +489,8 @@ func findExisting(dir, trackID string) string {
 }
 
 // embedCoverArt downloads a cover image from coverURL and embeds it into
-// the audio file at audioPath using ffmpeg. Requires ffmpeg in PATH
-// (already needed by yt-dlp for audio extraction).
+// the audio file at audioPath using ffmpeg, the same copy yt-dlp is
+// pointed at for audio extraction.
 func (d *Downloader) embedCoverArt(audioPath, coverURL string) error {
 	// Download the cover image to a temp file
 	resp, err := coverClient.Get(coverURL)
@@ -516,7 +522,7 @@ func (d *Downloader) embedCoverArt(audioPath, coverURL string) error {
 	tmpName := audioTmp.Name()
 	audioTmp.Close()
 
-	cmd := proc.CommandContext(d.ctx, "ffmpeg",
+	cmd := proc.CommandContext(d.ctx, deps.Path("ffmpeg"),
 		"-i", audioPath,
 		"-i", coverTmp.Name(),
 		"-map", "0:a", // audio from first input

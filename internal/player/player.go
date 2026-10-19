@@ -27,7 +27,7 @@ import (
 	"sync"
 	"time"
 
-	"ytmgo/internal/ytdlp"
+	"ytmgo/internal/deps"
 )
 
 type State int
@@ -244,8 +244,8 @@ func (p *Player) ensureRunning() error {
 	// calls used the good one. Point the hook at the same binary.
 	// Only when ytmgo has a copy of its own: otherwise mpv's default is
 	// already whatever PATH offers, and overriding adds nothing.
-	if ytdlp.Bundled() {
-		args = append(args, "--script-opts=ytdl_hook-ytdl_path="+ytdlp.Path())
+	if deps.Bundled("yt-dlp") {
+		args = append(args, "--script-opts=ytdl_hook-ytdl_path="+deps.Path("yt-dlp"))
 	}
 	// Test hook: lets integration tests run without an audio device
 	// (YTMGO_MPV_AO=null).
@@ -253,7 +253,7 @@ func (p *Player) ensureRunning() error {
 		args = append(args, "--ao="+ao)
 	}
 
-	cmd := exec.Command("mpv", args...)
+	cmd := exec.Command(deps.Path("mpv"), args...)
 	cmd.SysProcAttr = procAttr()
 	if err := cmd.Start(); err != nil {
 		return fmt.Errorf("mpv failed to start: %w (is mpv installed?)", err)

@@ -11,8 +11,8 @@ import (
 	"strings"
 	"time"
 
+	"ytmgo/internal/deps"
 	"ytmgo/internal/proc"
-	"ytmgo/internal/ytdlp"
 )
 
 // resolveTimeout bounds one yt-dlp search. Without it a wedged yt-dlp
@@ -47,7 +47,7 @@ func Resolve(artist, title string) (*Result, error) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), resolveTimeout)
 	defer cancel()
-	cmd := proc.CommandContext(ctx, ytdlp.Path(), args...)
+	cmd := proc.CommandContext(ctx, deps.Path("yt-dlp"), args...)
 	stdout, err := cmd.Output()
 	if err != nil {
 		if ctx.Err() != nil {

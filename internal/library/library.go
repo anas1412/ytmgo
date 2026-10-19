@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"ytmgo/internal/deps"
 	"ytmgo/internal/proc"
 	"ytmgo/internal/queue"
 )
@@ -128,7 +129,7 @@ func Scan(downloads string, extra []string, cache DurationCache) ([]Track, Durat
 func probe(path string) CacheEntry {
 	// Through proc so a GUI on Windows does not flash a console window
 	// for every file scanned.
-	cmd := proc.CommandContext(context.Background(), "ffprobe",
+	cmd := proc.CommandContext(context.Background(), deps.Path("ffprobe"),
 		"-v", "quiet",
 		"-print_format", "json",
 		"-show_entries", "format=duration:format_tags=title,artist,album:stream_tags=title,artist,album",

@@ -174,7 +174,21 @@ Only what the GUI needs from the shared packages. SQLite is
    on-demand download with pinned versions and checksums.
    → verify: with a tool both beside the exe and on `PATH`, the one beside the
    exe wins; a checksum mismatch aborts cleanly; the TUI on Linux behaves as
-   before.
+   before. **Done**, tested on Linux and under Wine:
+   - `internal/deps` replaces `internal/ytdlp`. It looks beside the exe,
+     then `BinDir()` (`%LOCALAPPDATA%\ytmgo\bin`), then `PATH`, and adds
+     `.exe` on Windows. yt-dlp, ffmpeg, ffprobe, and mpv all resolve through it.
+   - yt-dlp finds ffmpeg through `PATH` by itself, which ytmgo's own copy
+     is not on in Windows; downloads now pass `--ffmpeg-location` when the
+     copy is ytmgo's.
+   - `deps.Fetch` downloads a pinned build (`pins_windows.go`: yt-dlp
+     2026.08.19, ffmpeg 9.0.2 essentials from gyan.dev), checks its
+     SHA-256 before installing, extracts ffmpeg and ffprobe from one zip,
+     and leaves nothing behind on any failure.
+   - Not yet run: a real download end to end (the tests use a local
+     server), and whether gyan's essentials build encodes MP3 (it needs
+     libmp3lame). Both belong to the first Windows run.
+   - The missing-tool screen that calls `Fetch` is GUI work (Phase 2).
 5. **CI.** Add `windows/amd64` to the cross-build loop
    (`.github/workflows/ci.yml:52`), and a `windows-latest` job running
    `go test` on the packages the GUI uses. Tests that shell out to Unix
