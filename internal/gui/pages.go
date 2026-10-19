@@ -16,13 +16,13 @@ type PageTrack struct {
 	Plays string `json:"plays"`
 }
 
-func pageTracks(results []search.Result) []PageTrack {
+func (a *App) pageTracks(results []search.Result) []PageTrack {
 	out := make([]PageTrack, len(results))
 	for i, r := range results {
 		plays := r.Plays
 		// An album row's count reads "4.2M plays"; the number is enough.
 		plays = strings.TrimSuffix(plays, " plays")
-		out[i] = PageTrack{Track: r.ToTrack(), Plays: plays}
+		out[i] = PageTrack{Track: a.mark([]queue.Track{r.ToTrack()})[0], Plays: plays}
 	}
 	return out
 }
@@ -51,7 +51,7 @@ func (a *App) Album(browseID string) (AlbumPage, error) {
 	p := AlbumPage{
 		BrowseID: full.BrowseID, Title: full.Title, Artist: full.Artist,
 		ArtistBrowseID: full.ArtistBrowseID, Year: full.Year, CoverURL: full.CoverURL,
-		Tracks: pageTracks(search.AlbumResults(full)),
+		Tracks: a.pageTracks(search.AlbumResults(full)),
 	}
 	for _, t := range full.Tracks {
 		p.Seconds += t.Duration
@@ -90,7 +90,7 @@ func (a *App) Artist(browseID string) (ArtistView, error) {
 	}
 	v := ArtistView{
 		BrowseID: page.BrowseID, Name: page.Name, Subscribers: page.Subscribers,
-		PhotoURL: page.ThumbURL, Songs: pageTracks(search.ArtistSongs(page)), Releases: []Release{},
+		PhotoURL: page.ThumbURL, Songs: a.pageTracks(search.ArtistSongs(page)), Releases: []Release{},
 	}
 	for _, al := range page.Albums {
 		v.Releases = append(v.Releases, Release{BrowseID: al.BrowseID, Title: al.Title, Artist: al.Artist, Year: al.Year, CoverURL: al.CoverURL})

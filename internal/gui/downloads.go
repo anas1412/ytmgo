@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"ytmgo/internal/downloader"
+	"ytmgo/internal/library"
 	"ytmgo/internal/queue"
 	"ytmgo/internal/settings"
 	"ytmgo/internal/ytmusic"
@@ -27,7 +28,14 @@ type Host struct {
 
 // Attach gives the app its window. A function, not a method, so the
 // page cannot call it.
-func Attach(a *App, h Host) { a.host = h }
+// It also starts the first library scan, so songs on disk play from
+// their files from the start.
+func Attach(a *App, h Host) {
+	a.host = h
+	if a.scanLibrary != nil {
+		go a.Rescan()
+	}
+}
 
 // Close stops the downloads, killing a yt-dlp that is running, so quitting
 // does not leave a half-written file behind.
@@ -101,9 +109,14 @@ func (a *App) watch(dl downloads) {
 				})
 				s = a.changed()
 			}
+			a.added(queue.Track{ID: ev.FilePath, Title: ev.Title, Artist: ev.Uploader, FilePath: ev.FilePath, Downloaded: true})
+			lib := a.lib
 			a.mu.Unlock()
 			if queued {
 				a.emit("queue", s)
+			}
+			if lib != nil {
+				a.emit("library", lib)
 			}
 		}
 		a.emit("downloads", jobList(dl))
@@ -282,6 +295,9 @@ func (a *App) ChooseDownloadFolder() (string, error) {
 		a.settings.DownloadDir = dir
 		a.saveSettings(a.settings)
 		a.mu.Unlock()
+		// The download folder is part of the library; the TUI forgets to
+		// read the new one.
+		go a.Rescan()
 	}
 	return a.downloadDir(), nil
 }
@@ -300,6 +316,9 @@ func (a *App) PlaySource(t queue.Track) (string, error) {
 			path = have.FilePath
 			break
 		}
+	}
+	if f, ok := library.Match(a.lib, t); path == "" && ok {
+		path = f.FilePath
 	}
 	a.mu.Unlock()
 	if path != "" {

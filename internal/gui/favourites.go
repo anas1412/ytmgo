@@ -8,8 +8,9 @@ import "ytmgo/internal/queue"
 // Favourites lists them, newest first.
 func (a *App) Favourites() []queue.Track {
 	a.mu.Lock()
-	defer a.mu.Unlock()
-	return append([]queue.Track{}, a.favs...)
+	favs := append([]queue.Track{}, a.favs...)
+	a.mu.Unlock()
+	return a.mark(favs)
 }
 
 // ToggleFavourite adds t to the top of the favourites, or removes it if

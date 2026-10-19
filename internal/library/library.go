@@ -3,9 +3,11 @@ package library
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/fs"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 
@@ -83,9 +85,16 @@ func Scan(downloads string, extra []string, cache DurationCache) ([]Track, Durat
 			}
 			ce, ok := cache[fpath]
 			if !ok || ce.Mtime != mtime {
-				ce = probe(fpath)
+				var ran bool
+				ce, ran = probe(fpath)
 				ce.Mtime = mtime
-				updates[fpath] = ce
+				// Without ffprobe the file is not known yet, only not
+				// read: cached, it would never be read once ffprobe is
+				// there (on Windows, after the first download fetches
+				// it).
+				if ran {
+					updates[fpath] = ce
+				}
 			}
 
 			title, artist, album := ce.Title, ce.Artist, ce.Album
@@ -125,8 +134,8 @@ func Scan(downloads string, extra []string, cache DurationCache) ([]Track, Durat
 // keep them on the container, but Ogg and Opus keep them on the stream,
 // and asking for only the first left every .opus looking untagged.
 // Keys are matched case-insensitively — Vorbis comments come back as
-// TITLE, not title.
-func probe(path string) CacheEntry {
+// TITLE, not title. ran is false when ffprobe itself could not be run.
+func probe(path string) (ce CacheEntry, ran bool) {
 	// Through proc so a GUI on Windows does not flash a console window
 	// for every file scanned.
 	cmd := proc.CommandContext(context.Background(), deps.Path("ffprobe"),
@@ -137,7 +146,9 @@ func probe(path string) CacheEntry {
 	)
 	out, err := cmd.Output()
 	if err != nil {
-		return CacheEntry{}
+		var exit *exec.ExitError
+		// ffprobe ran and could not read the file: that is an answer.
+		return CacheEntry{}, errors.As(err, &exit)
 	}
 	var result struct {
 		Format struct {
@@ -149,10 +160,9 @@ func probe(path string) CacheEntry {
 		} `json:"streams"`
 	}
 	if err := json.Unmarshal(out, &result); err != nil {
-		return CacheEntry{}
+		return CacheEntry{}, true
 	}
 
-	var ce CacheEntry
 	if result.Format.Duration != "" {
 		var secs float64
 		if _, err := fmt.Sscanf(result.Format.Duration, "%f", &secs); err == nil {
@@ -176,7 +186,7 @@ func probe(path string) CacheEntry {
 			}
 		}
 	}
-	return ce
+	return ce, true
 }
 
 // tagValue finds key in tags regardless of case.

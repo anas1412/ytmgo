@@ -213,9 +213,18 @@ Downloads page (`5`) with a live bar and a count on the sidebar; format and
 folder in Settings. `x` does not switch pages, it says so on the player line.
 On Windows the first download fetches ffmpeg (`deps.Fetch`). A finished
 download marks its queued song, which then plays from the file, served to
-the page under `/local/` (only files handed out that way). Not yet: songs
-downloaded before, or not in the queue when they finish, still stream until
-the Library maps songs to files.
+the page under `/local/` (only files handed out that way).
+
+The Library is built (`gui/library.go`), on the TUI's scanner and cache:
+scanned when the window opens, after a folder change and on Rescan. Its page
+(`3`) has its own filter box rather than taking over the search box; `d` or
+the row's bin deletes after a dialog, and only library files can be deleted.
+Songs anywhere (search, recommendations, pages, favourites, the queue) are
+matched to files with `library.Match`, the TUI's matcher moved out of
+`internal/tui`, so they show ✓ and play from disk. Music folders are added in
+Settings with the native dialog, kept in the TUI's comma-separated setting.
+Fixed for both apps: a file is no longer cached as read when ffprobe could
+not run, and changing the download folder rescans.
 
 ## 9. Lyrics and visualizer
 

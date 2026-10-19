@@ -1147,6 +1147,109 @@
         font-variant-numeric: tabular-nums;
       }
 
+      /* ── Library page ─────────────────────────────────────────────── */
+      .lib-filter {
+        flex: 0 1 220px;
+        min-width: 0;
+        margin-left: auto;
+        padding: 7px 12px;
+        border: 1px solid var(--border);
+        border-radius: 999px;
+        background: var(--surface);
+        color: var(--text);
+        font: inherit;
+        font-size: 13px;
+        outline: none;
+        transition: border-color var(--fast);
+      }
+      .lib-filter:focus {
+        border-color: var(--violet-text);
+      }
+      .list-head .lib-filter + .icon-btn {
+        margin-left: 0;
+      }
+      .lib .head-row,
+      .lib .track {
+        grid-template-columns: 44px minmax(0, 1.6fr) minmax(0, 1fr) 56px 96px;
+      }
+      @container view (max-width: 560px) {
+        .lib .head-row,
+        .lib .track {
+          grid-template-columns: 44px minmax(0, 1fr) 56px 96px;
+        }
+      }
+      .track .add.del:hover {
+        color: var(--pink);
+      }
+      .folders {
+        margin-top: 8px;
+      }
+      .folders .folder {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 3px 0;
+        font-size: 13px;
+      }
+      .folders .folder span {
+        flex: 1;
+        min-width: 0;
+        word-break: break-all;
+        user-select: text;
+      }
+      .folders .folder button {
+        color: var(--mid);
+        font-size: 13px;
+      }
+      .folders .folder button:hover {
+        color: var(--pink);
+      }
+      /* The one question the app asks: before a file is deleted. */
+      dialog.ask {
+        width: min(400px, calc(100vw - 32px));
+        padding: 22px;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-m);
+        background: var(--raised);
+        color: var(--text);
+        box-shadow: 0 20px 60px rgb(0 0 0 / 0.5);
+      }
+      dialog.ask[open] {
+        animation: ask-in var(--slow) var(--ease);
+      }
+      dialog.ask::backdrop {
+        background: rgb(0 0 0 / 0.55);
+      }
+      @keyframes ask-in {
+        from {
+          opacity: 0;
+          transform: translateY(8px) scale(0.98);
+        }
+      }
+      dialog.ask strong {
+        display: block;
+        font-size: 16px;
+        overflow-wrap: anywhere;
+      }
+      dialog.ask p {
+        margin: 6px 0 20px;
+        color: var(--mid);
+        font-size: 13px;
+      }
+      dialog.ask .buttons-row {
+        display: flex;
+        justify-content: flex-end;
+        gap: 8px;
+      }
+      .soft.danger {
+        border-color: transparent;
+        background: var(--pink);
+        color: #fff;
+      }
+      .soft.danger:hover {
+        background: #ff3d97;
+      }
+
       /* ── Downloads page ───────────────────────────────────────────── */
       .downloads .top {
         display: flex;
@@ -1683,7 +1786,7 @@
         </button>
         <div class="nav-gap"></div>
         <!-- Not built yet: shown so the layout reads as it will, but inert. -->
-        <button class="nav-item" aria-disabled="true" title="Library is on its way">
+        <button class="nav-item" data-page="library" title="Library (3)">
           <svg viewBox="0 0 24 24"><path d="m16 6 4 14" /><path d="M12 6v14" /><path d="M8 8v12" /><path d="M4 4v16" /></svg>
           <span>Library</span>
         </button>
@@ -1798,6 +1901,16 @@
     </div>
     <audio id="audio" preload="auto"></audio>
     <div id="ghost" aria-hidden="true"></div>
+    <dialog class="ask" id="ask">
+      <form method="dialog">
+        <strong id="ask-title"></strong>
+        <p id="ask-body"></p>
+        <div class="buttons-row">
+          <button class="soft" value="no" type="submit">Cancel</button>
+          <button class="soft danger" id="ask-ok" value="yes" type="submit"></button>
+        </div>
+      </form>
+    </dialog>
 
     <script type="module">
       import {
@@ -1845,6 +1958,11 @@
         OpenDownloads,
         SetDownloadFormat,
         ChooseDownloadFolder,
+        Library,
+        Rescan,
+        DeleteFile,
+        AddLibraryFolder,
+        RemoveLibraryFolder,
       } from "./wailsjs/go/gui/App.js";
 
       const $ = (id) => document.getElementById(id);
@@ -2098,13 +2216,18 @@
         }
         // On an artist's own page their name would lead nowhere new.
         const toArtist = view !== "artist" && (r.artist_browse_id || r.album_browse_id);
-        artist.append(toArtist ? pageLink(r.artist || "", () => openArtistOf(r)) : r.artist || "");
+        const by = r.artist || (view === "library" ? "Unknown artist" : "");
+        artist.append(toArtist ? pageLink(by, () => openArtistOf(r)) : by);
         who.append(el("div", "title", r.title), artist);
         who.title = `${r.title}, ${r.artist}`;
         let album;
         if (view === "album") {
           album = el("div", "album", r.plays || "");
           album.title = r.plays ? `${r.plays} plays` : "";
+        } else if (view === "library") {
+          // The folder it is in, as the TUI's library shows.
+          album = el("div", "album", r.file_path.split(/[\\/]/).slice(-2, -1)[0] || "");
+          album.title = r.file_path;
         } else {
           album = el("div", "album");
           album.append(r.album_browse_id && albumOf(r) ? pageLink(albumOf(r), () => openAlbumOf(r)) : albumOf(r));
@@ -2125,6 +2248,20 @@
 
         const actions = el("div", "row-actions");
         actions.append(heartButton(r), add);
+        if (view === "library") {
+          const del = el("button", "add del");
+          del.type = "button";
+          del.setAttribute("aria-label", `Delete ${r.title} from disk`);
+          del.title = "Delete from disk (d)";
+          del.append(icon('<path d="M3 6h18" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" /><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />'));
+          del.addEventListener("click", (e) => {
+            e.stopPropagation();
+            select(i);
+            deleteFile(r);
+          });
+          del.addEventListener("dblclick", (e) => e.stopPropagation());
+          actions.append(del);
+        }
         row.append(wrap, who, album, el("div", "time", duration(r.duration_sec)), actions);
         if (now && r.id === now.track.id) row.classList.add("playing");
         row.addEventListener("click", () => select(i));
@@ -2142,16 +2279,16 @@
         head.append(
           el("span", "", view === "album" ? "#" : ""),
           el("span", "", "Title"),
-          el("span", "col-album", view === "album" ? "Plays" : "Album"),
+          el("span", "col-album", { album: "Plays", library: "Folder" }[view] || "Album"),
           el("span", "", "Length"),
           el("span"),
         );
         const list = el("div", "list");
         list.setAttribute("role", "listbox");
-        list.setAttribute("aria-label", { home: "Recommended songs", favs: "Favourites", search: "Songs", album: "Songs", artist: "Top songs" }[view]);
+        list.setAttribute("aria-label", { home: "Recommended songs", favs: "Favourites", search: "Songs", album: "Songs", artist: "Top songs", library: "Library" }[view]);
         list.append(el("div", "cursor"), ...results.map(track));
         // An album or artist page draws its own header above the list.
-        if (view === "album" || view === "artist") return { head, list };
+        if (view === "album" || view === "artist" || view === "library") return { head, list };
         const top = el("div", "list-head");
         if (view === "favs") {
           top.append(el("h2", "", "Favourites"), el("span", "sub", `${results.length} ${results.length === 1 ? "song" : "songs"}`));
@@ -3167,8 +3304,15 @@
           case "2":
             navTo("favs");
             return true;
+          case "3":
+            navTo("library");
+            return true;
           case "5":
             navTo("downloads");
+            return true;
+          case "d":
+            if (view !== "library" || !results[selected]) return false;
+            deleteFile(results[selected]);
             return true;
           case "6":
             navTo("settings");
@@ -3223,7 +3367,9 @@
           endDrag(false);
           return;
         }
-        const typing = document.activeElement === query;
+        // The Library's filter is typed into as the search box is.
+        const typing = document.activeElement === query || document.activeElement?.classList.contains("lib-filter");
+        if ($("ask").open) return;
         if (e.key === "/" && !typing) {
           e.preventDefault();
           query.focus();
@@ -3291,6 +3437,7 @@
         else if (view === "favs") showFavs();
         else if (view === "settings") renderSettings();
         else if (view === "downloads") renderDownloads();
+        else if (view === "library") renderLibrary();
         else if (view === "home") home();
         else render();
         pane.scrollTop = s.scroll;
@@ -3580,6 +3727,14 @@
           showFavs();
           return;
         }
+        if (page === "library") {
+          if (view === "library") return;
+          view = "library";
+          results = [];
+          selected = 0;
+          renderLibrary();
+          return;
+        }
         if (page === "downloads") {
           if (view === "downloads") return;
           view = "downloads";
@@ -3679,6 +3834,21 @@
           fmt.append(t);
         }
         box.append(setting("Download format", "M4A keeps YouTube’s own audio, at its best quality. MP3 plays on every device.", fmt));
+        const folders = el("div", "folders");
+        for (const dir of s.libraryFolders) {
+          const row = el("div", "folder");
+          const rm = el("button", "", "Remove");
+          rm.type = "button";
+          rm.setAttribute("aria-label", `Remove ${dir} from the library`);
+          rm.title = "Leaves the files where they are";
+          rm.addEventListener("click", async () => {
+            await RemoveLibraryFolder(dir);
+            renderSettings();
+          });
+          row.append(el("span", "", dir), rm);
+          folders.append(row);
+        }
+        box.append(setting("Music folders", "Your own music, shown in the Library with your downloads.", button("Add folder…", addFolder), s.libraryFolders.length ? folders : null));
         box.append(
           setting("Download folder", "Where downloads are saved.", [button("Open", openDownloads), button("Change…", chooseFolder)], el("div", "path", s.downloadDir)),
         );
@@ -3771,6 +3941,133 @@
         lfmNote = null;
         renderSettings();
       }
+
+      // ── Library ──────────────────────────────────────────────────────
+      // The download folder and the user's own folders, scanned by Go.
+      // The page's own box filters it by title or artist, as the TUI's
+      // search box does on its Library tab.
+      let lib = null; // null until the first scan is in
+      let libFilter = "";
+
+      async function renderLibrary() {
+        if (view !== "library") return;
+        if (lib === null) {
+          skeleton();
+          try {
+            lib = await Library();
+          } catch (err) {
+            if (view !== "library") return;
+            const p = problemOf(err);
+            notice(pane, "The library didn’t load", "Its folders couldn’t be read. Check them in Settings, then try again.", { label: "Try again", run: renderLibrary }, p.detail);
+            return;
+          }
+          if (view !== "library") return;
+        }
+        const top = el("div", "list-head");
+        const count = el("span", "sub");
+        const filter = el("input", "lib-filter");
+        filter.type = "search";
+        filter.placeholder = "Filter by title or artist";
+        filter.setAttribute("aria-label", "Filter the library");
+        filter.value = libFilter;
+        filter.addEventListener("input", () => {
+          libFilter = filter.value;
+          selected = 0;
+          fillLibrary();
+        });
+        filter.addEventListener("keydown", (e) => {
+          if (e.key === "Enter" && results[selected]) enqueue(results[selected]);
+        });
+        const again = el("button", "icon-btn");
+        again.type = "button";
+        again.title = "Scan the folders again";
+        again.setAttribute("aria-label", "Rescan the library");
+        again.append(icon('<path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" /><path d="M3 3v5h5" /><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16" /><path d="M16 16h5v5" />'));
+        again.addEventListener("click", async () => {
+          again.classList.add("spin");
+          try {
+            lib = await Rescan();
+          } catch (err) {
+            say("The library didn’t rescan", { error: true, full: problemOf(err).detail });
+          }
+          again.classList.remove("spin");
+          fillLibrary();
+        });
+        top.append(el("h2", "", "Library"), count, filter, again);
+        const body = el("div", "lib");
+        pane.replaceChildren(top, body);
+        fillLibrary();
+      }
+
+      // The list under the header, redrawn as the filter changes, so the
+      // box keeps its focus.
+      function fillLibrary() {
+        const body = pane.querySelector(".lib");
+        if (view !== "library" || !body || lib === null) return;
+        const n = lib.length;
+        pane.querySelector(".list-head .sub").textContent = `${n} ${n === 1 ? "song" : "songs"}`;
+        const f = libFilter.trim().toLowerCase();
+        results = f ? lib.filter((t) => (t.title || "").toLowerCase().includes(f) || (t.artist || "").toLowerCase().includes(f)) : lib;
+        selected = results.length ? Math.max(0, Math.min(selected, results.length - 1)) : -1;
+        if (!n) {
+          notice(body, "Nothing here yet", "Download something, or add your music folders in Settings.", { label: "Add a music folder", run: addFolder }, null, false);
+          return;
+        }
+        if (!results.length) {
+          notice(body, "Nothing matches", `No song or artist in your library has “${libFilter.trim()}” in it.`, null, null, false);
+          return;
+        }
+        const scroll = pane.scrollTop;
+        const { head, list } = render();
+        body.replaceChildren(head, list);
+        pane.scrollTop = scroll;
+        moveCursor();
+      }
+
+      async function addFolder() {
+        try {
+          await AddLibraryFolder();
+        } catch (err) {
+          say("That folder can’t be added", { error: true, full: problemOf(err).detail });
+        }
+        if (view === "settings") renderSettings();
+      }
+
+      // Asks before anything irreversible; Enter or the button confirms,
+      // Esc or Cancel does not.
+      function ask(title, body, ok) {
+        const d = $("ask");
+        $("ask-title").textContent = title;
+        $("ask-body").textContent = body;
+        $("ask-ok").textContent = ok;
+        d.returnValue = "";
+        d.showModal();
+        $("ask-ok").focus();
+        return new Promise((res) => d.addEventListener("close", () => res(d.returnValue === "yes"), { once: true }));
+      }
+
+      async function deleteFile(t) {
+        const yes = await ask(`Delete “${t.title}”?`, `The file is deleted from disk: ${t.file_path}`, "Delete");
+        if (!yes) return;
+        const row = pane.querySelectorAll(".list .track")[results.indexOf(t)];
+        try {
+          lib = await DeleteFile(t.file_path);
+        } catch (err) {
+          say(`Couldn’t delete “${t.title}”`, { error: true, full: problemOf(err).detail });
+          return;
+        }
+        say(`Deleted “${t.title}”`);
+        if (row) {
+          row.classList.add("leaving");
+          await new Promise((r) => setTimeout(r, 160));
+        }
+        fillLibrary();
+      }
+
+      window.runtime?.EventsOn("library", (l) => {
+        lib = l;
+        fillLibrary();
+      });
 
       // ── Downloads ────────────────────────────────────────────────────
       // One at a time, as in the TUI. Go sends the whole list on every

@@ -43,6 +43,10 @@ func TestCleanTitle(t *testing.T) {
 // mtime skips the ffprobe call (the file here isn't real audio, so a
 // probe returns 0 while the cache value is nonzero and must win).
 func TestScanDirUsesCache(t *testing.T) {
+	// Without ffprobe nothing is cached at all, which is the point.
+	if _, err := exec.LookPath("ffprobe"); err != nil {
+		t.Skip("ffprobe not installed")
+	}
 	dir := t.TempDir()
 	path := filepath.Join(dir, "Artist - Song.m4a")
 	if err := os.WriteFile(path, []byte("not really audio"), 0644); err != nil {
@@ -164,3 +168,4 @@ func TestProbeReadsTagsAcrossFormats(t *testing.T) {
 		}
 	}
 }
+

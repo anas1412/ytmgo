@@ -16,6 +16,7 @@ import (
 	"ytmgo/internal/db"
 	"ytmgo/internal/deps"
 	"ytmgo/internal/downloader"
+	"ytmgo/internal/library"
 	"ytmgo/internal/proc"
 	"ytmgo/internal/queue"
 	"ytmgo/internal/search"
@@ -66,6 +67,13 @@ type App struct {
 	fetchTool func(name string, progress func(done, total int64)) error
 	toolMu    sync.Mutex
 	quit      context.CancelFunc
+
+	// lib is the library, nil until the first scan; scanLibrary is
+	// library.Scan with the database's probe cache, and scanMu keeps
+	// scans one at a time.
+	lib         []queue.Track
+	scanMu      sync.Mutex
+	scanLibrary func(downloads string, extra []string) ([]queue.Track, error)
 
 	host Host
 	// dl is the downloader, started on first use by newDownloader;
@@ -128,8 +136,16 @@ func New(d *db.DB) *App {
 		album:      ytmusic.AlbumTracks,
 		artist:     ytmusic.Artist,
 		playlist:   search.PlaylistTracks,
-		streamURL:  ytresolve.StreamURL,
-		open:       proc.Open,
+		scanLibrary: func(downloads string, extra []string) ([]queue.Track, error) {
+			cache, _ := d.LoadLibraryCache() // without it, every file is read again
+			tracks, updates, err := library.Scan(downloads, extra, cache)
+			if err == nil {
+				d.SaveLibraryCache(updates) // best effort, as in the TUI
+			}
+			return tracks, err
+		},
+		streamURL: ytresolve.StreamURL,
+		open:      proc.Open,
 		newDownloader: func(dir, format string) downloads {
 			return downloader.New(dir, format)
 		},
@@ -181,7 +197,7 @@ func (a *App) Search(query string) (Found, error) {
 		if err != nil {
 			return Found{}, problem(err)
 		}
-		return Found{Tracks: asTracks(results), Playlist: title, Missed: missed}, nil
+		return Found{Tracks: a.mark(asTracks(results)), Playlist: title, Missed: missed}, nil
 	}
 	limit := a.settings.SearchLimit
 	if limit <= 0 {
@@ -191,7 +207,7 @@ func (a *App) Search(query string) (Found, error) {
 	if err != nil {
 		return Found{}, problem(err)
 	}
-	return Found{Tracks: asTracks(results)}, nil
+	return Found{Tracks: a.mark(asTracks(results))}, nil
 }
 
 func asTracks(results []search.Result) []queue.Track {
@@ -231,7 +247,7 @@ func (a *App) Recommendations() ([]queue.Track, error) {
 	if err != nil {
 		return nil, problem(err)
 	}
-	return asTracks(results), nil
+	return a.mark(asTracks(results)), nil
 }
 
 // Played records that t has started, as the TUI does at the start of a
@@ -248,6 +264,9 @@ type SettingsView struct {
 	Autoplay       bool   `json:"autoplay"`
 	DownloadFormat string `json:"downloadFormat"` // "m4a" or "mp3"
 	DownloadDir    string `json:"downloadDir"`    // where downloads go, resolved
+	// LibraryFolders are the user's own music folders; the download
+	// folder is always in the library besides.
+	LibraryFolders []string `json:"libraryFolders"`
 }
 
 // Settings reads them.
@@ -257,6 +276,7 @@ func (a *App) Settings() SettingsView {
 	return SettingsView{
 		SearchLimit: a.settings.SearchLimit, Autoplay: a.settings.AutoplayEnabled,
 		DownloadFormat: a.settings.DownloadFormat, DownloadDir: a.settings.ResolveDownloadDir(),
+		LibraryFolders: append([]string{}, a.settings.ResolveLibraryDirs()...),
 	}
 }
 
