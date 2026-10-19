@@ -37,8 +37,8 @@ func legacyDir() (string, error) {
 // directory and moving any pre-v1 database into it.
 //
 // The database is state, not configuration, so it belongs under the
-// platform data dir — XDG_DATA_HOME on Linux, Application Support on
-// macOS — beside the downloads that already live there.
+// platform data dir — XDG_DATA_HOME on Linux, %LOCALAPPDATA% on
+// Windows — beside the downloads that already live there.
 func dbPath() (string, error) {
 	base, err := settings.UserDataDir()
 	if err != nil {

@@ -130,7 +130,7 @@ func PlaybackModeLabel(mode int) string {
 // Resolution order:
 //  1. A custom path set on the Settings page.
 //  2. The platform user-data dir (XDG_DATA_HOME/ytmgo/downloads on
-//     Linux, ~/Library/Application Support/ytmgo/downloads on macOS).
+//     Linux, %LOCALAPPDATA%\ytmgo\downloads on Windows).
 //
 // The legacy default "downloads" counts as unset, so upgrading users get
 // the XDG location instead of a stray folder next to the binary.
@@ -156,12 +156,15 @@ func UserDataDir() (string, error) { return userDataDir() }
 
 // userDataDir returns the platform base directory for app data.
 func userDataDir() (string, error) {
+	// On Windows this is %LOCALAPPDATA%, which Go only exposes as the
+	// cache dir. It is the right home all the same: per-machine, never
+	// roamed, and where the Windows build keeps its tools too.
+	if runtime.GOOS == "windows" {
+		return os.UserCacheDir()
+	}
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return "", err
-	}
-	if runtime.GOOS == "darwin" {
-		return filepath.Join(home, "Library", "Application Support"), nil
 	}
 	if xdg := os.Getenv("XDG_DATA_HOME"); xdg != "" {
 		return xdg, nil
