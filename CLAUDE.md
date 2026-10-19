@@ -63,3 +63,32 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
 ---
 
 **These guidelines are working if:** fewer unnecessary changes in diffs, fewer rewrites due to overcomplication, and clarifying questions come before implementation rather than after mistakes.
+
+---
+
+## ytmgo: where platform code goes
+
+The TUI is Linux only; Windows gets the GUI (see `win_migration.md`).
+The shared packages under `internal/` serve both, so they must not care
+which OS they run on.
+
+- **OS-specific code lives in `internal/proc`, `internal/deps`, or
+  `internal/settings`** (or a new package of the same kind), never in
+  the shared packages or the front ends.
+  - `proc`: starting and killing external tools.
+  - `deps`: finding and fetching them.
+  - `settings`: data directories and path handling.
+- **Each OS gets its native way, not an imitation of another.** Windows
+  uses Job Objects, `%LOCALAPPDATA%`, `.exe`, and `CREATE_NO_WINDOW`; Linux
+  uses process groups and XDG. No POSIX shims or emulation.
+- **Code that does not compile elsewhere goes in `_windows.go` / `_unix.go`
+  files.** Code that only differs in a value uses `runtime.GOOS`.
+- **Run every external tool through `proc.CommandContext` and `deps.Path`,**
+  never `exec.Command` with a bare name. On Windows a bare name finds
+  nothing, and a child started without `proc` flashes a console window
+  in the GUI.
+- **Windows tests run locally under Wine:**
+  `GOOS=windows go test -c -o x.exe ./internal/<pkg>`, then
+  `wine x.exe -test.v` from the package directory. Tests that isolate
+  user dirs must fake `LOCALAPPDATA` and `USERPROFILE` as well as `HOME`
+  and `XDG_*`.
