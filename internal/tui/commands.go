@@ -147,23 +147,15 @@ func historySeeds(database *db.DB, max int) []string {
 	if database == nil {
 		return nil
 	}
-	entries, err := database.LoadPlayHistory(50, 0)
+	entries, err := database.LoadPlayHistory(search.SeedHistory, 0)
 	if err != nil {
 		return nil
 	}
-	seen := make(map[string]bool)
-	var seeds []string
-	for _, e := range entries {
-		if seen[e.TrackID] || !ytmusic.IsVideoID(e.TrackID) {
-			continue
-		}
-		seen[e.TrackID] = true
-		seeds = append(seeds, e.TrackID)
-		if len(seeds) >= max {
-			break
-		}
+	ids := make([]string, len(entries))
+	for i, e := range entries {
+		ids[i] = e.TrackID
 	}
-	return seeds
+	return search.Seeds(ids, max)
 }
 
 // fetchRecommendationsCmd fires a request for YouTube Music radio
@@ -171,7 +163,7 @@ func historySeeds(database *db.DB, max int) []string {
 // seq is the generation counter — stale responses are ignored.
 func fetchRecommendationsCmd(seq, limit int, db *db.DB) tea.Cmd {
 	return func() tea.Msg {
-		results, err := search.FetchRecommendations(limit, historySeeds(db, 4))
+		results, err := search.FetchRecommendations(limit, historySeeds(db, search.SeedCount))
 		if err != nil {
 			return RecommendationsMsg{Error: err, Seq: seq}
 		}
@@ -188,7 +180,7 @@ func fetchRecommendationsCmd(seq, limit int, db *db.DB) tea.Cmd {
 func fetchAutoplayCmd(db *db.DB) tea.Cmd {
 	const autoplayBatch = 1
 	return func() tea.Msg {
-		results, err := search.FetchRecommendations(autoplayBatch, historySeeds(db, 4))
+		results, err := search.FetchRecommendations(autoplayBatch, historySeeds(db, search.SeedCount))
 		if err != nil || len(results) == 0 {
 			return nil // silent — no results to autoplay
 		}

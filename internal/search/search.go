@@ -53,6 +53,33 @@ func Search(query string, limit int) ([]Result, error) {
 	return ytTracksToResults(tracks), nil
 }
 
+// Recommendations and autoplay both read the SeedHistory newest plays
+// and seed from up to SeedCount of them.
+const (
+	SeedHistory = 50
+	SeedCount   = 4
+)
+
+// Seeds picks the radio seeds for FetchRecommendations from the track
+// ids of play history, newest first: up to max unique video ids. Entries
+// that cannot seed a YouTube Music radio — TIDAL numbers from before,
+// library file paths — are skipped.
+func Seeds(trackIDs []string, max int) []string {
+	seen := make(map[string]bool)
+	var seeds []string
+	for _, id := range trackIDs {
+		if seen[id] || !ytmusic.IsVideoID(id) {
+			continue
+		}
+		seen[id] = true
+		seeds = append(seeds, id)
+		if len(seeds) >= max {
+			break
+		}
+	}
+	return seeds
+}
+
 // FetchRecommendations returns recommended tracks seeded from listening
 // history. seedVideoIDs are the most recent unique videoIds from play
 // history (newest first); each seed contributes its YouTube Music radio

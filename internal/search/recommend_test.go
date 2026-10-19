@@ -54,3 +54,19 @@ func TestNoSeedsMeansNoRecommendations(t *testing.T) {
 			len(got), got[0].Title)
 	}
 }
+
+// Seeds come newest first, unique, only real video ids, and no more than
+// asked for: a TIDAL number or a file path cannot seed a radio.
+func TestSeeds(t *testing.T) {
+	ids := []string{"dQw4w9WgXcQ", "/home/me/Music/a.mp3", "dQw4w9WgXcQ", "123456", "9bZkp7q19f0", "kJQP7kiw5Fk", "OPf0YbXqDm0", "JGwWNGJdvx8"}
+	got := Seeds(ids, 4)
+	want := []string{"dQw4w9WgXcQ", "9bZkp7q19f0", "kJQP7kiw5Fk", "OPf0YbXqDm0"}
+	if len(got) != len(want) {
+		t.Fatalf("got %v, want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("seed %d = %q, want %q", i, got[i], want[i])
+		}
+	}
+}
