@@ -1,14 +1,15 @@
 package library
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io/fs"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 
+	"ytmgo/internal/proc"
 	"ytmgo/internal/queue"
 )
 
@@ -125,7 +126,9 @@ func Scan(downloads string, extra []string, cache DurationCache) ([]Track, Durat
 // Keys are matched case-insensitively — Vorbis comments come back as
 // TITLE, not title.
 func probe(path string) CacheEntry {
-	cmd := exec.Command("ffprobe",
+	// Through proc so a GUI on Windows does not flash a console window
+	// for every file scanned.
+	cmd := proc.CommandContext(context.Background(), "ffprobe",
 		"-v", "quiet",
 		"-print_format", "json",
 		"-show_entries", "format=duration:format_tags=title,artist,album:stream_tags=title,artist,album",

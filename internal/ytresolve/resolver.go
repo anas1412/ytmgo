@@ -9,9 +9,9 @@ import (
 	"fmt"
 	"os/exec"
 	"strings"
-	"syscall"
 	"time"
 
+	"ytmgo/internal/proc"
 	"ytmgo/internal/ytdlp"
 )
 
@@ -47,11 +47,7 @@ func Resolve(artist, title string) (*Result, error) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), resolveTimeout)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, ytdlp.Path(), args...)
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
-	cmd.Cancel = func() error {
-		return syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
-	}
+	cmd := proc.CommandContext(ctx, ytdlp.Path(), args...)
 	stdout, err := cmd.Output()
 	if err != nil {
 		if ctx.Err() != nil {

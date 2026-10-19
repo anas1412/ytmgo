@@ -8,14 +8,13 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 
+	"ytmgo/internal/proc"
 	"ytmgo/internal/ytdlp"
 	"ytmgo/internal/ytresolve"
 )
@@ -92,18 +91,6 @@ func New(outDir, format string) *Downloader {
 	d.wg.Add(1)
 	go d.worker(outDir)
 	return d
-}
-
-// pgidCommand builds a command in its own process group so cancelling
-// the context kills the whole tree (yt-dlp spawns ffmpeg children that
-// a plain Process.Kill would orphan).
-func pgidCommand(ctx context.Context, name string, args ...string) *exec.Cmd {
-	cmd := exec.CommandContext(ctx, name, args...)
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
-	cmd.Cancel = func() error {
-		return syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
-	}
-	return cmd
 }
 
 // SetFormat updates the output audio format for new downloads.
@@ -371,7 +358,7 @@ func (d *Downloader) runJob(job *Job, outDir string) {
 		videoURL,
 	}
 
-	cmd := pgidCommand(d.ctx, ytdlp.Path(), args...)
+	cmd := proc.CommandContext(d.ctx, ytdlp.Path(), args...)
 
 	// yt-dlp writes progress to stdout (stderr carries only warnings and
 	// errors), so the percentage must be parsed from stdout.
@@ -529,7 +516,7 @@ func (d *Downloader) embedCoverArt(audioPath, coverURL string) error {
 	tmpName := audioTmp.Name()
 	audioTmp.Close()
 
-	cmd := pgidCommand(d.ctx, "ffmpeg",
+	cmd := proc.CommandContext(d.ctx, "ffmpeg",
 		"-i", audioPath,
 		"-i", coverTmp.Name(),
 		"-map", "0:a", // audio from first input
