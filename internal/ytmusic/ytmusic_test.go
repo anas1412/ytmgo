@@ -1,6 +1,7 @@
 package ytmusic
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 )
@@ -29,6 +30,64 @@ func TestIsVideoID(t *testing.T) {
 		if IsVideoID(bad) {
 			t.Errorf("IsVideoID(%q) = true, want false", bad)
 		}
+	}
+}
+
+// multiArtistRow is a songs-search row as YouTube Music returns it for a
+// collaboration: the byline's artist runs are joined by plain " & " and
+// ", " runs, which once came back as the album.
+const multiArtistRow = `{
+  "flexColumns": [
+    {"musicResponsiveListItemFlexColumnRenderer": {"text": {"runs": [
+      {"text": "Get Lucky (Radio Edit - feat. Pharrell Williams and Nile Rodgers)",
+       "navigationEndpoint": {"watchEndpoint": {"videoId": "h5EofwRzit0"}}}]}}},
+    {"musicResponsiveListItemFlexColumnRenderer": {"text": {"runs": [
+      {"text": "Daft Punk", "navigationEndpoint": {"browseEndpoint": {"browseId": "UC_kRDKYrUlrbtrSiyu5Tflg",
+        "browseEndpointContextSupportedConfigs": {"browseEndpointContextMusicConfig": {"pageType": "MUSIC_PAGE_TYPE_ARTIST"}}}}},
+      {"text": ", "},
+      {"text": "Pharrell Williams", "navigationEndpoint": {"browseEndpoint": {"browseId": "UCNUwSmXKCnS3E5CapC1G9vw",
+        "browseEndpointContextSupportedConfigs": {"browseEndpointContextMusicConfig": {"pageType": "MUSIC_PAGE_TYPE_ARTIST"}}}}},
+      {"text": " & "},
+      {"text": "Nile Rodgers", "navigationEndpoint": {"browseEndpoint": {"browseId": "UCwEqVRyD6kFhNl8bY2pNkdQ",
+        "browseEndpointContextSupportedConfigs": {"browseEndpointContextMusicConfig": {"pageType": "MUSIC_PAGE_TYPE_ARTIST"}}}}},
+      {"text": " • "},
+      {"text": "Get Lucky", "navigationEndpoint": {"browseEndpoint": {"browseId": "MPREb_hZQgd5b2x8i",
+        "browseEndpointContextSupportedConfigs": {"browseEndpointContextMusicConfig": {"pageType": "MUSIC_PAGE_TYPE_ALBUM"}}}}},
+      {"text": " • "},
+      {"text": "4:08"}]}}}
+  ]
+}`
+
+func TestParseSearchItemMultiArtist(t *testing.T) {
+	var item interface{}
+	if err := json.Unmarshal([]byte(multiArtistRow), &item); err != nil {
+		t.Fatal(err)
+	}
+	got, ok := parseSearchItem(item)
+	if !ok {
+		t.Fatal("row rejected")
+	}
+	want := Track{
+		VideoID:        "h5EofwRzit0",
+		Title:          "Get Lucky (Radio Edit - feat. Pharrell Williams and Nile Rodgers)",
+		Artist:         "Daft Punk, Pharrell Williams & Nile Rodgers",
+		ArtistBrowseID: "UC_kRDKYrUlrbtrSiyu5Tflg",
+		Album:          "Get Lucky",
+		AlbumBrowseID:  "MPREb_hZQgd5b2x8i",
+		Duration:       248,
+	}
+	if got != want {
+		t.Errorf("got  %+v\nwant %+v", got, want)
+	}
+
+	// Without an album run the album stays empty rather than picking
+	// up a separator.
+	noAlbum := strings.Replace(multiArtistRow, "MUSIC_PAGE_TYPE_ALBUM", "MUSIC_PAGE_TYPE_PLAYLIST", 1)
+	if err := json.Unmarshal([]byte(noAlbum), &item); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := parseSearchItem(item); got.Album != "" || got.AlbumBrowseID != "" || got.Artist != want.Artist {
+		t.Errorf("no album run: got album %q (%q), artist %q", got.Album, got.AlbumBrowseID, got.Artist)
 	}
 }
 

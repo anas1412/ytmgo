@@ -230,36 +230,11 @@ func parseSearchItem(item interface{}) (Track, bool) {
 		return t, false
 	}
 
-	// Second column runs: [Artist, " • ", Album, " • ", "4:58"].
-	// Each run may carry a navigationEndpoint; the album run's points
-	// at the album page (MPREb_…), which open-album-from-song uses.
+	// Second column runs: [Artist, " & ", Artist, " • ", Album, " • ", "4:58"].
 	runs, _ := dig(item, "flexColumns", 1, "musicResponsiveListItemFlexColumnRenderer",
 		"text", "runs").([]interface{})
-	var fields []string
-	var fieldAlbumIDs []string // parallel to fields: album browse id of the run, if any
-	for _, r := range runs {
-		s := digString(r, "text")
-		if strings.TrimSpace(s) == "•" || s == "" {
-			continue
-		}
-		fields = append(fields, s)
-		fieldAlbumIDs = append(fieldAlbumIDs, albumBrowseIDFromRun(r))
-		// The first run that links to an artist page wins: a
-		// collaboration lists several, and the first is the primary.
-		if t.ArtistBrowseID == "" {
-			t.ArtistBrowseID = artistBrowseIDFromRun(r)
-		}
-	}
-	for i, f := range fields {
-		switch {
-		case i == 0:
-			t.Artist = f
-		case parseClock(f) > 0 && i == len(fields)-1:
-			t.Duration = parseClock(f)
-		case t.Album == "":
-			t.Album = f
-			t.AlbumBrowseID = fieldAlbumIDs[i]
-		}
+	if last, groups := readByline(&t, runs); groups > 1 {
+		t.Duration = parseClock(last)
 	}
 
 	t.CoverURL = largestThumbnail(dig(item, "thumbnail", "musicThumbnailRenderer", "thumbnail", "thumbnails"))
@@ -275,59 +250,69 @@ func parseRadioItem(item interface{}) (Track, bool) {
 		return t, false
 	}
 
-	// Byline runs: [Artist, " • ", Album, " • ", "2016"].
+	// Byline runs: [Artist, " • ", Album, " • ", "2016"], read like a
+	// search row's.
 	runs, _ := dig(item, "longBylineText", "runs").([]interface{})
-	var fields []string
-	var fieldAlbumIDs []string // parallel to fields, as in parseSearchItem
-	for _, r := range runs {
-		s := digString(r, "text")
-		if strings.TrimSpace(s) == "•" || s == "" {
-			continue
-		}
-		fields = append(fields, s)
-		fieldAlbumIDs = append(fieldAlbumIDs, albumBrowseIDFromRun(r))
-		// Radio items carry the same artist link as search rows, in a
-		// different byline field. Missing it here meant recommendations
-		// — the list ytmgo opens on — were the one place [I] did nothing.
-		if t.ArtistBrowseID == "" {
-			t.ArtistBrowseID = artistBrowseIDFromRun(r)
-		}
-	}
-	if len(fields) > 0 {
-		t.Artist = fields[0]
-	}
-	if len(fields) > 1 {
-		t.Album = fields[1]
-		t.AlbumBrowseID = fieldAlbumIDs[1]
-	}
+	readByline(&t, runs)
 
 	t.Duration = parseClock(digString(item, "lengthText", "runs", 0, "text"))
 	t.CoverURL = largestThumbnail(dig(item, "thumbnail", "thumbnails"))
 	return t, true
 }
 
-// albumBrowseIDFromRun returns the album browse id (MPREb_…) carried by
-// a byline run's navigation endpoint, or "" when the run doesn't point
-// at an album. Artist runs point at channels (MPLA…), so filtering on
-// the MPRE prefix picks out just the album run.
+// readByline fills t's artist and album from byline runs such as
+// [Artist, " & ", Artist, " • ", Album, " • ", "4:58"], and returns the
+// text of the last " • " group and how many groups there were. The
+// artist is the whole first group, so collaborators keep the separators
+// YouTube Music shows between them; the album is the run that links to
+// an album page, wherever it sits. A separator inside the artist group
+// (" & ", ", ") is plain text, so it can never be taken for the album.
+func readByline(t *Track, runs []interface{}) (last string, groups int) {
+	groups = 1
+	for _, r := range runs {
+		s := digString(r, "text")
+		if strings.TrimSpace(s) == "•" {
+			groups++
+			last = ""
+			continue
+		}
+		last += s
+		if groups == 1 {
+			t.Artist += s
+		}
+		// The first run that links to an artist page wins: a
+		// collaboration lists several, and the first is the primary.
+		if t.ArtistBrowseID == "" {
+			t.ArtistBrowseID = artistBrowseIDFromRun(r)
+		}
+		if id := albumBrowseIDFromRun(r); id != "" && t.AlbumBrowseID == "" {
+			t.Album, t.AlbumBrowseID = s, id
+		}
+	}
+	return last, groups
+}
+
 // artistBrowseIDFromRun returns the run's artist page id, if it links to
 // one. Identified by the run's own pageType rather than the id prefix:
 // UC ids are channel ids generally, and only this tag says the channel
 // is an artist page.
 func artistBrowseIDFromRun(run interface{}) string {
+	return browseIDOfType(run, "MUSIC_PAGE_TYPE_ARTIST")
+}
+
+// albumBrowseIDFromRun returns the album browse id (MPREb_…) carried by
+// a byline run, or "" when the run doesn't link to an album page.
+func albumBrowseIDFromRun(run interface{}) string {
+	return browseIDOfType(run, "MUSIC_PAGE_TYPE_ALBUM")
+}
+
+func browseIDOfType(run interface{}, pageType string) string {
 	if digString(run, "navigationEndpoint", "browseEndpoint",
 		"browseEndpointContextSupportedConfigs", "browseEndpointContextMusicConfig",
-		"pageType") != "MUSIC_PAGE_TYPE_ARTIST" {
+		"pageType") != pageType {
 		return ""
 	}
 	return digString(run, "navigationEndpoint", "browseEndpoint", "browseId")
-}
-
-func albumBrowseIDFromRun(run interface{}) string {
-	if id := digString(run, "navigationEndpoint", "browseEndpoint", "browseId"); strings.HasPrefix(id, "MPRE") {
-		return id
-	}
-	return ""
 }
 
 // sizeRe matches the size suffix of googleusercontent thumbnail URLs.
