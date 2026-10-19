@@ -364,11 +364,7 @@ func downloadAlbum(query, parentDir, format string) error {
 		return err
 	}
 
-	folder := alb.Title
-	if alb.Artist != "" {
-		folder = alb.Artist + " - " + alb.Title
-	}
-	dir := filepath.Join(parentDir, sanitizePathSegment(folder))
+	dir := downloader.AlbumDir(parentDir, alb.Artist, alb.Title)
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return fmt.Errorf("cannot create %s: %w", dir, err)
 	}
@@ -383,13 +379,11 @@ func downloadAlbum(query, parentDir, format string) error {
 	defer d.Close()
 
 	tty := isTTY()
-	// Number width follows the tracklist: 9 tracks -> "1", 10+ -> "01".
-	width := len(fmt.Sprintf("%d", len(alb.Tracks)))
 	var failed int
 
 	for i, t := range alb.Tracks {
 		n := i + 1
-		stem := fmt.Sprintf("%0*d - %s", width, n, t.Title)
+		stem := downloader.AlbumStem(n, len(alb.Tracks), t.Title)
 		label := fmt.Sprintf("[%d/%d] %s", n, len(alb.Tracks), t.Title)
 
 		d.EnqueueAs(t.VideoID, t.Title, alb.Artist, ytmusic.WatchURL(t.VideoID), dir, t.CoverURL, stem)
@@ -434,20 +428,6 @@ func downloadAlbum(query, parentDir, format string) error {
 	return nil
 }
 
-// sanitizePathSegment strips characters that are awkward in a directory
-// name. Mirrors the downloader's filename sanitising.
-func sanitizePathSegment(s string) string {
-	var b strings.Builder
-	for _, r := range s {
-		switch r {
-		case '/', '\\', ':', '*', '?', '"', '<', '>', '|':
-			b.WriteRune('_')
-		default:
-			b.WriteRune(r)
-		}
-	}
-	return strings.TrimSpace(b.String())
-}
 
 // resolveFormat validates a --format override, falling back to the
 // configured format when the flag is absent.

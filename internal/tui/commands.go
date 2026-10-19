@@ -8,8 +8,6 @@ import (
 	"os"
 	"os/exec"
 	"path"
-	"path/filepath"
-	"strings"
 	"time"
 
 	"ytmgo/internal/coverart"
@@ -273,30 +271,12 @@ func downloadAlbumCmd(a ytmusic.Album, parentDir string) tea.Cmd {
 		if err != nil {
 			return AlbumDownloadMsg{Album: a, Error: err}
 		}
-		folder := full.Title
-		if full.Artist != "" {
-			folder = full.Artist + " - " + full.Title
-		}
-		dir := filepath.Join(parentDir, sanitizeDirName(folder))
+		dir := downloader.AlbumDir(parentDir, full.Artist, full.Title)
 		if err := os.MkdirAll(dir, 0755); err != nil {
 			return AlbumDownloadMsg{Album: full, Error: err}
 		}
 		return AlbumDownloadMsg{Album: full, Dir: dir}
 	}
-}
-
-// sanitizeDirName strips characters that are awkward in a folder name.
-func sanitizeDirName(s string) string {
-	var b strings.Builder
-	for _, r := range s {
-		switch r {
-		case '/', '\\', ':', '*', '?', '"', '<', '>', '|':
-			b.WriteRune('_')
-		default:
-			b.WriteRune(r)
-		}
-	}
-	return strings.TrimSpace(b.String())
 }
 
 // ─── URL prefetch (background cache) ─────────────────────────────────

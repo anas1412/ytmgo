@@ -132,21 +132,6 @@ func TestResolveLocation(t *testing.T) {
 	}
 }
 
-func TestSanitizePathSegment(t *testing.T) {
-	cases := map[string]string{
-		"Mild High Club - Timeline": "Mild High Club - Timeline",
-		"AC/DC - Back In Black":     "AC_DC - Back In Black",
-		`Hi: "there" <x>|y*z?`:      `Hi_ _there_ _x__y_z_`,
-		"  padded  ":                "padded",
-		"ラブ・ストーリーは突然に":              "ラブ・ストーリーは突然に",
-	}
-	for in, want := range cases {
-		if got := sanitizePathSegment(in); got != want {
-			t.Errorf("sanitizePathSegment(%q) = %q, want %q", in, got, want)
-		}
-	}
-}
-
 // TestAlbumFlagParsing checks that -a is consumed as a flag rather than
 // swallowed into the query, on both commands that accept it.
 func TestAlbumFlagParsing(t *testing.T) {

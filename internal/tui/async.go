@@ -133,9 +133,8 @@ func (m Model) handleAlbumDownload(msg AlbumDownloadMsg) (tea.Model, tea.Cmd) {
 	m.ensureDownloader()
 	// Number the stems so the folder sorts in album order, exactly as
 	// the CLI does.
-	width := len(fmt.Sprintf("%d", len(alb.Tracks)))
 	for i, t := range alb.Tracks {
-		stem := fmt.Sprintf("%0*d - %s", width, i+1, t.Title)
+		stem := downloader.AlbumStem(i+1, len(alb.Tracks), t.Title)
 		m.downloader.EnqueueAs(t.VideoID, t.Title, alb.Artist,
 			ytmusic.WatchURL(t.VideoID), msg.Dir, t.CoverURL, stem)
 	}
