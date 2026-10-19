@@ -182,10 +182,14 @@ func (s *Settings) ResolveLibraryDirs() []string {
 		p := strings.TrimSpace(part)
 		// A folder dropped onto the terminal arrives however the
 		// terminal likes to paste it: quoted, as a file:// URL, or with
-		// spaces backslash-escaped. Take all three.
+		// spaces backslash-escaped. Take all three. Not the escape on
+		// Windows, where a backslash is always a separator: D:\Music\ Live
+		// is a folder whose name starts with a space.
 		p = strings.TrimPrefix(p, "file://")
 		p = strings.Trim(p, `"'`)
-		p = strings.ReplaceAll(p, `\ `, " ")
+		if runtime.GOOS != "windows" {
+			p = strings.ReplaceAll(p, `\ `, " ")
+		}
 		if p == "" {
 			continue
 		}

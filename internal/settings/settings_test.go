@@ -3,10 +3,14 @@ package settings
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 )
 
 func TestResolveLibraryDirs(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Unix paths; see TestResolveLibraryDirsWindows")
+	}
 	home, _ := os.UserHomeDir()
 	s := &Settings{LibraryDirs: " ~/Music ,, /mnt/more/ , ~ "}
 	got := s.ResolveLibraryDirs()
@@ -28,6 +32,9 @@ func TestResolveLibraryDirs(t *testing.T) {
 // terminal likes — quoted, escaped, or as a URL — and each must land as
 // the plain path.
 func TestResolveLibraryDirsAcceptsDroppedPaths(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("terminal drag-and-drop, which only the TUI does")
+	}
 	for in, want := range map[string]string{
 		`'/home/me/My Music'`:        "/home/me/My Music",
 		`"/home/me/My Music"`:        "/home/me/My Music",
