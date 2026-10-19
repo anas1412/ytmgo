@@ -8,10 +8,15 @@
 package gui
 
 import (
+	"context"
+	"path/filepath"
 	"strings"
 	"sync"
 
 	"ytmgo/internal/db"
+	"ytmgo/internal/deps"
+	"ytmgo/internal/downloader"
+	"ytmgo/internal/proc"
 	"ytmgo/internal/queue"
 	"ytmgo/internal/search"
 	"ytmgo/internal/settings"
@@ -51,6 +56,27 @@ type App struct {
 
 	lfm      lastfmAPI
 	lfmToken string // while the user is approving ytmgo on last.fm
+
+	// streamURL is ytresolve.StreamURL; open is proc.Open.
+	streamURL func(watchURL string) (string, error)
+	open      func(path string) error
+
+	// fetchTool installs a tool missing on Windows, the first time it is
+	// needed; quit cancels that when the window closes.
+	fetchTool func(name string, progress func(done, total int64)) error
+	toolMu    sync.Mutex
+	quit      context.CancelFunc
+
+	host Host
+	// dl is the downloader, started on first use by newDownloader;
+	// dlMu guards it, apart from mu, which its progress needs.
+	dlMu          sync.Mutex
+	dl            downloads
+	newDownloader func(dir, format string) downloads
+	// local is the downloaded files PlaySource has handed out, by
+	// track id, for Media to serve.
+	localMu sync.Mutex
+	local   map[string]string
 }
 
 // New returns the App to bind, reading the user's settings and saved
@@ -72,7 +98,15 @@ func New(d *db.DB) *App {
 	if err != nil {
 		favs = []queue.Track{}
 	}
+	ctx, quit := context.WithCancel(context.Background())
 	return &App{
+		quit: quit,
+		fetchTool: func(name string, progress func(done, total int64)) error {
+			if filepath.IsAbs(deps.Path(name)) || !deps.CanFetch(name) {
+				return nil
+			}
+			return deps.Fetch(ctx, name, progress)
+		},
 		settings:     s,
 		q:            q,
 		favs:         favs,
@@ -94,6 +128,11 @@ func New(d *db.DB) *App {
 		album:      ytmusic.AlbumTracks,
 		artist:     ytmusic.Artist,
 		playlist:   search.PlaylistTracks,
+		streamURL:  ytresolve.StreamURL,
+		open:       proc.Open,
+		newDownloader: func(dir, format string) downloads {
+			return downloader.New(dir, format)
+		},
 	}
 }
 
@@ -205,15 +244,20 @@ func (a *App) Played(t queue.Track) error {
 
 // SettingsView is the settings the Settings page edits so far.
 type SettingsView struct {
-	SearchLimit int  `json:"searchLimit"`
-	Autoplay    bool `json:"autoplay"`
+	SearchLimit    int    `json:"searchLimit"`
+	Autoplay       bool   `json:"autoplay"`
+	DownloadFormat string `json:"downloadFormat"` // "m4a" or "mp3"
+	DownloadDir    string `json:"downloadDir"`    // where downloads go, resolved
 }
 
 // Settings reads them.
 func (a *App) Settings() SettingsView {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	return SettingsView{SearchLimit: a.settings.SearchLimit, Autoplay: a.settings.AutoplayEnabled}
+	return SettingsView{
+		SearchLimit: a.settings.SearchLimit, Autoplay: a.settings.AutoplayEnabled,
+		DownloadFormat: a.settings.DownloadFormat, DownloadDir: a.settings.ResolveDownloadDir(),
+	}
 }
 
 // SetSearchLimit sets how many results a search or the home list shows,
@@ -225,12 +269,4 @@ func (a *App) SetSearchLimit(n int) int {
 	a.settings.SearchLimit = n
 	a.saveSettings(a.settings)
 	return n
-}
-
-// StreamURL turns a track's watch URL into a direct audio stream the
-// page's <audio> element can play. Streams expire after some hours, so
-// the page asks for one each time a track starts.
-func (a *App) StreamURL(watchURL string) (string, error) {
-	url, err := ytresolve.StreamURL(watchURL)
-	return url, problem(err)
 }

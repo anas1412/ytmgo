@@ -24,3 +24,14 @@ func CommandContext(ctx context.Context, name string, args ...string) *Cmd {
 	}
 	return &Cmd{Cmd: cmd}
 }
+
+// Open opens a folder in the file manager, or a link in the browser,
+// with xdg-open, without waiting for what it opens to close.
+func Open(path string) error {
+	cmd := exec.Command("xdg-open", path)
+	if err := cmd.Start(); err != nil {
+		return err
+	}
+	go cmd.Wait() // reap it, so it does not linger as a zombie
+	return nil
+}

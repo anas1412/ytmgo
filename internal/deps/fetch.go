@@ -23,6 +23,13 @@ type pin struct {
 	files map[string]string
 }
 
+// CanFetch reports whether Fetch has a build of the tool to install:
+// on Windows, yes; elsewhere the package manager provides the tools.
+func CanFetch(name string) bool {
+	_, ok := pins[name]
+	return ok
+}
+
 // Fetch downloads the named tool into BinDir, where Path finds it next.
 // The download is checked against a pinned SHA-256 before anything is
 // installed; on any failure nothing is left behind. progress, if not

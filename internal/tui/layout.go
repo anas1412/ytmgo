@@ -1,10 +1,9 @@
 package tui
 
 import (
-	"os/exec"
-
 	"ytmgo/internal/downloader"
 	"ytmgo/internal/player"
+	"ytmgo/internal/proc"
 )
 
 // ensurePlayer creates the player if it doesn't exist yet.
@@ -37,11 +36,9 @@ func (m *Model) downloadDir() string {
 }
 
 // openInOS opens the given path or URL with the system's default handler
-// — file manager for a directory, browser for a link — via xdg-open.
-// Uses Start, not Run, so it returns immediately without waiting for the
-// launched process to exit.
+// — file manager for a directory, browser for a link.
 func openInOS(path string) error {
-	return exec.Command("xdg-open", path).Start()
+	return proc.Open(path)
 }
 
 // panelHeight returns how many terminal lines the panel area occupies.

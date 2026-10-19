@@ -207,6 +207,16 @@ filter as you type; downloading an album comes with downloads.
 button (Explorer). Folder adding uses the native dialog. Album downloads go
 into the album folder (the TUI writes them to the root folder by mistake).
 
+Downloads are built (`gui/downloads.go`): `x` on the focused queue row, the
+selected song or the one playing; a Download button on album pages; the
+Downloads page (`5`) with a live bar and a count on the sidebar; format and
+folder in Settings. `x` does not switch pages, it says so on the player line.
+On Windows the first download fetches ffmpeg (`deps.Fetch`). A finished
+download marks its queued song, which then plays from the file, served to
+the page under `/local/` (only files handed out that way). Not yet: songs
+downloaded before, or not in the queue when they finish, still stream until
+the Library maps songs to files.
+
 ## 9. Lyrics and visualizer
 
 - **Lyrics** from LRCLIB, synced when available, otherwise plain; YouTube

@@ -106,3 +106,14 @@ func killOnCloseJob() (windows.Handle, error) {
 	}
 	return job, nil
 }
+
+// Open opens a folder in Explorer. Not through CommandContext: the
+// window is the user's, and must not close when ytmgo does.
+func Open(path string) error {
+	cmd := exec.Command("explorer.exe", path)
+	if err := cmd.Start(); err != nil {
+		return err
+	}
+	go cmd.Wait() // release the process handle
+	return nil
+}

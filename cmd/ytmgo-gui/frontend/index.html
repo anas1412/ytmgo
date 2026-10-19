@@ -1147,6 +1147,108 @@
         font-variant-numeric: tabular-nums;
       }
 
+      /* ── Downloads page ───────────────────────────────────────────── */
+      .downloads .top {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+      }
+      .downloads h3 {
+        margin: 22px 0 4px;
+        color: var(--mid);
+        font-size: 13px;
+        font-weight: 600;
+      }
+      .job {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 2px 16px;
+        padding: 10px 0;
+        border-top: 1px solid var(--border);
+      }
+      .job .j-title,
+      .job .j-artist {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .job .j-title {
+        font-weight: 600;
+      }
+      .job .j-artist {
+        color: var(--mid);
+        font-size: 13px;
+      }
+      .job .j-state {
+        grid-row: 1 / span 2;
+        grid-column: 2;
+        align-self: center;
+        color: var(--mid);
+        font-size: 13px;
+        font-variant-numeric: tabular-nums;
+      }
+      .job.done .j-state {
+        color: var(--mint);
+      }
+      .job.failed .j-state {
+        color: var(--pink);
+      }
+      .job .j-bar {
+        grid-column: 1 / -1;
+        height: 4px;
+        margin-top: 6px;
+        border-radius: 2px;
+        background: var(--border);
+        overflow: hidden;
+      }
+      .job .j-bar div {
+        height: 100%;
+        background: var(--mint);
+        transition: width var(--slow) var(--ease);
+      }
+      .job details {
+        grid-column: 1 / -1;
+        font-size: 13px;
+        color: var(--mid);
+      }
+      .job details code {
+        display: block;
+        margin-top: 4px;
+        white-space: pre-wrap;
+        word-break: break-word;
+        user-select: text;
+      }
+      .nav-item {
+        position: relative;
+      }
+      .nav-item .count {
+        margin-left: auto;
+        min-width: 18px;
+        padding: 0 6px;
+        border-radius: 9px;
+        background: var(--violet);
+        color: #fff;
+        font-size: 11px;
+        line-height: 18px;
+        text-align: center;
+      }
+      .nav-item .count[hidden] {
+        display: none;
+      }
+      .app.side-collapsed .nav-item .count {
+        position: absolute;
+        top: 2px;
+        right: 6px;
+      }
+      .setting .path {
+        margin-top: 6px;
+        color: var(--text);
+        font-size: 13px;
+        word-break: break-all;
+        user-select: text;
+      }
+
       /* ── Album and artist pages ────────────────────────────────────── */
       .page-head {
         display: flex;
@@ -1589,9 +1691,10 @@
           <svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.8 9.8 0 0 0-6.7 2.7L3 8" /><path d="M3 3v5h5" /><path d="M12 7v5l4 2" /></svg>
           <span>History</span>
         </button>
-        <button class="nav-item" aria-disabled="true" title="Downloads are on their way">
+        <button class="nav-item" data-page="downloads" title="Downloads (5)">
           <svg viewBox="0 0 24 24"><path d="M12 15V3" /><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><path d="m7 10 5 5 5-5" /></svg>
           <span>Downloads</span>
+          <b class="count" id="dl-count" hidden></b>
         </button>
         <button class="nav-item nav-bottom" data-page="settings" title="Settings (6)">
           <svg viewBox="0 0 24 24"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" /><circle cx="12" cy="12" r="3" /></svg>
@@ -1699,7 +1802,7 @@
     <script type="module">
       import {
         Search,
-        StreamURL,
+        PlaySource,
         Version,
         Queue,
         PlayNow,
@@ -1736,6 +1839,12 @@
         Album as fetchAlbum,
         Artist as fetchArtist,
         ArtistOfAlbum as fetchArtistOfAlbum,
+        Download,
+        DownloadAlbum,
+        Downloads,
+        OpenDownloads,
+        SetDownloadFormat,
+        ChooseDownloadFolder,
       } from "./wailsjs/go/gui/App.js";
 
       const $ = (id) => document.getElementById(id);
@@ -1967,6 +2076,7 @@
       // ── Results ──────────────────────────────────────────────────────
       function track(r, i) {
         const row = el("div", "track enter");
+        row.dataset.id = r.id;
         row.style.animationDelay = `${Math.min(i, 10) * 24}ms`;
         row.setAttribute("role", "option");
 
@@ -1981,7 +2091,7 @@
 
         const who = el("div", "who");
         const artist = el("div", "artist");
-        if (r.downloaded) {
+        if (r.downloaded || dlDone.has(r.id)) {
           const dl = el("span", "dl", "✓");
           dl.title = "Downloaded";
           artist.append(dl);
@@ -2742,7 +2852,7 @@
         setLoading(true);
         let url;
         try {
-          url = await StreamURL(track.url);
+          url = await PlaySource(track);
         } catch (err) {
           if (mine !== playSeq) return;
           setLoading(false);
@@ -3057,9 +3167,18 @@
           case "2":
             navTo("favs");
             return true;
+          case "5":
+            navTo("downloads");
+            return true;
           case "6":
             navTo("settings");
             return true;
+          case "x": {
+            const row = document.activeElement?.closest?.(".q-row");
+            const t = row ? qs.tracks[+row.dataset.index] : results[selected] || now?.track;
+            if (t) download(t);
+            return true;
+          }
           case "a":
           case "A": {
             // On an album page, a queues it all; on an artist page, A
@@ -3171,6 +3290,7 @@
         else if (view === "artist") renderArtist();
         else if (view === "favs") showFavs();
         else if (view === "settings") renderSettings();
+        else if (view === "downloads") renderDownloads();
         else if (view === "home") home();
         else render();
         pane.scrollTop = s.scroll;
@@ -3291,7 +3411,9 @@
         const play = pill("Play", () => playList(p.tracks), true);
         const add = pill("Add to queue", () => queueAll());
         add.title = "Add every song to the queue (a)";
-        const head = header("album", p.coverURL, p.title, meta, n ? [play, add] : []);
+        const get = pill("Download", () => downloadAlbum(p, get));
+        get.title = `Download every song into “${p.artist} - ${p.title}”`;
+        const head = header("album", p.coverURL, p.title, meta, n ? [play, add, get] : []);
         if (!n) {
           pane.replaceChildren(backButton(), head);
           const empty = el("div");
@@ -3458,6 +3580,14 @@
           showFavs();
           return;
         }
+        if (page === "downloads") {
+          if (view === "downloads") return;
+          view = "downloads";
+          results = [];
+          selected = -1;
+          renderDownloads();
+          return;
+        }
         if (page === "settings") {
           if (view === "settings") return;
           view = "settings";
@@ -3531,6 +3661,27 @@
         sw.setAttribute("aria-label", "Autoplay");
         sw.addEventListener("click", () => $("autoplay").click());
         box.append(setting("Autoplay", "When the queue runs out, keep playing songs like the ones you played.", sw));
+
+        // Downloads: the format, and the folder, picked with Windows' own
+        // dialog.
+        const fmt = el("div", "seg");
+        for (const [key, label] of [
+          ["m4a", "M4A"],
+          ["mp3", "MP3"],
+        ]) {
+          const t = el("button", "tab", label);
+          t.type = "button";
+          t.setAttribute("aria-pressed", s.downloadFormat === key);
+          t.addEventListener("click", async () => {
+            await SetDownloadFormat(key);
+            renderSettings();
+          });
+          fmt.append(t);
+        }
+        box.append(setting("Download format", "M4A keeps YouTube’s own audio, at its best quality. MP3 plays on every device.", fmt));
+        box.append(
+          setting("Download folder", "Where downloads are saved.", [button("Open", openDownloads), button("Change…", chooseFolder)], el("div", "path", s.downloadDir)),
+        );
 
         // Last.fm, by state, as the TUI's row.
         let control;
@@ -3620,6 +3771,175 @@
         lfmNote = null;
         renderSettings();
       }
+
+      // ── Downloads ────────────────────────────────────────────────────
+      // One at a time, as in the TUI. Go sends the whole list on every
+      // change; the page keeps the finished ids to mark ✓ wherever those
+      // songs show.
+      let jobs = [];
+      let dlDone = new Set();
+      let jobsShape = "";
+      const DL_COPY = {
+        offline: "You were offline.",
+        timeout: "YouTube didn’t answer in time.",
+        "missing-tool": "yt-dlp or ffmpeg isn’t installed.",
+        unavailable: "This song can’t be downloaded.",
+        other: "The download didn’t finish.",
+      };
+
+      function setJobs(list) {
+        jobs = list || [];
+        const done = jobs.filter((j) => j.status === "done").map((j) => j.id);
+        const fresh = done.filter((id) => !dlDone.has(id));
+        for (const id of fresh) dlDone.add(id);
+        if (fresh.length) paintDownloaded(fresh);
+        const active = jobs.filter((j) => j.status === "pending" || j.status === "downloading").length;
+        const count = $("dl-count");
+        count.hidden = !active;
+        count.textContent = active;
+        count.title = `${active} downloading`;
+        if (view === "downloads") renderDownloads();
+      }
+
+      // ✓ on the rows of songs that just finished.
+      function paintDownloaded(ids) {
+        for (const id of ids)
+          for (const row of pane.querySelectorAll(`.track[data-id="${CSS.escape(id)}"]`)) {
+            const artist = row.querySelector(".artist");
+            if (artist.querySelector(".dl")) continue;
+            const dl = el("span", "dl", "✓");
+            dl.title = "Downloaded";
+            artist.prepend(dl);
+          }
+      }
+
+      // ffmpeg is fetched the first time anything is downloaded; a fetch
+      // that fails stops the download, and says why.
+      function cannotDownload(err, what) {
+        const p = problemOf(err);
+        const tool = p.detail.includes("ffmpeg") || p.kind === "missing-tool";
+        if (p.kind === "offline") say(`Offline, so ${what} didn’t download`, { error: true, full: p.detail });
+        else if (tool) say("Couldn’t get ffmpeg, which downloads need", { error: true, sticky: true, full: p.detail });
+        else say(`${what[0].toUpperCase() + what.slice(1)} didn’t download`, { error: true, full: p.detail });
+      }
+      window.runtime?.EventsOn("tool", (f) => {
+        const pct = f.total > 0 ? ` ${Math.floor((f.done * 100) / f.total)}%` : "";
+        say(`Getting ffmpeg for downloads…${pct}`, { sticky: true, full: "Downloads need ffmpeg. ytmgo gets it once, the first time, then the download starts." });
+      });
+
+      async function download(t) {
+        let did;
+        try {
+          did = await Download(t);
+        } catch (err) {
+          cannotDownload(err, `“${t.title}”`);
+          return;
+        }
+        if (did === "pending") say(`Already downloading “${t.title}”`);
+        else if (did === "downloaded") say(`Already downloaded: “${t.title}”`);
+        else say(`Download queued: “${t.title}”`, { full: `“${t.title}” is queued. Downloads (5) shows how it’s going.` });
+      }
+
+      async function downloadAlbum(p, b) {
+        b.disabled = true;
+        try {
+          const n = await DownloadAlbum(p.browseID);
+          const songs = `${n} ${n === 1 ? "song" : "songs"}`;
+          say(`Downloading “${p.title}”, ${songs}`, { full: `Downloading ${songs} of “${p.title}” into “${p.artist} - ${p.title}”.` });
+        } catch (err) {
+          cannotDownload(err, "the album");
+        } finally {
+          b.disabled = false;
+        }
+      }
+
+      async function openDownloads() {
+        try {
+          await OpenDownloads();
+        } catch (err) {
+          say("The download folder didn’t open", { error: true, full: problemOf(err).detail });
+        }
+      }
+
+      async function chooseFolder() {
+        try {
+          await ChooseDownloadFolder();
+        } catch (err) {
+          say("That folder can’t be used", { error: true, full: problemOf(err).detail });
+        }
+        renderSettings();
+      }
+
+      function jobRow(j) {
+        const row = el("div", "job " + j.status);
+        row.dataset.id = j.id;
+        row.append(el("div", "j-title", j.title), el("div", "j-artist", j.artist || ""));
+        const state = el("div", "j-state");
+        row.append(state);
+        if (j.status === "downloading") {
+          state.textContent = `${Math.round(j.progress)}%`;
+          const bar = el("div", "j-bar");
+          const fill = el("div");
+          fill.style.width = `${j.progress}%`;
+          bar.append(fill);
+          row.append(bar);
+        } else if (j.status === "pending") state.textContent = "Waiting";
+        else if (j.status === "done") state.textContent = "✓ Done";
+        else {
+          const pr = j.problem || { kind: "other", detail: "" };
+          state.textContent = "Failed";
+          const more = el("details");
+          more.append(el("summary", "", DL_COPY[pr.kind] || DL_COPY.other));
+          if (pr.detail) more.append(el("code", "", pr.detail));
+          row.append(more);
+        }
+        return row;
+      }
+
+      // Redrawn whole when a download changes state; in between, only the
+      // running one's bar moves, so the page does not flicker under the
+      // pointer while a download counts up.
+      function renderDownloads() {
+        const shape = jobs.map((j) => j.id + j.status).join();
+        const running = jobs.find((j) => j.status === "downloading");
+        if (shape === jobsShape && pane.querySelector(".downloads")) {
+          const row = running && pane.querySelector(`.job.downloading[data-id="${CSS.escape(running.id)}"]`);
+          if (row) {
+            row.querySelector(".j-state").textContent = `${Math.round(running.progress)}%`;
+            row.querySelector(".j-bar div").style.width = `${running.progress}%`;
+          }
+          return;
+        }
+        jobsShape = shape;
+        const box = el("div", "settings downloads");
+        const top = el("div", "top");
+        top.append(el("h2", "", "Downloads"), button("Open downloads folder", openDownloads));
+        box.append(top);
+        if (!jobs.length) {
+          const empty = el("div");
+          notice(empty, "Nothing downloading", "Press x on a song, or Download on an album, to keep it for listening offline.", null, null, false);
+          box.append(empty);
+        }
+        for (const [status, title] of [
+          ["downloading", "Downloading"],
+          ["pending", "Waiting"],
+          ["done", "Done"],
+          ["failed", "Failed"],
+        ]) {
+          const these = jobs.filter((j) => j.status === status);
+          if (!these.length) continue;
+          box.append(el("h3", "", `${title} (${these.length})`), ...these.map(jobRow));
+        }
+        const scroll = pane.scrollTop;
+        pane.replaceChildren(box);
+        pane.scrollTop = scroll;
+      }
+
+      window.runtime?.EventsOn("downloads", setJobs);
+      // A finished download marks its song in the queue, so it plays
+      // from the file from then on.
+      window.runtime?.EventsOn("queue", (s) => setQueue(s));
+      Downloads().then(setJobs);
 
       // ── Autoplay ─────────────────────────────────────────────────────
       // Keeps the music going when the queue runs out, with one song

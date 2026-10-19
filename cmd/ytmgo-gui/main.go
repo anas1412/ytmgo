@@ -19,6 +19,7 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
 	"github.com/wailsapp/wails/v2/pkg/options/linux"
+	"github.com/wailsapp/wails/v2/pkg/runtime"
 
 	"ytmgo/internal/db"
 	"ytmgo/internal/gui"
@@ -53,12 +54,24 @@ func main() {
 		// The page's own background, so the window does not flash white
 		// before the first paint.
 		BackgroundColour: &options.RGBA{R: 0x11, G: 0x11, B: 0x18, A: 255},
-		AssetServer:      &assetserver.Options{Assets: assets},
-		Bind:             []interface{}{app},
+		// Handler serves downloaded files for playback, under /local/.
+		AssetServer: &assetserver.Options{Assets: assets, Handler: gui.Media(app)},
+		Bind:        []interface{}{app},
+		OnStartup: func(ctx context.Context) {
+			gui.Attach(app, gui.Host{
+				Emit: func(event string, data any) { runtime.EventsEmit(ctx, event, data) },
+				PickFolder: func(title string) (string, error) {
+					return runtime.OpenDirectoryDialog(ctx, runtime.OpenDialogOptions{Title: title})
+				},
+			})
+		},
 		// The database is opened here rather than in gui.New so that
 		// closing it is not a method on App, which the page could call.
-		OnShutdown: func(context.Context) { d.Close() },
-		Linux:      &linux.Options{Icon: icon},
+		OnShutdown: func(context.Context) {
+			gui.Close(app)
+			d.Close()
+		},
+		Linux: &linux.Options{Icon: icon},
 	})
 	if err != nil {
 		log.Fatal(err)
