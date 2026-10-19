@@ -3,6 +3,10 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <!-- Google's image servers reset the connection when the referer is
+         the app's own origin (localhost, wails://), so covers would fail
+         to load. Send none, for every image and stream the page fetches. -->
+    <meta name="referrer" content="no-referrer" />
     <title>ytmgo</title>
     <style>
       /* ytmgo's own dark palette (internal/tui/theme.go, adaptive()).
@@ -73,14 +77,30 @@
         flex: none;
       }
 
-      /* ── Shell: sidebar, main view, now-playing bar ───────────────── */
+      /* ── Shell: sidebar | main view | right panel, player below ──────
+         The columns between panels are the splitters. Their widths live
+         in --side-w and --right-w, set by dragging. */
       .app {
+        --side-w: 240px;
+        --right-w: 320px;
         height: 100%;
         display: grid;
-        grid-template-columns: 232px 1fr;
-        grid-template-rows: 1fr auto;
-        gap: 8px;
+        grid-template-columns: var(--side-w) 8px minmax(0, 1fr) 8px var(--right-w);
+        grid-template-rows: minmax(0, 1fr) auto;
+        row-gap: 8px;
         padding: 8px;
+        transition: grid-template-columns var(--slow) var(--ease);
+      }
+      .app.right-closed {
+        grid-template-columns: var(--side-w) 8px minmax(0, 1fr) 0 0;
+      }
+      /* While dragging, the columns follow the pointer exactly. */
+      .app.dragging {
+        transition: none;
+        cursor: col-resize;
+      }
+      .app.dragging * {
+        user-select: none;
       }
 
       nav {
@@ -88,24 +108,57 @@
         display: flex;
         flex-direction: column;
         gap: 2px;
+        min-width: 0;
         padding: 18px 10px;
+        overflow: hidden;
         background: var(--surface);
         border-radius: var(--radius-m);
       }
-      .brand {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        padding: 0 10px 18px;
-        font-family: "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif;
-        font-size: 20px;
-        font-weight: 700;
-        letter-spacing: -0.01em;
+
+      .splitter {
+        grid-row: 1;
+        position: relative;
+        cursor: col-resize;
+        touch-action: none;
       }
-      .brand svg {
-        width: 26px;
-        height: 26px;
-        stroke: none;
+      .splitter::after {
+        content: "";
+        position: absolute;
+        top: 12px;
+        bottom: 12px;
+        left: 3px;
+        width: 2px;
+        border-radius: 1px;
+        background: transparent;
+        transition: background var(--fast);
+      }
+      .splitter:hover::after {
+        background: var(--border);
+      }
+      .splitter:focus-visible {
+        outline: 0;
+      }
+      .splitter:focus-visible::after,
+      .app.dragging .splitter.active::after {
+        background: var(--violet-text);
+      }
+      .app.right-closed .split-right,
+      .app.right-closed .side-panel {
+        display: none;
+      }
+      .brand {
+        display: block;
+        padding: 2px 10px 22px;
+      }
+      .brand img {
+        display: block;
+        height: 34px;
+        width: auto;
+        pointer-events: none;
+      }
+      .brand .mark {
+        display: none;
+        height: 32px;
       }
       .nav-item {
         display: flex;
@@ -117,6 +170,7 @@
         color: var(--mid);
         font-weight: 600;
         text-align: left;
+        white-space: nowrap;
         transition: color var(--fast), background var(--fast);
       }
       .nav-item:hover:not([aria-disabled="true"]) {
@@ -137,14 +191,74 @@
         height: 14px;
       }
 
-      .view {
+      .view,
+      .side-panel {
         grid-row: 1;
+        min-width: 0;
         min-height: 0;
         display: flex;
         flex-direction: column;
         background: var(--surface);
         border-radius: var(--radius-m);
         overflow: hidden;
+      }
+      /* Each panel lays itself out by its own width, not the window's,
+         since the splitters decide how wide it is. */
+      .view {
+        container: view / inline-size;
+      }
+      .side-panel {
+        container: side / inline-size;
+      }
+
+      /* ── Right panel: Queue and Lyrics ────────────────────────────── */
+      .panel-head {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        padding: 14px 12px 10px 16px;
+      }
+      .tab {
+        padding: 6px 12px;
+        border-radius: 999px;
+        color: var(--mid);
+        font-weight: 600;
+        white-space: nowrap;
+        transition: color var(--fast), background var(--fast);
+      }
+      .tab:hover {
+        color: var(--text);
+      }
+      .tab[aria-selected="true"] {
+        background: var(--text);
+        color: var(--bg);
+      }
+      .icon-btn {
+        display: grid;
+        place-items: center;
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        color: var(--mid);
+        transition: color var(--fast), background var(--fast);
+      }
+      .icon-btn:hover {
+        color: var(--text);
+        background: var(--hover);
+      }
+      .panel-head .icon-btn {
+        margin-left: auto;
+      }
+      .panel-body {
+        flex: 1;
+        min-height: 0;
+        overflow-y: auto;
+      }
+      .panel-body .notice {
+        padding: 56px 20px;
+      }
+      .panel-body .notice strong {
+        font-size: 17px;
       }
 
       /* ── Search field ─────────────────────────────────────────────── */
@@ -445,6 +559,66 @@
         margin: 0;
         color: var(--mid);
       }
+      .notice .detail {
+        max-width: 60ch;
+        margin-top: 6px;
+        color: var(--dim);
+        font-size: 12px;
+        text-align: left;
+      }
+      .notice .detail summary {
+        cursor: pointer;
+        text-align: center;
+        list-style: none;
+      }
+      .notice .detail summary:hover {
+        color: var(--mid);
+      }
+      .notice .detail code {
+        display: block;
+        margin-top: 8px;
+        padding: 10px 12px;
+        border-radius: var(--radius-s);
+        background: var(--bg);
+        font: 12px/1.5 "Cascadia Mono", ui-monospace, monospace;
+        white-space: pre-wrap;
+        word-break: break-word;
+        user-select: text;
+      }
+      .offline {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin: 0 24px 10px;
+        padding: 9px 14px;
+        border-radius: var(--radius-s);
+        background: var(--raised);
+        color: var(--mid);
+        font-size: 13px;
+        animation: arrive var(--slow) var(--ease) both;
+      }
+      .offline[hidden] {
+        display: none;
+      }
+      .offline .dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: var(--pink);
+        flex: none;
+      }
+      .art-wrap.missing {
+        display: grid;
+        place-items: center;
+      }
+      .art-wrap.missing img {
+        display: none;
+      }
+      .art-wrap.missing::after {
+        content: "♪";
+        color: var(--dim);
+        font-size: 18px;
+      }
       .notice.error strong {
         color: var(--pink);
       }
@@ -489,6 +663,23 @@
         min-width: 0;
         color: var(--dim);
       }
+      .np-title {
+        overflow: hidden;
+        white-space: nowrap;
+        text-overflow: ellipsis;
+        color: var(--text);
+        font-weight: 600;
+      }
+      .np-sub {
+        overflow: hidden;
+        white-space: nowrap;
+        text-overflow: ellipsis;
+        color: var(--mid);
+        font-size: 13px;
+      }
+      .np-text.change {
+        animation: arrive var(--slow) var(--ease) both;
+      }
       .controls {
         display: flex;
         flex-direction: column;
@@ -510,7 +701,14 @@
         color: var(--border);
         cursor: default;
       }
+      .buttons button:not(:disabled):hover {
+        color: var(--text);
+      }
+      .buttons button:not(:disabled):active {
+        transform: scale(0.94);
+      }
       .buttons .main {
+        position: relative;
         width: 36px;
         height: 36px;
         border-radius: 50%;
@@ -526,6 +724,142 @@
         fill: currentColor;
         stroke: none;
       }
+      .buttons .main:not(:disabled):hover {
+        transform: scale(1.06);
+        color: var(--bg);
+      }
+      .main .i-pause,
+      .main .spinner,
+      .main.playing .i-play,
+      .main.loading .i-play,
+      .main.loading .i-pause {
+        display: none;
+      }
+      .main.playing .i-pause {
+        display: block;
+      }
+      .main.loading .spinner {
+        display: block;
+        width: 16px;
+        height: 16px;
+        border: 2px solid currentColor;
+        border-right-color: transparent;
+        border-radius: 50%;
+        animation: spin 0.7s linear infinite;
+      }
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+
+      /* Seek bar: violet as it fills, with a knob that shows on hover. */
+      .seek {
+        position: relative;
+        flex: 1;
+        height: 14px;
+        display: flex;
+        align-items: center;
+        cursor: pointer;
+        touch-action: none;
+      }
+      .seek::before {
+        content: "";
+        position: absolute;
+        left: 0;
+        right: 0;
+        height: 4px;
+        border-radius: 2px;
+        background: var(--raised);
+      }
+      .seek-fill {
+        position: absolute;
+        left: 0;
+        height: 4px;
+        width: 0;
+        border-radius: 2px;
+        background: var(--text);
+        transition: background var(--fast);
+      }
+      .seek-fill::after {
+        content: "";
+        position: absolute;
+        right: -6px;
+        top: -4px;
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        background: #fff;
+        opacity: 0;
+        transition: opacity var(--fast);
+      }
+      .seek.loading::before {
+        background: linear-gradient(90deg, var(--raised), var(--border), var(--raised));
+        background-size: 40% 100%;
+        background-repeat: no-repeat;
+        background-color: var(--raised);
+        animation: sweep 1.1s linear infinite;
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .seek.loading::before {
+          animation: none;
+        }
+      }
+      .seek:hover .seek-fill,
+      .seek.dragging .seek-fill,
+      .seek:focus-visible .seek-fill {
+        background: var(--violet-text);
+      }
+      .seek:hover .seek-fill::after,
+      .seek.dragging .seek-fill::after,
+      .seek:focus-visible .seek-fill::after {
+        opacity: 1;
+      }
+
+      /* Volume: the same look as the seek bar, on a native range input. */
+      .volume {
+        --v: 70%;
+        width: 96px;
+        height: 14px;
+        margin: 0;
+        appearance: none;
+        background: transparent;
+        cursor: pointer;
+      }
+      .volume::-webkit-slider-runnable-track {
+        height: 4px;
+        border-radius: 2px;
+        background: linear-gradient(90deg, var(--text) var(--v), var(--raised) var(--v));
+      }
+      .volume:hover::-webkit-slider-runnable-track {
+        background: linear-gradient(90deg, var(--violet-text) var(--v), var(--raised) var(--v));
+      }
+      .volume::-webkit-slider-thumb {
+        appearance: none;
+        width: 12px;
+        height: 12px;
+        margin-top: -4px;
+        border-radius: 50%;
+        background: #fff;
+        opacity: 0;
+        transition: opacity var(--fast);
+      }
+      .volume:hover::-webkit-slider-thumb,
+      .volume:focus-visible::-webkit-slider-thumb {
+        opacity: 1;
+      }
+      #mute.muted .wave {
+        display: none;
+      }
+
+      /* The row that is playing, in mint, as in the TUI's queue. */
+      .track.playing .title {
+        color: var(--mint);
+      }
+      .track.playing.selected .title {
+        color: #b9f8e5;
+      }
+
       .progress {
         display: flex;
         align-items: center;
@@ -536,12 +870,6 @@
         font-size: 12px;
         font-variant-numeric: tabular-nums;
       }
-      .track-bar {
-        flex: 1;
-        height: 4px;
-        border-radius: 2px;
-        background: var(--raised);
-      }
       .extras {
         display: flex;
         justify-content: flex-end;
@@ -549,8 +877,8 @@
         gap: 10px;
         color: var(--dim);
       }
-      .extras .track-bar {
-        flex: 0 0 96px;
+      .extras .icon-btn[aria-pressed="true"] {
+        color: var(--mint);
       }
 
       /* ── Toast: confirms what a key or click did ──────────────────── */
@@ -568,29 +896,37 @@
         transition: opacity var(--fast), transform var(--fast) var(--ease);
         pointer-events: none;
       }
+      #toast.error {
+        background: var(--raised);
+        color: var(--text);
+        border-left: 3px solid var(--pink);
+      }
       #toast.show {
         opacity: 1;
         transform: translate(-50%, 0);
       }
 
-      /* Narrower than the window allows, but a smaller preview should not
-         break: the sidebar folds to icons, then the album column goes. */
-      @media (max-width: 860px) {
-        .app {
-          grid-template-columns: 64px 1fr;
-        }
-        .nav-item span,
-        .brand span {
-          display: none;
-        }
-        .brand,
-        .nav-item {
-          justify-content: center;
-          padding-left: 0;
-          padding-right: 0;
-        }
+      /* A sidebar dragged narrow folds to icons, as Spotify's does. */
+      .app.side-collapsed .nav-item span,
+      .app.side-collapsed .brand .wordmark {
+        display: none;
       }
-      @media (max-width: 680px) {
+      .app.side-collapsed .brand .mark {
+        display: block;
+        margin: 0 auto;
+      }
+      .app.side-collapsed .brand {
+        padding-left: 0;
+        padding-right: 0;
+      }
+      .app.side-collapsed .nav-item {
+        justify-content: center;
+        padding-left: 0;
+        padding-right: 0;
+      }
+
+      /* A narrow main view drops the album column first. */
+      @container view (max-width: 560px) {
         .head-row,
         .track {
           grid-template-columns: 44px minmax(0, 1fr) 56px;
@@ -600,18 +936,33 @@
           display: none;
         }
       }
+      @container view (max-width: 420px) {
+        .search-head {
+          padding-left: 14px;
+          padding-right: 14px;
+        }
+        .field kbd {
+          display: none;
+        }
+      }
+
+      /* The player keeps its controls whole; on a narrow window the
+         extras give way first. */
+      @media (max-width: 760px) {
+        .extras .volume,
+        .extras .vol,
+        #version {
+          display: none;
+        }
+      }
     </style>
   </head>
   <body>
-    <div class="app">
+    <div class="app" id="app">
       <nav aria-label="Main">
         <div class="brand">
-          <svg viewBox="0 0 512 512" aria-hidden="true">
-            <polyline points="45,300 135,357 45,414" fill="none" stroke="#06d6a0" stroke-width="44" />
-            <rect x="172" y="392" width="148" height="34" fill="#06d6a0" />
-            <path d="M245 62 V230 Q245 308 325 308 H400 M432 62 V340 Q432 430 345 432" fill="none" stroke="#7c3aed" stroke-width="78" />
-          </svg>
-          <span>ytmgo</span>
+          <img class="wordmark" src="ytmgo-logo.png" alt="ytmgo" />
+          <img class="mark" src="ytmgo-icon.png" alt="ytmgo" />
         </div>
         <button class="nav-item" aria-current="page" title="Search">
           <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" /></svg>
@@ -637,6 +988,8 @@
         </button>
       </nav>
 
+      <div class="splitter split-left" role="separator" aria-orientation="vertical" aria-label="Resize sidebar" tabindex="0" title="Drag to resize, double-click to reset"></div>
+
       <section class="view" aria-label="Search">
         <div class="search-head">
           <form class="field" id="search" autocomplete="off" role="search">
@@ -648,39 +1001,75 @@
             <kbd aria-hidden="true">/</kbd>
           </form>
         </div>
+        <div class="offline" id="offline" role="status" hidden>
+          <span class="dot" aria-hidden="true"></span>
+          You’re offline. Search and playback come back with the connection.
+        </div>
         <div class="results" id="results"></div>
       </section>
 
+      <div class="splitter split-right" role="separator" aria-orientation="vertical" aria-label="Resize side panel" tabindex="0" title="Drag to resize, double-click to reset"></div>
+
+      <aside class="side-panel" aria-label="Queue and lyrics">
+        <div class="panel-head" role="tablist">
+          <button class="tab" role="tab" data-tab="queue" aria-selected="true">Queue</button>
+          <button class="tab" role="tab" data-tab="lyrics" aria-selected="false">Lyrics</button>
+          <button class="icon-btn" id="close-panel" aria-label="Close panel" title="Close">
+            <svg viewBox="0 0 24 24"><path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg>
+          </button>
+        </div>
+        <div class="panel-body" id="panel-body"></div>
+      </aside>
+
       <footer class="player" aria-label="Now playing">
         <div class="np">
-          <div class="art-wrap"></div>
-          <div class="np-text">Nothing playing yet</div>
+          <div class="art-wrap"><img class="art" id="np-art" alt="" /></div>
+          <div class="np-text" id="np-text">
+            <div class="np-empty">Nothing playing yet</div>
+          </div>
         </div>
         <div class="controls">
           <div class="buttons">
-            <button class="skip" disabled aria-label="Previous">
+            <button class="skip" id="prev" disabled aria-label="Previous" title="Previous (p)">
               <svg viewBox="0 0 24 24"><path d="M6 5h2v14H6zM20 5v14L9 12z" /></svg>
             </button>
-            <button class="main" disabled aria-label="Play">
-              <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
+            <button class="main" id="toggle" disabled aria-label="Play" title="Play (Space)">
+              <svg class="i-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
+              <svg class="i-pause" viewBox="0 0 24 24"><path d="M7 5h4v14H7zM13 5h4v14h-4z" /></svg>
+              <span class="spinner" aria-hidden="true"></span>
             </button>
-            <button class="skip" disabled aria-label="Next">
+            <button class="skip" id="next" disabled aria-label="Next" title="Next (n)">
               <svg viewBox="0 0 24 24"><path d="M16 5h2v14h-2zM4 5v14l11-7z" /></svg>
             </button>
           </div>
-          <div class="progress"><span>0:00</span><div class="track-bar"></div><span>0:00</span></div>
+          <div class="progress">
+            <span id="t-now">0:00</span>
+            <div class="seek" id="seek" role="slider" aria-label="Seek" aria-valuemin="0" aria-valuemax="0" aria-valuenow="0" tabindex="0">
+              <div class="seek-fill" id="seek-fill"></div>
+            </div>
+            <span id="t-end">0:00</span>
+          </div>
         </div>
         <div class="extras">
-          <svg viewBox="0 0 24 24"><path d="M11 5 6 9H2v6h4l5 4z" /><path d="M15.5 8.5a5 5 0 0 1 0 7" /></svg>
-          <div class="track-bar"></div>
+          <button class="icon-btn" data-open="lyrics" aria-pressed="false" aria-label="Lyrics" title="Lyrics (y)">
+            <svg viewBox="0 0 24 24"><path d="m12 8-9.04 9.06a2.82 2.82 0 1 0 3.98 3.98L16 12" /><circle cx="17" cy="7" r="5" /></svg>
+          </button>
+          <button class="icon-btn" data-open="queue" aria-pressed="true" aria-label="Queue" title="Queue">
+            <svg viewBox="0 0 24 24"><path d="M21 15V6" /><path d="M18.5 18a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z" /><path d="M12 12H3" /><path d="M16 6H3" /><path d="M12 18H3" /></svg>
+          </button>
+          <button class="icon-btn vol" id="mute" aria-label="Mute" title="Mute">
+            <svg viewBox="0 0 24 24"><path d="M11 5 6 9H2v6h4l5 4z" /><path class="wave" d="M15.5 8.5a5 5 0 0 1 0 7" /></svg>
+          </button>
+          <input class="volume" id="volume" type="range" min="0" max="100" value="70" aria-label="Volume" title="Volume (+ / −)" />
           <span id="version"></span>
         </div>
       </footer>
     </div>
     <div id="toast" role="status" aria-live="polite"></div>
+    <audio id="audio" preload="auto"></audio>
 
     <script type="module">
-      import { Search, Version } from "./wailsjs/go/gui/App.js";
+      import { Search, StreamURL, Version } from "./wailsjs/go/gui/App.js";
 
       const $ = (id) => document.getElementById(id);
       const query = $("query");
@@ -695,6 +1084,8 @@
       // cannot overwrite the results of a newer one.
       let seq = 0;
       let debounce;
+      // A search that failed, run again when the connection comes back.
+      let failedQuery = "";
 
       Version().then((v) => ($("version").textContent = v));
 
@@ -704,25 +1095,53 @@
         if (text != null) n.textContent = text;
         return n;
       };
+      // Covers come sized for the TUI's full-resolution art (544px).
+      // Google's image server sizes on request, so a 44px thumbnail asks
+      // for 120px (twice that, for sharp HiDPI) — 13KB instead of 170KB.
+      const sized = (url, px) => url.replace(/=w\d+-h\d+/, `=w${px}-h${px}`);
       const duration = (secs) =>
         secs ? `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, "0")}` : "";
 
       let toastTimer;
-      function toast(text) {
+      function toast(text, isError = false) {
         const t = $("toast");
         t.textContent = text;
+        t.classList.toggle("error", isError);
         t.classList.add("show");
         clearTimeout(toastTimer);
-        toastTimer = setTimeout(() => t.classList.remove("show"), 1800);
+        // Errors stay long enough to read.
+        toastTimer = setTimeout(() => t.classList.remove("show"), isError ? 4200 : 1800);
       }
 
-      function notice(title, body, action) {
+      // Go sends failures as a Problem (internal/gui/problem.go): a kind
+      // the page has words for, and the original text for "Show details".
+      function problemOf(err) {
+        try {
+          const p = JSON.parse(String(err));
+          if (p && p.kind) return p;
+        } catch {}
+        return { kind: "other", detail: String(err) };
+      }
+      const SEARCH_COPY = {
+        offline: ["You’re offline", "Search needs an internet connection. It runs again on its own once you’re back online."],
+        timeout: ["YouTube Music didn’t answer", "It took too long to respond. Try again in a moment."],
+        "missing-tool": ["yt-dlp isn’t installed", "ytmgo needs yt-dlp to find and play music."],
+        unavailable: ["That isn’t available", "YouTube Music won’t show it here. Try a different search."],
+        other: ["Search didn’t work", "Something went wrong talking to YouTube Music. Try again."],
+      };
+
+      function notice(title, body, action, detail) {
         const box = el("div", "notice" + (action ? " error" : ""));
         box.append(el("strong", "", title), el("p", "", body));
         if (action) {
           const b = el("button", "pill", action.label);
           b.addEventListener("click", action.run);
           box.append(b);
+        }
+        if (detail) {
+          const more = el("details", "detail");
+          more.append(el("summary", "", "Show details"), el("code", "", detail));
+          box.append(more);
         }
         pane.replaceChildren(box);
       }
@@ -761,7 +1180,21 @@
         img.alt = "";
         img.loading = "lazy";
         img.addEventListener("load", () => img.classList.add("loaded"));
-        if (r.CoverURL) img.src = r.CoverURL;
+        // One retry, for a connection that drops a request.
+        img.addEventListener("error", () => {
+          if (img.dataset.retried) {
+            wrap.classList.add("missing");
+            img.remove();
+            return;
+          }
+          img.dataset.retried = "1";
+          // Clearing src first, as the same src again may not refetch.
+          const src = img.src;
+          img.removeAttribute("src");
+          setTimeout(() => (img.src = src), 900);
+        });
+        if (r.CoverURL) img.src = sized(r.CoverURL, 120);
+        else wrap.classList.add("missing");
         const play = el("div", "play");
         play.innerHTML = '<svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>';
         wrap.append(img, play);
@@ -773,6 +1206,7 @@
         album.title = r.Album || "";
 
         row.append(wrap, who, album, el("div", "time", duration(r.Duration)));
+        if (now && r.ID === now.track.ID) row.classList.add("playing");
         row.addEventListener("click", () => select(i));
         row.addEventListener("dblclick", () => playAt(i));
         return row;
@@ -815,7 +1249,7 @@
 
       function playAt(i) {
         select(i);
-        toast("Playback is the next thing being built");
+        play(results, i);
       }
 
       async function run(q) {
@@ -840,20 +1274,17 @@
           if (mine !== seq) return;
           results = found || [];
           lastQuery = q;
+          failedQuery = "";
           selected = results.length ? 0 : -1;
           render();
         } catch (err) {
           if (mine !== seq) return;
           lastQuery = "";
           results = [];
-          const detail = String(err);
-          const offline = /timeout|deadline|no such host|connection|network/i.test(detail);
-          notice(
-            offline ? "Couldn’t reach YouTube Music" : "Search didn’t work",
-            offline ? "Check your internet connection, then try again." : detail,
-            { label: "Try again", run: () => run(query.value) },
-          );
-          pane.querySelector(".notice").title = detail;
+          const p = problemOf(err);
+          const [title, body] = SEARCH_COPY[p.kind] || SEARCH_COPY.other;
+          failedQuery = q;
+          notice(title, body, { label: "Try again", run: () => run(query.value) }, p.detail);
         } finally {
           if (mine === seq) field.classList.remove("busy");
         }
@@ -892,6 +1323,10 @@
         } else if (e.key === "Escape") {
           query.focus();
           query.select();
+        } else if (e.key === "y" && !typing) {
+          openPanel("lyrics");
+        } else if (!typing && playerKey(e)) {
+          e.preventDefault();
         } else if (!results.length) {
           return;
         } else if (e.key === "ArrowDown" || (!typing && e.key === "j")) {
@@ -904,6 +1339,458 @@
           playAt(selected);
         }
       });
+
+      // ── Layout: resizable sidebar and side panel ─────────────────────
+      // Widths are remembered between runs. Storage can be missing or
+      // refuse writes, so every access is guarded and the defaults stand
+      // in for anything it cannot give back.
+      const app = $("app");
+      const SIDE = { def: 240, min: 200, max: 400, collapsed: 76, snap: 150 };
+      const RIGHT = { def: 320, min: 260, max: 520 };
+      const MAIN_MIN = 380;
+      const GUTTERS = 8 * 2 + 8 * 2; // the app's padding and both splitters
+      const layout = { side: SIDE.def, right: RIGHT.def, rightOpen: true, tab: "queue" };
+      try {
+        Object.assign(layout, JSON.parse(localStorage.getItem("ytmgo:layout") || "{}"));
+      } catch {}
+      const save = () => {
+        try {
+          localStorage.setItem("ytmgo:layout", JSON.stringify(layout));
+        } catch {}
+      };
+
+      // The sidebar either collapses to icons or sits between min and
+      // max; the main view never gets squeezed below MAIN_MIN.
+      function apply() {
+        const room = app.clientWidth - GUTTERS - MAIN_MIN;
+        let right = layout.rightOpen ? Math.min(Math.max(layout.right, RIGHT.min), RIGHT.max) : 0;
+        let side = layout.side < SIDE.snap ? SIDE.collapsed : Math.min(Math.max(layout.side, SIDE.min), SIDE.max);
+        if (side + right > room) side = SIDE.collapsed;
+        if (side + right > room) right = Math.max(RIGHT.min, room - side);
+        // No room for the panel even at its narrowest: hide it for now,
+        // without forgetting it was open.
+        const squeezed = layout.rightOpen && side + right > room;
+        app.style.setProperty("--side-w", `${side}px`);
+        app.style.setProperty("--right-w", `${right}px`);
+        app.classList.toggle("side-collapsed", side === SIDE.collapsed);
+        app.classList.toggle("right-closed", !layout.rightOpen || squeezed);
+        for (const t of document.querySelectorAll(".tab")) t.setAttribute("aria-selected", t.dataset.tab === layout.tab);
+        for (const b of document.querySelectorAll("[data-open]"))
+          b.setAttribute("aria-pressed", layout.rightOpen && b.dataset.open === layout.tab);
+        renderPanel();
+      }
+
+      function drag(splitter, onMove) {
+        splitter.addEventListener("pointerdown", (e) => {
+          e.preventDefault();
+          splitter.setPointerCapture(e.pointerId);
+          app.classList.add("dragging");
+          splitter.classList.add("active");
+          const box = app.getBoundingClientRect();
+          const move = (ev) => {
+            onMove(ev.clientX, box);
+            apply();
+          };
+          const up = () => {
+            app.classList.remove("dragging");
+            splitter.classList.remove("active");
+            splitter.removeEventListener("pointermove", move);
+            save();
+          };
+          splitter.addEventListener("pointermove", move);
+          splitter.addEventListener("pointerup", up, { once: true });
+          splitter.addEventListener("pointercancel", up, { once: true });
+        });
+      }
+      const left = document.querySelector(".split-left");
+      const rightSplit = document.querySelector(".split-right");
+      drag(left, (x, box) => (layout.side = x - box.left - 8));
+      drag(rightSplit, (x, box) => (layout.right = box.right - x - 8));
+
+      // Double-click puts a panel back to its default width; arrow keys
+      // resize from the keyboard, Enter folds or unfolds the sidebar.
+      left.addEventListener("dblclick", () => {
+        layout.side = SIDE.def;
+        apply();
+        save();
+      });
+      rightSplit.addEventListener("dblclick", () => {
+        layout.right = RIGHT.def;
+        apply();
+        save();
+      });
+      function keyResize(e, key, step) {
+        if (e.key !== "ArrowLeft" && e.key !== "ArrowRight" && e.key !== "Enter") return;
+        e.preventDefault();
+        e.stopPropagation();
+        if (e.key === "Enter" && key === "side") {
+          layout.side = layout.side < SIDE.snap ? SIDE.def : SIDE.collapsed;
+        } else if (e.key !== "Enter") {
+          const grow = e.key === "ArrowRight" ? 1 : -1;
+          if (key === "side" && layout.side < SIDE.snap) layout.side = grow > 0 ? SIDE.min : SIDE.collapsed;
+          else layout[key] += grow * step;
+        }
+        apply();
+        save();
+      }
+      left.addEventListener("keydown", (e) => keyResize(e, "side", 16));
+      rightSplit.addEventListener("keydown", (e) => keyResize(e, "right", -16));
+
+      // The panel opens on the tab its button names; that tab's button
+      // again closes it.
+      function openPanel(tab) {
+        layout.rightOpen = !(layout.rightOpen && layout.tab === tab);
+        layout.tab = tab;
+        apply();
+        save();
+      }
+      for (const b of document.querySelectorAll("[data-open]")) b.addEventListener("click", () => openPanel(b.dataset.open));
+      for (const t of document.querySelectorAll(".tab"))
+        t.addEventListener("click", () => {
+          layout.tab = t.dataset.tab;
+          apply();
+          save();
+        });
+      $("close-panel").addEventListener("click", () => {
+        layout.rightOpen = false;
+        apply();
+        save();
+      });
+
+      function renderPanel() {
+        const body = $("panel-body");
+        const copy =
+          layout.tab === "queue"
+            ? ["Your queue is empty", "Songs you play or add show up here, with what comes next."]
+            : ["Nothing playing", "Lyrics follow along here while a song plays."];
+        if (body.dataset.tab === layout.tab) return;
+        body.dataset.tab = layout.tab;
+        const box = el("div", "notice");
+        box.append(el("strong", "", copy[0]), el("p", "", copy[1]));
+        body.replaceChildren(box);
+      }
+
+      new ResizeObserver(apply).observe(app);
+      apply();
+
+      // ── Player ───────────────────────────────────────────────────────
+      // Plays through the list a track was started from, as the TUI
+      // plays through its queue. The audio is a direct stream yt-dlp
+      // resolves when a track starts; streams expire, so none is kept.
+      const audio = $("audio");
+      const toggle = $("toggle");
+      const seek = $("seek");
+      const seekFill = $("seek-fill");
+      let now = null; // { list, pos, track }
+      let playSeq = 0;
+      let seeking = false;
+
+      function markPlaying() {
+        const rows = pane.querySelectorAll(".list .track");
+        rows.forEach((row, i) => row.classList.toggle("playing", !!now && results[i]?.ID === now.track.ID));
+      }
+
+      function showTrack(t) {
+        const art = $("np-art");
+        const wrap = art.parentElement;
+        art.classList.remove("loaded");
+        wrap.classList.toggle("missing", !t.CoverURL);
+        art.onload = () => art.classList.add("loaded");
+        art.onerror = () => {
+          wrap.classList.add("missing");
+          art.removeAttribute("src");
+        };
+        if (t.CoverURL) art.src = sized(t.CoverURL, 120);
+        else art.removeAttribute("src");
+        const text = $("np-text");
+        const title = el("div", "np-title", t.Title);
+        const sub = el("div", "np-sub", t.Uploader);
+        text.title = t.Album ? `${t.Title}, ${t.Uploader}, from ${t.Album}` : `${t.Title}, ${t.Uploader}`;
+        text.replaceChildren(title, sub);
+        text.classList.remove("change");
+        void text.offsetWidth; // restart the entrance for each new track
+        text.classList.add("change");
+        $("t-end").textContent = duration(t.Duration) || "0:00";
+        for (const id of ["prev", "toggle", "next"]) $(id).disabled = false;
+        if ("mediaSession" in navigator) {
+          navigator.mediaSession.metadata = new MediaMetadata({
+            title: t.Title,
+            artist: t.Uploader,
+            album: t.Album || "",
+            artwork: t.CoverURL ? [{ src: sized(t.CoverURL, 512), sizes: "512x512", type: "image/jpeg" }] : [],
+          });
+        }
+      }
+
+      // Songs that failed in a row. Skipping on is right for one song
+      // that will not play; three in a row means something bigger is
+      // wrong, and skipping on would run through the whole list.
+      let failures = 0;
+
+      function setLoading(on) {
+        toggle.classList.toggle("loading", on);
+        seek.classList.toggle("loading", on);
+      }
+
+      async function play(list, pos, at = 0) {
+        const track = list[pos];
+        if (!track) return;
+        const fresh = !now || now.track !== track;
+        // retried stays with the song across restarts of it, so a stream
+        // that keeps failing is given up on rather than retried forever.
+        now = { list, pos, track, retried: fresh ? false : now.retried };
+        const mine = ++playSeq;
+        audio.pause();
+        if (fresh) {
+          showTrack(track);
+          markPlaying();
+          updateSeek(0);
+        }
+        setLoading(true);
+        let url;
+        try {
+          url = await StreamURL(track.URL);
+        } catch (err) {
+          if (mine !== playSeq) return;
+          setLoading(false);
+          cannotPlay(track, problemOf(err));
+          return;
+        }
+        if (mine !== playSeq) return;
+        audio.src = url;
+        if (at) audio.currentTime = at;
+        // A stream that will not play says so through the error event,
+        // which handles it once; play()'s own rejection is that same
+        // failure, so it is not handled again here.
+        audio.play().catch(() => {});
+      }
+
+      // What to do when a song cannot start, by why.
+      function cannotPlay(track, p) {
+        audio.removeAttribute("src");
+        console.error(p.detail);
+        if (p.kind === "unavailable" || p.kind === "other") {
+          if (++failures >= 3) {
+            failures = 0;
+            toast("Stopped: three songs in a row couldn’t play", true);
+            return;
+          }
+          toast(`Skipped “${track.Title}”: it can’t be played here`, true);
+          if (now.pos + 1 < now.list.length) play(now.list, now.pos + 1);
+          return;
+        }
+        const why = {
+          offline: "You’re offline. Press play once you’re back online",
+          timeout: "YouTube took too long to answer. Press play to try again",
+          "missing-tool": "yt-dlp isn’t installed, so nothing can play",
+        }[p.kind];
+        toast(why, true);
+      }
+
+      function next() {
+        if (!now) return;
+        if (now.pos + 1 < now.list.length) play(now.list, now.pos + 1);
+        else toast("That was the last song in the list");
+      }
+      // Previous restarts the song once it is more than 3s in, as the
+      // TUI's p does.
+      function prev() {
+        if (!now) return;
+        if (audio.currentTime > 3 || now.pos === 0) audio.currentTime = 0;
+        else play(now.list, now.pos - 1);
+      }
+      function togglePlay() {
+        if (!now) {
+          if (results.length) playAt(Math.max(selected, 0));
+          return;
+        }
+        // A song that never started, or lost its stream: start it again,
+        // from where it stopped.
+        if (!audio.getAttribute("src")) {
+          play(now.list, now.pos, audio.currentTime || 0);
+          return;
+        }
+        if (audio.paused) audio.play().catch(() => {});
+        else audio.pause();
+      }
+      function seekBy(secs) {
+        if (!now || !isFinite(audio.duration)) return;
+        audio.currentTime = Math.min(Math.max(audio.currentTime + secs, 0), audio.duration);
+      }
+
+      $("prev").addEventListener("click", prev);
+      $("next").addEventListener("click", next);
+      toggle.addEventListener("click", togglePlay);
+
+      audio.addEventListener("playing", () => {
+        failures = 0;
+        setLoading(false);
+        toggle.classList.add("playing");
+        toggle.setAttribute("aria-label", "Pause");
+      });
+      audio.addEventListener("pause", () => {
+        toggle.classList.remove("playing");
+        toggle.setAttribute("aria-label", "Play");
+      });
+      audio.addEventListener("waiting", () => setLoading(true));
+      audio.addEventListener("canplay", () => setLoading(false));
+      audio.addEventListener("loadedmetadata", () => {
+        if (isFinite(audio.duration)) $("t-end").textContent = duration(Math.round(audio.duration));
+      });
+      audio.addEventListener("timeupdate", () => {
+        if (!seeking && isFinite(audio.duration) && audio.duration > 0) updateSeek(audio.currentTime / audio.duration);
+      });
+      audio.addEventListener("ended", next);
+      // A stream that breaks mid-song has usually expired (they last
+      // some hours) or lost the network. Offline, wait for it to come
+      // back; otherwise fetch a new stream once and carry on from the
+      // same point.
+      let resumeAt = null;
+      audio.addEventListener("error", () => {
+        if (!audio.getAttribute("src") || !now) return;
+        const at = audio.currentTime || 0;
+        setLoading(false);
+        audio.removeAttribute("src");
+        if (!navigator.onLine) {
+          resumeAt = at;
+          toast("Lost the connection. The song picks up again when you’re back online", true);
+          return;
+        }
+        if (now.retried) {
+          now.retried = false;
+          cannotPlay(now.track, { kind: "other", detail: "the stream failed twice" });
+          return;
+        }
+        now.retried = true;
+        play(now.list, now.pos, at);
+      });
+
+      function updateSeek(ratio) {
+        seekFill.style.width = `${ratio * 100}%`;
+        const total = isFinite(audio.duration) ? audio.duration : now?.track.Duration || 0;
+        $("t-now").textContent = duration(Math.floor(ratio * total)) || "0:00";
+        seek.setAttribute("aria-valuemax", Math.round(total));
+        seek.setAttribute("aria-valuenow", Math.round(ratio * total));
+      }
+
+      // Click or drag anywhere on the bar; the song jumps on release.
+      seek.addEventListener("pointerdown", (e) => {
+        if (!now || !isFinite(audio.duration)) return;
+        seeking = true;
+        seek.classList.add("dragging");
+        seek.setPointerCapture(e.pointerId);
+        const at = (ev) => {
+          const box = seek.getBoundingClientRect();
+          return Math.min(Math.max((ev.clientX - box.left) / box.width, 0), 1);
+        };
+        updateSeek(at(e));
+        const move = (ev) => updateSeek(at(ev));
+        const up = (ev) => {
+          audio.currentTime = at(ev) * audio.duration;
+          seeking = false;
+          seek.classList.remove("dragging");
+          seek.removeEventListener("pointermove", move);
+        };
+        seek.addEventListener("pointermove", move);
+        seek.addEventListener("pointerup", up, { once: true });
+      });
+      seek.addEventListener("keydown", (e) => {
+        if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
+          e.preventDefault();
+          e.stopPropagation();
+          seekBy(e.key === "ArrowRight" ? 5 : -5);
+        }
+      });
+
+      // Volume, remembered between runs like the TUI's.
+      const volume = $("volume");
+      let lastVolume = 70;
+      function setVolume(v) {
+        v = Math.min(Math.max(Math.round(v), 0), 100);
+        volume.value = v;
+        volume.style.setProperty("--v", `${v}%`);
+        audio.volume = v / 100;
+        $("mute").classList.toggle("muted", v === 0);
+        $("mute").setAttribute("aria-label", v === 0 ? "Unmute" : "Mute");
+        try {
+          localStorage.setItem("ytmgo:volume", String(v));
+        } catch {}
+      }
+      volume.addEventListener("input", () => setVolume(+volume.value));
+      $("mute").addEventListener("click", () => {
+        if (+volume.value > 0) {
+          lastVolume = +volume.value;
+          setVolume(0);
+        } else setVolume(lastVolume || 70);
+      });
+      try {
+        const saved = localStorage.getItem("ytmgo:volume");
+        setVolume(saved == null ? 70 : +saved);
+      } catch {
+        setVolume(70);
+      }
+
+      // The TUI's keys: Space, n / →, p / ←, l and h to seek 5s, + and −.
+      function playerKey(e) {
+        // A focused button, slider or splitter keeps Space and the arrows
+        // for itself: Space presses the button, arrows move the slider.
+        const control = document.activeElement?.matches("button, input, [role=slider], [role=separator]");
+        if (control && (e.key === " " || e.key.startsWith("Arrow"))) return false;
+        switch (e.key) {
+          case " ":
+            togglePlay();
+            return true;
+          case "n":
+          case "ArrowRight":
+            next();
+            return true;
+          case "p":
+          case "ArrowLeft":
+            prev();
+            return true;
+          case "l":
+            seekBy(5);
+            return true;
+          case "h":
+            seekBy(-5);
+            return true;
+          case "+":
+          case "=":
+            setVolume(+volume.value + 5);
+            return true;
+          case "-":
+          case "_":
+            setVolume(+volume.value - 5);
+            return true;
+        }
+        return false;
+      }
+
+      // Media keys and the system's now-playing controls.
+      if ("mediaSession" in navigator) {
+        const ms = navigator.mediaSession;
+        ms.setActionHandler("play", togglePlay);
+        ms.setActionHandler("pause", togglePlay);
+        ms.setActionHandler("nexttrack", next);
+        ms.setActionHandler("previoustrack", prev);
+      }
+
+      // ── Connection ───────────────────────────────────────────────────
+      // A slim banner while offline. Coming back runs the search that
+      // failed and resumes a song the connection cut off.
+      function connection() {
+        $("offline").hidden = navigator.onLine;
+        if (!navigator.onLine) return;
+        if (failedQuery && query.value.trim() === failedQuery) run(failedQuery);
+        if (resumeAt != null && now) {
+          const at = resumeAt;
+          resumeAt = null;
+          play(now.list, now.pos, at);
+        }
+      }
+      window.addEventListener("online", connection);
+      window.addEventListener("offline", connection);
+      connection();
 
       empty();
     </script>

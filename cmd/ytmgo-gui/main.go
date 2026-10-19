@@ -18,6 +18,7 @@ import (
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
+	"github.com/wailsapp/wails/v2/pkg/options/linux"
 
 	"ytmgo/internal/db"
 	"ytmgo/internal/gui"
@@ -25,6 +26,13 @@ import (
 
 //go:embed all:frontend
 var frontend embed.FS
+
+// The window icon on Linux, where development happens. On Windows the
+// icon comes from build/windows/icon.ico, which wails build embeds in
+// the exe.
+//
+//go:embed build/appicon.png
+var icon []byte
 
 func main() {
 	assets, err := fs.Sub(frontend, "frontend")
@@ -50,6 +58,7 @@ func main() {
 		// The database is opened here rather than in gui.New so that
 		// closing it is not a method on App, which the page could call.
 		OnShutdown: func(context.Context) { d.Close() },
+		Linux:      &linux.Options{Icon: icon},
 	})
 	if err != nil {
 		log.Fatal(err)
