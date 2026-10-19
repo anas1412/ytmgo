@@ -205,25 +205,7 @@ func openAlbumCmd(a ytmusic.Album, seq int) tea.Cmd {
 		if err != nil {
 			return AlbumTracksMsg{Album: a, Error: err, Seq: seq}
 		}
-		tracks := make([]search.Result, 0, len(full.Tracks))
-		for _, t := range full.Tracks {
-			cover := t.CoverURL
-			if cover == "" {
-				cover = full.CoverURL
-			}
-			tracks = append(tracks, search.Result{
-				ID:             t.VideoID,
-				Title:          t.Title,
-				Uploader:       t.Artist,
-				Album:          full.Title,
-				Duration:       t.Duration,
-				URL:            ytmusic.WatchURL(t.VideoID),
-				CoverURL:       cover,
-				AlbumBrowseID:  full.BrowseID,
-				ArtistBrowseID: full.ArtistBrowseID,
-				Plays:          t.Plays,
-			})
-		}
+		tracks := search.AlbumResults(full)
 		return AlbumTracksMsg{Album: full, Tracks: tracks, Seq: seq}
 	}
 }
@@ -237,25 +219,7 @@ func openArtistCmd(browseID string, seq int) tea.Cmd {
 		if err != nil {
 			return ArtistLoadedMsg{Error: err, Seq: seq}
 		}
-		songs := make([]search.Result, 0, len(a.TopSongs))
-		for _, t := range a.TopSongs {
-			cover := t.CoverURL
-			if cover == "" {
-				cover = a.ThumbURL
-			}
-			songs = append(songs, search.Result{
-				ID:             t.VideoID,
-				Title:          t.Title,
-				Uploader:       t.Artist,
-				Album:          t.Album,
-				Duration:       t.Duration,
-				URL:            ytmusic.WatchURL(t.VideoID),
-				CoverURL:       cover,
-				AlbumBrowseID:  t.AlbumBrowseID,
-				ArtistBrowseID: a.BrowseID,
-				Plays:          t.Plays,
-			})
-		}
+		songs := search.ArtistSongs(a)
 		return ArtistLoadedMsg{Artist: a, Songs: songs, Seq: seq}
 	}
 }
