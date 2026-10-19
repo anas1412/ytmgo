@@ -428,7 +428,6 @@ func downloadAlbum(query, parentDir, format string) error {
 	return nil
 }
 
-
 // resolveFormat validates a --format override, falling back to the
 // configured format when the flag is absent.
 func resolveFormat(f string, set *settings.Settings) (string, error) {

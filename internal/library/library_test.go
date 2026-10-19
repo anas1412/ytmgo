@@ -168,4 +168,3 @@ func TestProbeReadsTagsAcrossFormats(t *testing.T) {
 		}
 	}
 }
-
