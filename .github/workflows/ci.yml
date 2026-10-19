@@ -49,7 +49,7 @@ jobs:
       # — which is how POSIX-only process handling reached main.
       - name: cross-compile every supported target
         run: |
-          for t in linux/amd64 linux/arm64; do
+          for t in linux/amd64 linux/arm64 windows/amd64; do
             echo "building $t"
             GOOS=${t%/*} GOARCH=${t#*/} CGO_ENABLED=0 go build -o /dev/null ./... || exit 1
           done
@@ -60,6 +60,28 @@ jobs:
       # shipped code for months without a failing test.
       - name: go test
         run: go test ./... -short -race -count=1 -timeout 300s
+
+  # The shared packages on real Windows, which the Windows GUI is built
+  # on. Cross-compiling proves they build; only running them proves the
+  # Windows paths — taskkill, .exe lookup, %LOCALAPPDATA% — behave.
+  # internal/tui is left out: the TUI does not ship on Windows. No -race:
+  # on Windows it needs cgo and a C toolchain, and the Linux job already
+  # runs the same tests under it.
+  windows:
+    name: test (windows)
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version: "1.22"
+
+      - name: go test
+        shell: bash
+        run: go test $(go list ./internal/... | grep -v /internal/tui$) -short -count=1 -timeout 300s
 
   # The live tests, against the real YouTube Music and LRCLIB. Not a
   # gate: continue-on-error keeps a third-party outage from failing the

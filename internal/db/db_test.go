@@ -253,10 +253,14 @@ func TestShowHintsRoundTrips(t *testing.T) {
 // directory. Faking HOME alone was not enough: the database lives under
 // XDG_DATA_HOME, so with that set — as it is on most Linux desktops —
 // the tests opened, and wrote to, the developer's real ytmgo.db.
+// Windows reads neither: the database is under LOCALAPPDATA, and the
+// home directory is USERPROFILE, so those are faked as well.
 func isolateUserDirs(t *testing.T) {
 	t.Helper()
 	dir := t.TempDir()
 	t.Setenv("HOME", dir)
 	t.Setenv("XDG_DATA_HOME", dir)
 	t.Setenv("XDG_CONFIG_HOME", dir)
+	t.Setenv("LOCALAPPDATA", dir)
+	t.Setenv("USERPROFILE", dir)
 }

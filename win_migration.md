@@ -194,13 +194,21 @@ Only what the GUI needs from the shared packages. SQLite is
    `go test` on the packages the GUI uses. Tests that shell out to Unix
    tools get build tags or a skip.
    Locally, Windows test binaries run under Wine
-   (`GOOS=windows go test -c`, then `wine pkg.test.exe`). A first run of
-   every package found these failing on Windows, all expected:
-   - `ytdlp`: looks for `yt-dlp`, not `yt-dlp.exe`, and checks Unix
-     exec bits. Fixed by step 4.
-   - `ytresolve`: the test fakes yt-dlp with a `#!/bin/sh` script.
-   - `settings`: the library-folder tests assume Unix paths.
-   - `tui`: not shipped on Windows; exclude it from the Windows job.
+   (`GOOS=windows go test -c`, then `wine pkg.test.exe`). **Done:** CI
+   cross-builds `windows/amd64` and runs a `windows-latest` job over
+   `internal/...` minus `tui` (no `-race`, which needs cgo on Windows).
+   Under Wine every package in it passes. What the Windows runs found:
+   - `ytdlp` looked for `yt-dlp`, not `yt-dlp.exe`: fixed in step 4.
+   - `db` tests isolated themselves with `HOME` and `XDG_DATA_HOME`, which
+     Windows ignores, so they wrote to the real
+     `%LOCALAPPDATA%\ytmgo\ytmgo.db`. They now fake `LOCALAPPDATA` and
+     `USERPROFILE` too.
+   - `settings` unescaped `\ ` in library folders, which on Windows
+     renamed `D:\Music\ Live` to `D:\Music Live`. The unescape is
+     Unix-only now, with a Windows test; the Unix drag-and-drop tests skip
+     on Windows.
+   - `ytresolve` fakes yt-dlp with a `#!/bin/sh` script, so that test
+     skips on Windows; running the command is covered by `proc`'s test.
 
 Exit: every shared package the GUI imports builds and passes its tests on
 Windows, and can find or fetch the tools it needs.

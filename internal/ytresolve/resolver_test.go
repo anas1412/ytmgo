@@ -3,6 +3,7 @@ package ytresolve
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 )
 
@@ -10,6 +11,12 @@ import (
 // its arguments and prints a canned --flat-playlist entry. Flat entries
 // carry "url" but no "webpage_url", so this also covers the fallback.
 func TestResolveURL(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		// What is under test is the arguments and the parsing, which do
+		// not change per platform; running the command is proc's job,
+		// and proc has its own Windows test.
+		t.Skip("fakes yt-dlp with a shell script")
+	}
 	dir := t.TempDir()
 	argsFile := filepath.Join(dir, "args")
 	script := "#!/bin/sh\nprintf '%s\\n' \"$@\" > " + argsFile + "\n" +
