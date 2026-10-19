@@ -14,6 +14,7 @@ import (
 	"ytmgo/internal/search"
 	"ytmgo/internal/settings"
 	"ytmgo/internal/version"
+	"ytmgo/internal/ytresolve"
 )
 
 // App is what the frontend talks to.
@@ -50,5 +51,14 @@ func (a *App) Search(query string) ([]search.Result, error) {
 	if limit <= 0 {
 		limit = settings.Defaults().SearchLimit
 	}
-	return a.search(query, limit)
+	results, err := a.search(query, limit)
+	return results, problem(err)
+}
+
+// StreamURL turns a track's watch URL into a direct audio stream the
+// page's <audio> element can play. Streams expire after some hours, so
+// the page asks for one each time a track starts.
+func (a *App) StreamURL(watchURL string) (string, error) {
+	url, err := ytresolve.StreamURL(watchURL)
+	return url, problem(err)
 }

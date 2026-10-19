@@ -83,3 +83,34 @@ func ResolveURL(artist, title string) (string, error) {
 	}
 	return r.WebpageURL, nil
 }
+
+// StreamURL returns a direct audio stream for a watch URL, for a player
+// that cannot resolve YouTube pages itself — the GUI's <audio> element,
+// where mpv would run yt-dlp through its own hook.
+//
+// It runs: yt-dlp -f bestaudio --get-url --no-playlist {watchURL}
+//
+// The URL it returns expires after some hours, so it is fetched when a
+// track starts, not stored.
+func StreamURL(watchURL string) (string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), resolveTimeout)
+	defer cancel()
+	cmd := proc.CommandContext(ctx, deps.Path("yt-dlp"),
+		"-f", "bestaudio", "--get-url", "--no-playlist", watchURL)
+	out, err := cmd.Output()
+	if err != nil {
+		if ctx.Err() != nil {
+			return "", fmt.Errorf("yt-dlp timed out after %s", resolveTimeout)
+		}
+		if ee, ok := err.(*exec.ExitError); ok {
+			return "", fmt.Errorf("yt-dlp could not open the track: %s", strings.TrimSpace(string(ee.Stderr)))
+		}
+		return "", fmt.Errorf("yt-dlp could not open the track: %w", err)
+	}
+	// One line per format requested; bestaudio is one.
+	url, _, _ := strings.Cut(strings.TrimSpace(string(out)), "\n")
+	if !strings.HasPrefix(url, "http") {
+		return "", fmt.Errorf("yt-dlp returned no stream for %s", watchURL)
+	}
+	return url, nil
+}
