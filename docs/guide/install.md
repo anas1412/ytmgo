@@ -33,8 +33,8 @@ Override it with `YTMGO_INSTALL_DIR=/opt/bin curl ... | bash`.
 
 ytmgo on Windows is a desktop app, not the terminal one: the same
 library, queue, downloads, lyrics and Last.fm, in a window. Download
-`ytmgo-gui-setup.exe` from the newest
-[`gui-v` release](https://github.com/anas1412/ytmgo/releases) and run it.
+[`ytmgo-gui-setup.exe`](https://github.com/anas1412/ytmgo/releases/latest/download/ytmgo-gui-setup.exe)
+from the latest release and run it.
 
 - It installs for you alone, with no administrator prompt, into
   `%LOCALAPPDATA%\Programs\ytmgo`, with a Start menu entry and an

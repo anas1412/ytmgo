@@ -24,7 +24,7 @@ A YouTube Music client written in Go. Search music, download audio, manage a pla
       <a href="https://github.com/anas1412/ytmgo/releases/latest/download/ytmgo_Linux_arm64.tar.gz">arm64</a> ·
       <a href="#install">one-line install</a></td>
     <td align="center"><b>Windows: the desktop app</b><br>
-      <a href="https://github.com/anas1412/ytmgo/releases/download/gui-v0.1.0/ytmgo-gui-setup.exe">Download ytmgo-gui-setup.exe</a> (0.1.0, pre-release)</td>
+      <a href="https://github.com/anas1412/ytmgo/releases/latest/download/ytmgo-gui-setup.exe">Download ytmgo-gui-setup.exe</a> (Windows 10 and 11)</td>
   </tr>
 </table>
 
