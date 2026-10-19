@@ -96,9 +96,12 @@
         --wails-draggable: drag;
       }
       .tb-logo {
-        height: 26px;
+        height: 22px;
         width: auto;
-        margin: 0 auto 0 18px;
+        /* Centred over the sidebar's icons: the app's 8px edge, the
+           sidebar's and the item's 10px padding, half a 20px icon. */
+        margin: 0 auto 0 27px;
+        transition: margin-left var(--slow) var(--ease);
         /* Part of the bar: dragging the logo drags the window. */
         pointer-events: none;
       }
@@ -123,6 +126,10 @@
         width: 12px;
         height: 12px;
         stroke-width: 1.4;
+      }
+      /* Folded, the sidebar centres its icons in its 76px. */
+      .titlebar.side-collapsed .tb-logo {
+        margin-left: 35px;
       }
       .titlebar .i-restore,
       .titlebar.max .i-max {
@@ -1880,7 +1887,7 @@
   </head>
   <body>
     <header class="titlebar" id="titlebar">
-      <img class="tb-logo" src="ytmgo-logo.png" alt="ytmgo" />
+      <img class="tb-logo" src="ytmgo-icon.png" alt="ytmgo" />
       <button type="button" id="win-min" aria-label="Minimise" title="Minimise">
         <svg viewBox="0 0 12 12"><path d="M1 6h10" /></svg>
       </button>
@@ -2548,6 +2555,7 @@
         app.style.setProperty("--side-w", `${side}px`);
         app.style.setProperty("--right-w", `${right}px`);
         app.classList.toggle("side-collapsed", side === SIDE.collapsed);
+        $("titlebar").classList.toggle("side-collapsed", side === SIDE.collapsed);
         app.classList.toggle("right-closed", !layout.rightOpen || squeezed);
         for (const t of document.querySelectorAll(".tab")) t.setAttribute("aria-selected", t.dataset.tab === layout.tab);
         for (const b of document.querySelectorAll("[data-open]"))
