@@ -288,7 +288,24 @@ WebKitGTK, which is a development-machine dependency only.
 
 ## Phase 3: GUI feature parity
 
-In this order, each shippable alone:
+**The target is the current TUI** (v1.4.0 Stream page), mapped onto a
+Spotify-like layout: sidebar, main view, a right panel with Queue and
+Lyrics tabs, and the player bar.
+
+| TUI | GUI |
+| --- | --- |
+| Recommendations from history as the home list (50) | main view when the search is empty |
+| Search results; album view (art, year, track count, total length, numbered tracks); artist page (top songs, discography) | main view |
+| Queue: count and total time (`30 · 1:21:05`), ▶ on the playing track, ✓ on downloaded ones, ♥ on favourites | right panel, Queue tab |
+| Lyrics, synced, current line followed | right panel, Lyrics tab |
+| Visualizer | in the player bar or right panel, if the audio route allows (S2) |
+| Player: art, title and artist, album (`○ Skiptracing`), next track (`⏭ Tesselation`), Prev / Pause / Next, seek bar with times, `∞ AUTO`, `⇄ SHFL`, `↻ OFF`, volume slider with −/+ | player bar |
+| Track keys: `f` favourite, `x` download, `e` queue, `a` album, `A` artist, `u` copy link | the same keys, plus a right-click menu |
+| Tabs: Stream, Favs, Library, History, Downloads, Settings | sidebar |
+| Quote line; version and update status; key hints, `z` hints, `?` help | status area and a `?` overlay |
+
+In this order, each shippable alone (playback and the full player bar
+come first, in Phase 2):
 
 1. Queue: reorder by drag, remove, clear. Autoplay radio when it runs dry.
 2. Library (with the native folder dialog), favourites, history.
