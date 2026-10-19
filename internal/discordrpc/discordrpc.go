@@ -30,6 +30,7 @@ const clientID = "1512079698518081608"
 var (
 	mu       sync.Mutex
 	loggedIn bool
+	shown    string // the id of the song on show, for a cover found late
 )
 
 // ─── IPC protocol types ─────────────────────────────────────────────
@@ -189,8 +190,32 @@ func Update(track queue.Track, state player.State, position float64) {
 		start = &t
 	}
 
-	// Use TIDAL cover art as the large image when available (from DB or
-	// search results). Fall back to the ytmgo logo otherwise.
+	// A song with no cover link, a library file, gets YouTube Music's;
+	// the first time, the logo shows until the cover arrives, then the
+	// song is shown again with it, if it is still the one on show.
+	mu.Lock()
+	shown = track.ID
+	mu.Unlock()
+	if track.CoverURL == "" && track.Title != "" {
+		asked := time.Now()
+		track.CoverURL, _ = coverFor(track.Artist, track.Title, func(c string) {
+			mu.Lock()
+			still := shown == track.ID
+			mu.Unlock()
+			if !still {
+				return
+			}
+			t := track
+			t.CoverURL = c
+			at := position
+			if state == player.StatePlaying {
+				at += time.Since(asked).Seconds()
+			}
+			Update(t, state, at)
+		})
+	}
+
+	// The cover when there is one; the ytmgo logo otherwise.
 	largeImage := "ytmgo-logo"
 	if track.CoverURL != "" {
 		largeImage = track.CoverURL

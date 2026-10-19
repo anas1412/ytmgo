@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	"ytmgo/internal/queue"
-	"ytmgo/internal/search"
 	"ytmgo/internal/settings"
 )
 
@@ -37,35 +36,22 @@ func TestPresenceFollowsTheSetting(t *testing.T) {
 	}
 }
 
-// A library song has no cover on the web, so Discord gets one: the
-// same song's from the queue, or else from YouTube Music, asked once.
+// A library song has no cover on the web, so Discord gets the same
+// song's from the queue when it is there; the rest is discordrpc's.
 func TestPresenceFindsACoverForLibrarySongs(t *testing.T) {
 	var shown []string
-	searches := 0
 	a := &App{settings: settings.Defaults(), q: queue.New(),
 		saveQueue: func([]queue.Track, int, bool, bool, bool) error { return nil },
 		discord:   &discord{update: func(t *queue.Track, _ bool, _ float64) { shown = append(shown, t.CoverURL) }, close: func() {}},
-		search: func(q string, limit int) ([]search.Result, error) {
-			searches++
-			if q != "Djo End of Beginning" || limit != 1 {
-				t.Errorf("searched %q, %d", q, limit)
-			}
-			return []search.Result{{CoverURL: "https://yt/djo.jpg"}}, nil
-		},
 	}
 	a.Add(queue.Track{ID: "yt1", Title: "Homage (Official Video)", Artist: "Mild High Club - Topic", CoverURL: "https://yt/homage.jpg"})
 
 	a.Presence(&queue.Track{ID: "/m/a.m4a", Title: "Homage", Artist: "Mild High Club", FilePath: "/m/a.m4a"}, true, 0)
-	file := queue.Track{ID: "/m/b.m4a", Title: "End of Beginning", Artist: "Djo", FilePath: "/m/b.m4a"}
-	a.Presence(&file, true, 0)
-	a.Presence(&file, false, 3)
+	a.Presence(&queue.Track{ID: "/m/b.m4a", Title: "End of Beginning", Artist: "Djo", FilePath: "/m/b.m4a"}, true, 0)
 	a.Presence(&queue.Track{ID: "yt2", Title: "X", CoverURL: "https://yt/own.jpg"}, true, 0)
 
-	want := []string{"https://yt/homage.jpg", "https://yt/djo.jpg", "https://yt/djo.jpg", "https://yt/own.jpg"}
-	if strings.Join(shown, " ") != strings.Join(want, " ") {
-		t.Errorf("Discord showed %v, want %v", shown, want)
-	}
-	if searches != 1 {
-		t.Errorf("searched %d times, want once", searches)
+	want := []string{"https://yt/homage.jpg", "", "https://yt/own.jpg"}
+	if strings.Join(shown, "|") != strings.Join(want, "|") {
+		t.Errorf("Discord got %q, want %q", shown, want)
 	}
 }

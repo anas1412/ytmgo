@@ -1,8 +1,6 @@
 package gui
 
 import (
-	"strings"
-
 	"ytmgo/internal/discordrpc"
 	"ytmgo/internal/library"
 	"ytmgo/internal/player"
@@ -50,37 +48,20 @@ func (a *App) Presence(t *queue.Track, playing bool, position float64) {
 	a.discord.update(t, playing, position)
 }
 
-// publicCover finds a cover Discord can show for a song with none of
-// its own, a library file: Discord shows only pictures on the web, and
-// a file's cover is inside the file. The same song in the queue or the
-// favourites may carry one; failing that, YouTube Music is asked once,
-// and the answer, even none, is kept.
+// publicCover is a cover Discord can show for a song with none of its
+// own, a library file: the same song's, when the queue or the
+// favourites carry it with one. Failing that, discordrpc asks YouTube
+// Music, for the TUI as for this app.
 func (a *App) publicCover(t queue.Track) string {
 	key := library.MatchKey(t)
 	a.mu.Lock()
+	defer a.mu.Unlock()
 	for _, have := range append(a.q.Tracks(), a.favs...) {
 		if have.CoverURL != "" && library.MatchKey(have) == key {
-			a.mu.Unlock()
 			return have.CoverURL
 		}
 	}
-	url, asked := a.covers[key]
-	a.mu.Unlock()
-	if asked || t.Title == "" || a.search == nil {
-		return url
-	}
-	if results, err := a.search(strings.TrimSpace(t.Artist+" "+t.Title), 1); err == nil && len(results) > 0 {
-		url = results[0].CoverURL
-	} else if err != nil {
-		return "" // offline, say: asked again next time
-	}
-	a.mu.Lock()
-	if a.covers == nil {
-		a.covers = map[string]string{}
-	}
-	a.covers[key] = url
-	a.mu.Unlock()
-	return url
+	return ""
 }
 
 // SetDiscord turns Discord RPC on or off, and saves it. Off clears what
