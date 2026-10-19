@@ -1300,6 +1300,9 @@
       .lib-filter:focus {
         border-color: var(--violet-text);
       }
+      .list-head .push {
+        margin-left: auto;
+      }
       .list-head .lib-filter + .icon-btn {
         margin-left: 0;
       }
@@ -1931,7 +1934,7 @@
           <svg viewBox="0 0 24 24"><path d="m16 6 4 14" /><path d="M12 6v14" /><path d="M8 8v12" /><path d="M4 4v16" /></svg>
           <span>Library</span>
         </button>
-        <button class="nav-item" aria-disabled="true" title="History is on its way">
+        <button class="nav-item" data-page="history" title="History (4)">
           <svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.8 9.8 0 0 0-6.7 2.7L3 8" /><path d="M3 3v5h5" /><path d="M12 7v5l4 2" /></svg>
           <span>History</span>
         </button>
@@ -2090,6 +2093,8 @@
         SetDownloadFormat,
         ChooseDownloadFolder,
         Lyrics as fetchLyrics,
+        History,
+        ClearHistory,
         Library,
         Rescan,
         DeleteFile,
@@ -2356,6 +2361,9 @@
         if (view === "album") {
           album = el("div", "album", r.plays || "");
           album.title = r.plays ? `${r.plays} plays` : "";
+        } else if (view === "history") {
+          album = el("div", "album", ago(r.playedAt));
+          album.title = new Date(r.playedAt).toLocaleString();
         } else if (view === "library") {
           // The folder it is in, as the TUI's library shows.
           album = el("div", "album", r.file_path.split(/[\\/]/).slice(-2, -1)[0] || "");
@@ -2411,16 +2419,17 @@
         head.append(
           el("span", "", view === "album" ? "#" : ""),
           el("span", "", "Title"),
-          el("span", "col-album", { album: "Plays", library: "Folder" }[view] || "Album"),
-          el("span", "", "Length"),
+          el("span", "col-album", { album: "Plays", library: "Folder", history: "Played" }[view] || "Album"),
+          // History keeps no lengths (db play_history).
+          el("span", "", view === "history" ? "" : "Length"),
           el("span"),
         );
         const list = el("div", "list");
         list.setAttribute("role", "listbox");
-        list.setAttribute("aria-label", { home: "Recommended songs", favs: "Favourites", search: "Songs", album: "Songs", artist: "Top songs", library: "Library" }[view]);
+        list.setAttribute("aria-label", { home: "Recommended songs", favs: "Favourites", search: "Songs", album: "Songs", artist: "Top songs", library: "Library", history: "History" }[view]);
         list.append(el("div", "cursor"), ...results.map(track));
         // An album or artist page draws its own header above the list.
-        if (view === "album" || view === "artist" || view === "library") return { head, list };
+        if (view === "album" || view === "artist" || view === "library" || view === "history") return { head, list };
         const top = el("div", "list-head");
         if (view === "favs") {
           top.append(el("h2", "", "Favourites"), el("span", "sub", `${results.length} ${results.length === 1 ? "song" : "songs"}`));
@@ -3448,8 +3457,15 @@
           case "3":
             navTo("library");
             return true;
+          case "4":
+            navTo("history");
+            return true;
           case "5":
             navTo("downloads");
+            return true;
+          case "C":
+            if (view !== "history") return false;
+            clearHistory();
             return true;
           case "d":
             if (view !== "library" || !results[selected]) return false;
@@ -3579,6 +3595,7 @@
         else if (view === "settings") renderSettings();
         else if (view === "downloads") renderDownloads();
         else if (view === "library") renderLibrary();
+        else if (view === "history") renderHistory();
         else if (view === "home") home();
         else render();
         pane.scrollTop = s.scroll;
@@ -3866,6 +3883,14 @@
           view = "favs";
           selected = 0;
           showFavs();
+          return;
+        }
+        if (page === "history") {
+          if (view === "history") return;
+          view = "history";
+          results = [];
+          selected = 0;
+          renderHistory();
           return;
         }
         if (page === "library") {
@@ -4232,6 +4257,69 @@
       });
       window.addEventListener("resize", paintMax);
       paintMax();
+
+      // ── History ──────────────────────────────────────────────────────
+      // The newest 100 plays, read again on every visit, as in the TUI.
+      // A song is recorded when it starts (Played).
+      let histSeq = 0;
+      const historyShown = 100; // as Go's History
+
+      // "just now", "5 min ago", "3 hours ago", "2 days ago", then "Jan 2":
+      // the TUI's relativeTime.
+      function ago(iso) {
+        const t = new Date(iso);
+        const s = (Date.now() - t) / 1000;
+        if (isNaN(s)) return "";
+        const n = (x, unit) => `${x} ${unit}${x === 1 ? "" : "s"} ago`;
+        if (s < 60) return "just now";
+        if (s < 3600) return `${Math.floor(s / 60)} min ago`;
+        if (s < 86400) return n(Math.floor(s / 3600), "hour");
+        if (s < 7 * 86400) return n(Math.floor(s / 86400), "day");
+        return t.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+      }
+
+      async function renderHistory() {
+        const mine = ++histSeq;
+        if (!pane.querySelector(".hist")) skeleton();
+        let plays;
+        try {
+          plays = await History();
+        } catch (err) {
+          if (mine !== histSeq || view !== "history") return;
+          notice(pane, "History didn’t load", "Its database couldn’t be read. Try again.", { label: "Try again", run: renderHistory }, problemOf(err).detail);
+          return;
+        }
+        if (mine !== histSeq || view !== "history") return;
+        results = plays || [];
+        selected = results.length ? Math.max(0, Math.min(selected, results.length - 1)) : -1;
+        if (!results.length) {
+          notice(pane, "Nothing played yet", "Songs you play show up here, newest first.", null, null, false);
+          return;
+        }
+        const top = el("div", "list-head");
+        const n = results.length;
+        const clear = button("Clear history", clearHistory);
+        clear.classList.add("push");
+        clear.title = "Clear history (C)";
+        top.append(el("h2", "", "History"), el("span", "sub", n === historyShown ? `last ${n} plays` : `${n} ${n === 1 ? "play" : "plays"}`), clear);
+        const { head, list } = render();
+        const body = el("div", "hist");
+        body.append(head, list);
+        pane.replaceChildren(top, body);
+        moveCursor();
+      }
+      async function clearHistory() {
+        const yes = await ask("Clear history?", "Every song you’ve played is forgotten. Recommendations start again from what you play next.", "Clear history");
+        if (!yes) return;
+        try {
+          await ClearHistory();
+        } catch (err) {
+          say("History didn’t clear", { error: true, full: problemOf(err).detail });
+          return;
+        }
+        say("History cleared");
+        if (view === "history") renderHistory();
+      }
 
       // ── Library ──────────────────────────────────────────────────────
       // The download folder and the user's own folders, scanned by Go.

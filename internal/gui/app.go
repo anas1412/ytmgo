@@ -46,7 +46,11 @@ type App struct {
 	// history is the track ids of the newest plays, newest first;
 	// recommend is search.FetchRecommendations; recordPlay is the
 	// database's RecordPlay.
-	history    func(limit int) ([]string, error)
+	history func(limit int) ([]string, error)
+	// plays and clearPlays are the database's play history, for the
+	// History page.
+	plays      func(limit, offset int) ([]db.PlayHistoryEntry, error)
+	clearPlays func() error
 	recommend  func(limit int, seeds []string) ([]search.Result, error)
 	recordPlay func(queue.Track) error
 	saveFavs   func([]queue.Track) error
@@ -138,6 +142,8 @@ func New(d *db.DB) *App {
 		},
 		recommend:  search.FetchRecommendations,
 		recordPlay: d.RecordPlay,
+		plays:      d.LoadPlayHistory,
+		clearPlays: d.ClearPlayHistory,
 		saveFavs:   d.SaveFavorites,
 		lfm:        realLastFM,
 		album:      ytmusic.AlbumTracks,

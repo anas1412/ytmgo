@@ -115,6 +115,11 @@ cannot.
   The History page shows the newest 100, reloaded on every visit, with
   relative times: "just now", "N min ago", "N hours ago", "N days ago", then
   "Jan 2". `C` confirms "Clear history?" then "History cleared".
+
+  **GUI (built, `gui/history.go`):** the History page (`4`), the newest 100
+  read again on every visit, with the TUI's relative times in a Played
+  column; rows play, queue and drag like any list, and songs the library has
+  play from the file. `C` or Clear history asks first, in a dialog.
 - **Favourites** `f` on any track row: "Added to favorites: T" /
   "Removed from favorites: T"; newest first; `♥` on search, album, artist,
   library, queue and favourite rows (not history, not the player).
