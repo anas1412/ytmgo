@@ -1307,12 +1307,16 @@
         margin-left: 0;
       }
       .lib .head-row,
-      .lib .track {
+      .lib .track,
+      .mypl .head-row,
+      .mypl .track {
         grid-template-columns: 44px minmax(0, 1.6fr) minmax(0, 1fr) 56px 96px;
       }
       @container view (max-width: 560px) {
         .lib .head-row,
-        .lib .track {
+        .lib .track,
+        .mypl .head-row,
+        .mypl .track {
           grid-template-columns: 44px minmax(0, 1fr) 56px 96px;
         }
       }
@@ -1351,6 +1355,57 @@
         background: var(--raised);
         color: var(--text);
         box-shadow: 0 20px 60px rgb(0 0 0 / 0.5);
+      }
+      .name-input {
+        width: 100%;
+        margin: 14px 0 20px;
+        padding: 9px 12px;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-s);
+        background: var(--surface);
+        color: var(--text);
+        font: inherit;
+        outline: none;
+      }
+      .name-input:focus {
+        border-color: var(--violet-text);
+      }
+      /* The song menu, on right-click. */
+      .menu {
+        position: fixed;
+        z-index: 30;
+        min-width: 210px;
+        max-width: 280px;
+        padding: 6px;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-m);
+        background: var(--raised);
+        box-shadow: 0 16px 40px rgb(0 0 0 / 0.5);
+      }
+      .menu button {
+        display: block;
+        width: 100%;
+        padding: 8px 10px;
+        border-radius: var(--radius-s);
+        text-align: left;
+        font-size: 13px;
+        overflow: hidden;
+        white-space: nowrap;
+        text-overflow: ellipsis;
+      }
+      .menu button:hover,
+      .menu button:focus-visible {
+        background: var(--hover);
+      }
+      .menu .m-label {
+        padding: 8px 10px 4px;
+        color: var(--dim);
+        font-size: 12px;
+      }
+      .menu hr {
+        margin: 6px 4px;
+        border: 0;
+        border-top: 1px solid var(--border);
       }
       dialog.ask[open] {
         animation: ask-in var(--slow) var(--ease);
@@ -1695,6 +1750,51 @@
       .nav-playlists .icon-btn:disabled {
         opacity: 0.4;
         cursor: default;
+      }
+      .pl-list {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        margin-top: 6px;
+        max-height: 40vh;
+        overflow-y: auto;
+      }
+      .pl-item {
+        display: grid;
+        grid-template-columns: 36px minmax(0, 1fr);
+        align-items: center;
+        gap: 10px;
+        padding: 6px;
+        border-radius: var(--radius-s);
+        text-align: left;
+        transition: background var(--fast), box-shadow var(--fast);
+      }
+      .pl-item:hover,
+      .pl-item[aria-current="page"] {
+        background: var(--hover);
+      }
+      /* A song held over it: dropping adds it there. */
+      .pl-item.drop-on {
+        background: var(--hover);
+        box-shadow: inset 0 0 0 2px var(--violet);
+      }
+      .pl-item .art-wrap {
+        width: 36px;
+        height: 36px;
+      }
+      .pl-item .pl-name,
+      .pl-item .pl-sub {
+        overflow: hidden;
+        white-space: nowrap;
+        text-overflow: ellipsis;
+      }
+      .pl-item .pl-name {
+        font-size: 13px;
+        font-weight: 600;
+      }
+      .pl-item .pl-sub {
+        color: var(--dim);
+        font-size: 12px;
       }
       .nav-playlists p {
         margin: 8px 6px 0;
@@ -2300,15 +2400,15 @@
           <span>Downloads</span>
           <b class="count" id="dl-count" hidden></b>
         </button>
-        <!-- Playlists of your own are on their way: the place they will live. -->
+        <!-- Playlists of your own; a song dropped on one goes into it. -->
         <div class="nav-playlists">
           <div class="np-head">
             <span>Playlists</span>
-            <button type="button" class="icon-btn" disabled aria-label="Create a playlist" title="Playlists of your own are on their way">
+            <button type="button" class="icon-btn" id="pl-new" aria-label="Create a playlist" title="New playlist">
               <svg viewBox="0 0 24 24"><path d="M12 5v14" /><path d="M5 12h14" /></svg>
             </button>
           </div>
-          <p>Playlists of your own are coming. For now, keep songs with ♥ in Favourites.</p>
+          <div class="pl-list" id="pl-list"></div>
         </div>
         <button class="nav-item nav-bottom" data-page="settings" title="Settings (6)">
           <svg viewBox="0 0 24 24"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" /><circle cx="12" cy="12" r="3" /></svg>
@@ -2442,6 +2542,17 @@
         <div class="buttons-row"><button class="soft" type="submit">Close</button></div>
       </form>
     </dialog>
+    <dialog class="ask" id="name-ask">
+      <form method="dialog">
+        <strong id="name-title"></strong>
+        <input class="name-input" id="name-input" maxlength="120" autocomplete="off" aria-label="Name" />
+        <div class="buttons-row">
+          <button class="soft" value="no" type="submit" formnovalidate>Cancel</button>
+          <button class="soft primary" id="name-ok" value="yes" type="submit"></button>
+        </div>
+      </form>
+    </dialog>
+    <div class="menu" id="menu" role="menu" hidden></div>
     <dialog class="ask" id="ask">
       <form method="dialog">
         <strong id="ask-title"></strong>
@@ -2503,6 +2614,13 @@
         ShareLink,
         Locate,
         Saved as fetchSaved,
+        MyPlaylists,
+        MyPlaylist,
+        CreatePlaylist,
+        AddToPlaylist,
+        RemoveFromPlaylist,
+        RenamePlaylist,
+        DeletePlaylist,
         ToggleSaved,
         MediaBase,
         SetCopyMusicLinks,
@@ -2778,6 +2896,26 @@
 
         const actions = el("div", "row-actions");
         actions.append(heartButton(r), add);
+        if (view === "myplaylist") {
+          const rm = el("button", "add del");
+          rm.type = "button";
+          rm.setAttribute("aria-label", `Remove ${r.title} from this playlist`);
+          rm.title = "Remove from this playlist";
+          rm.append(icon(ICON_X));
+          rm.addEventListener("click", async (e) => {
+            e.stopPropagation();
+            try {
+              page = { ...page, ...(await RemoveFromPlaylist(page.id, i)) };
+              results = page.tracks;
+              renderMyPlaylist();
+              loadPlaylists();
+            } catch (err) {
+              say("That didn’t save", { error: true, full: problemOf(err).detail });
+            }
+          });
+          rm.addEventListener("dblclick", (e) => e.stopPropagation());
+          actions.append(rm);
+        }
         if (view === "library") {
           const del = el("button", "add del");
           del.type = "button";
@@ -2796,6 +2934,10 @@
         if (now && r.id === now.track.id) row.classList.add("playing");
         row.addEventListener("click", () => select(i));
         row.addEventListener("dblclick", () => playNow(i));
+        row.addEventListener("contextmenu", (e) => {
+          select(i);
+          songMenu(e, r);
+        });
         draggable(row, () => ({ kind: "result", index: i, track: r }));
         return row;
       }
@@ -2819,12 +2961,14 @@
         list.setAttribute("aria-label", { favs: "Favourites", search: "Songs", album: "Songs", artist: "Top songs", library: "Library", history: "History", playlist: "Songs" }[view]);
         list.append(el("div", "cursor"), ...results.map(track));
         // An album or artist page draws its own header above the list.
-        if (["album", "artist", "library", "history", "playlist", "favs"].includes(view)) return { head, list };
+        if (["album", "artist", "library", "history", "playlist", "favs", "myplaylist"].includes(view)) return { head, list };
         const top = el("div", "list-head");
         if (lastFound?.playlist) {
           const n = results.length;
           const missed = lastFound.missed ? `, ${lastFound.missed} not found on YouTube Music` : "";
-          top.append(el("h2", "", lastFound.playlist), el("span", "sub", `${n} ${n === 1 ? "song" : "songs"}${missed}`));
+          const keep = pill("Save as playlist", () => saveAsPlaylist(lastFound.playlist, results));
+          keep.classList.add("push");
+          top.append(el("h2", "", lastFound.playlist), el("span", "sub", `${n} ${n === 1 ? "song" : "songs"}${missed}`), keep);
         } else top.append(el("h2", "", "Songs"));
         pane.replaceChildren(top, head, list);
         pane.scrollTop = 0;
@@ -3176,6 +3320,7 @@
           }
         });
         draggable(row, () => ({ kind: "queue", index: i, track: t }));
+        row.addEventListener("contextmenu", (e) => songMenu(e, t));
         return row;
       }
       function focusRow(i) {
@@ -3311,6 +3456,11 @@
       // below the pointer, or at the end. Moving a queue row onto its own
       // place changes nothing, so no line is drawn there.
       function locateDrop() {
+        // Over a playlist in the sidebar, the song goes into it.
+        const pl = document.elementFromPoint(drag.px, drag.py)?.closest?.(".pl-item");
+        for (const it of document.querySelectorAll(".pl-item.drop-on")) if (it !== pl) it.classList.remove("drop-on");
+        pl?.classList.add("drop-on");
+        drag.toPlaylist = pl ? { id: +pl.dataset.id, name: pl.dataset.name } : null;
         const body = $("panel-body");
         const box = body.getBoundingClientRect();
         const inside = drag.px >= box.left && drag.px <= box.right && drag.py >= box.top && drag.py <= box.bottom;
@@ -3376,6 +3526,11 @@
         const body = $("panel-body");
         body.classList.remove("drop-target");
         body.querySelector(".drop-line")?.remove();
+        for (const it of document.querySelectorAll(".pl-item.drop-on")) it.classList.remove("drop-on");
+        if (commit && d.toPlaylist) {
+          addToPlaylist(d.toPlaylist, [d.track]);
+          return;
+        }
         if (!commit || d.at == null) return;
         if (d.kind === "queue") {
           const to = d.at > d.index ? d.at - 1 : d.at;
@@ -3430,6 +3585,7 @@
         setLoading(true);
       }
 
+      $("np-text").addEventListener("contextmenu", (e) => now && songMenu(e, now.track));
       function showTrack(t) {
         shownId = t.id;
         const art = $("np-art");
@@ -4002,6 +4158,7 @@
         else if (view === "history") renderHistory();
         else if (view === "home") renderHome();
         else if (view === "playlist") renderPlaylist();
+        else if (view === "myplaylist") renderMyPlaylist();
         else if (view === "search" && !lastQuery) searchLanding();
         else render();
         pane.scrollTop = s.scroll;
@@ -4045,6 +4202,9 @@
           } else if (kind === "playlist") {
             results = p.tracks;
             renderPlaylist();
+          } else if (kind === "myplaylist") {
+            results = p.tracks;
+            renderMyPlaylist();
           } else {
             artistTab = p.songs.length ? "songs" : "releases";
             renderArtist();
@@ -4055,7 +4215,7 @@
           const offline = pr.kind === "offline";
           notice(
             pane,
-            { album: "This album didn’t open", artist: "This artist didn’t open", playlist: "This playlist didn’t open" }[kind],
+            { album: "This album didn’t open", artist: "This artist didn’t open", playlist: "This playlist didn’t open", myplaylist: "This playlist didn’t open" }[kind],
             offline ? "You’re offline. Try again once you’re back online." : "YouTube Music didn’t give the page back. Try again.",
             {
               label: "Try again",
@@ -4184,7 +4344,8 @@
         const play = pill("Play", () => playList(p.tracks, pageSource()), true);
         const add = pill("Add to queue", () => queueAll());
         add.title = "Add every song to the queue (e)";
-        const head = header("playlist", p.coverURL, p.title || p.name || "Playlist", meta, n ? [play, add] : []);
+        const keep = pill("Save as playlist", () => saveAsPlaylist(p.title || "Playlist", p.tracks));
+        const head = header("playlist", p.coverURL, p.title || p.name || "Playlist", meta, n ? [play, add, keep] : []);
         if (!n) {
           pane.replaceChildren(backButton(), head);
           const empty = el("div");
@@ -4381,6 +4542,179 @@
         }
         pane.replaceChildren(top, seg, body);
       }
+
+      // ── Your playlists ───────────────────────────────────────────────
+      // Kept in Go (gui/myplaylists.go), in the database the TUI reads
+      // too. The sidebar lists them; a song dropped on one, or sent from
+      // its right-click menu, goes into it.
+      let myPlaylists = [];
+      async function loadPlaylists() {
+        myPlaylists = (await MyPlaylists()) || [];
+        const list = $("pl-list");
+        list.replaceChildren(
+          ...myPlaylists.map((p) => {
+            const b = el("button", "pl-item");
+            b.type = "button";
+            b.dataset.id = p.id;
+            b.dataset.name = p.name;
+            b.title = `${p.name}, ${p.count} ${p.count === 1 ? "song" : "songs"}`;
+            if (view === "myplaylist" && page?.id === p.id) b.setAttribute("aria-current", "page");
+            const text = el("div");
+            text.append(el("div", "pl-name", p.name), el("div", "pl-sub", `${p.count} ${p.count === 1 ? "song" : "songs"}`));
+            b.append(cover(p.coverURL, 120), text);
+            b.addEventListener("click", () => openMyPlaylist(p.id, p.name));
+            return b;
+          }),
+        );
+        if (!myPlaylists.length) list.append(el("p", "", "Make one with +, or right-click any song."));
+      }
+      loadPlaylists();
+      $("pl-new").addEventListener("click", () => newPlaylist([]));
+
+      // Opens over whatever is on screen; Back returns to it.
+      function openMyPlaylist(id, name) {
+        openPage("myplaylist", () => MyPlaylist(id), name);
+      }
+
+      // A name, asked in a dialog; null when cancelled.
+      function askName(title, ok, value = "") {
+        const d = $("name-ask");
+        $("name-title").textContent = title;
+        $("name-ok").textContent = ok;
+        const input = $("name-input");
+        input.value = value;
+        d.showModal();
+        input.select();
+        return answerOf(d).then((v) => (v === "yes" && input.value.trim() ? input.value.trim() : null));
+      }
+
+      async function newPlaylist(tracks) {
+        const name = await askName("New playlist", "Create", tracks.length === 1 ? tracks[0].title : "");
+        if (!name) return;
+        try {
+          const id = await CreatePlaylist(name, tracks);
+          say(tracks.length ? `Added to “${name}”` : `Made “${name}”`);
+          await loadPlaylists();
+          if (!tracks.length) openMyPlaylist(id, name);
+        } catch (err) {
+          say("That playlist wasn’t made", { error: true, full: problemOf(err).detail });
+        }
+      }
+
+      async function saveAsPlaylist(name, tracks) {
+        try {
+          await CreatePlaylist(name, tracks);
+          say(`Saved “${name}”, ${tracks.length} ${tracks.length === 1 ? "song" : "songs"}`);
+          loadPlaylists();
+        } catch (err) {
+          say("That playlist wasn’t saved", { error: true, full: problemOf(err).detail });
+        }
+      }
+
+      async function addToPlaylist(pl, tracks) {
+        try {
+          const n = await AddToPlaylist(pl.id, tracks);
+          if (n) say(`Added to “${pl.name}”`);
+          else say(`Already in “${pl.name}”`);
+          await loadPlaylists();
+          if (view === "myplaylist" && page?.id === pl.id) openMyPlaylist(pl.id, pl.name);
+        } catch (err) {
+          say("That didn’t save", { error: true, full: problemOf(err).detail });
+        }
+      }
+
+      function renderMyPlaylist() {
+        const p = page;
+        const n = p.tracks.length;
+        const meta = [el("span", "strong", "Your playlist"), el("span", "", `${n} ${n === 1 ? "song" : "songs"}${p.seconds ? `, ${long(p.seconds)}` : ""}`)];
+        const play = pill("Play", () => playList(p.tracks, pageSource()), true);
+        const add = pill("Add to queue", () => queueAll());
+        const rename = pill("Rename", async () => {
+          const name = await askName("Rename playlist", "Rename", p.name);
+          if (!name || name === p.name) return;
+          try {
+            await RenamePlaylist(p.id, name);
+            page = { ...page, name };
+            renderMyPlaylist();
+            loadPlaylists();
+          } catch (err) {
+            say("That name didn’t save", { error: true, full: problemOf(err).detail });
+          }
+        });
+        const del = pill("Delete", async () => {
+          if (!(await ask(`Delete “${p.name}”?`, "The playlist goes; its songs stay wherever else they are.", "Delete"))) return;
+          try {
+            await DeletePlaylist(p.id);
+            say(`Deleted “${p.name}”`);
+            await loadPlaylists();
+            back() || navTo("home");
+          } catch (err) {
+            say("That playlist wasn’t deleted", { error: true, full: problemOf(err).detail });
+          }
+        });
+        const head = header("playlist", p.tracks[0]?.cover_url || "", p.name, meta, n ? [play, add, rename, del] : [rename, del]);
+        if (!n) {
+          pane.replaceChildren(backButton(), head);
+          const empty = el("div");
+          notice(empty, "Nothing in it yet", "Right-click any song, or drag it onto this playlist in the sidebar.", null, null, false);
+          pane.append(empty);
+        } else {
+          const { head: cols, list } = render();
+          const body = el("div", "mypl");
+          body.append(cols, list);
+          pane.replaceChildren(backButton(), head, body);
+          moveCursor();
+        }
+        for (const it of document.querySelectorAll(".pl-item"))
+          if (+it.dataset.id === p.id) it.setAttribute("aria-current", "page");
+          else it.removeAttribute("aria-current");
+      }
+
+      // ── The song menu ────────────────────────────────────────────────
+      // Right-click on any song: into a playlist, into the queue, or to
+      // its album or artist.
+      function songMenu(e, t) {
+        e.preventDefault();
+        const menu = $("menu");
+        const item = (text, run) => {
+          const b = el("button", "", text);
+          b.type = "button";
+          b.setAttribute("role", "menuitem");
+          b.addEventListener("click", () => {
+            closeMenu();
+            run();
+          });
+          return b;
+        };
+        menu.replaceChildren(
+          el("div", "m-label", t.title),
+          item("Add to queue", () => enqueue(t)),
+          item("Go to album", () => openAlbumOf(t)),
+          item("Go to artist", () => openArtistOf(t)),
+          el("hr"),
+          el("div", "m-label", "Add to playlist"),
+          item("New playlist…", () => newPlaylist([t])),
+          ...myPlaylists.map((p) => item(p.name, () => addToPlaylist(p, [t]))),
+        );
+        menu.hidden = false;
+        // Where the pointer is, kept inside the window.
+        const r = menu.getBoundingClientRect();
+        menu.style.left = `${Math.min(e.clientX, innerWidth - r.width - 8)}px`;
+        menu.style.top = `${Math.min(e.clientY, innerHeight - r.height - 8)}px`;
+        menu.querySelector("button")?.focus();
+      }
+      function closeMenu() {
+        $("menu").hidden = true;
+      }
+      document.addEventListener("pointerdown", (e) => {
+        if (!$("menu").hidden && !e.target.closest("#menu")) closeMenu();
+      });
+      document.addEventListener("keydown", (e) => {
+        if (e.key === "Escape" && !$("menu").hidden) {
+          e.stopImmediatePropagation();
+          closeMenu();
+        }
+      }, true);
 
       // ── Followed artists and liked albums ────────────────────────────
       // Kept in Go (gui/saved.go), in the database the TUI reads too.
@@ -5015,6 +5349,7 @@
         if (!page) return null;
         if (view === "album") return { kind: "album", id: page.browseID, title: page.title, subtitle: page.artist, coverURL: page.coverURL };
         if (view === "playlist") return { kind: "playlist", id: page.id, title: page.title, subtitle: page.subtitle || "", coverURL: page.coverURL || "" };
+        if (view === "myplaylist") return { kind: "myplaylist", id: String(page.id), title: page.name, subtitle: "Your playlist", coverURL: page.tracks[0]?.cover_url || "" };
         return null;
       }
       const PLAY = '<path d="M8 5v14l11-7z" />';
@@ -5122,7 +5457,7 @@
         // Then the albums and playlists played lately, newest first, as
         // Spotify's: the tile opens the page, its button plays it.
         for (const src of recent) {
-          const load = src.kind === "album" ? () => fetchAlbum(src.id) : () => fetchPlaylist(src.id);
+          const load = { album: () => fetchAlbum(src.id), myplaylist: () => MyPlaylist(+src.id) }[src.kind] || (() => fetchPlaylist(src.id));
           const extra = src.kind === "playlist" ? { coverURL: src.coverURL, subtitle: src.subtitle } : {};
           const tile = tileOf(
             cover(src.coverURL, 120),
@@ -5221,6 +5556,7 @@
         // The card plays; its artist line opens the artist.
         if (t.artist) c.querySelector(".c-sub").replaceChildren(artistLink(t, true));
         draggable(c, () => ({ kind: "result", index: -1, track: t }));
+        c.addEventListener("contextmenu", (e) => songMenu(e, t));
         return c;
       }
 
@@ -5392,10 +5728,28 @@
         $("ask-title").textContent = title;
         $("ask-body").textContent = body;
         $("ask-ok").textContent = ok;
-        d.returnValue = "";
         d.showModal();
         $("ask-ok").focus();
-        return new Promise((res) => d.addEventListener("close", () => res(d.returnValue === "yes"), { once: true }));
+        return answerOf(d).then((v) => v === "yes");
+      }
+
+      // The button a dialog's form was sent with, or null for Esc. From
+      // the submit itself, which carries the button, rather than from the
+      // close event that follows it: that one can come late, or, seen
+      // in Chromium on a second showing, not at all.
+      function answerOf(d) {
+        const form = d.querySelector("form");
+        return new Promise((res) => {
+          const done = (v) => {
+            form.removeEventListener("submit", onSubmit);
+            d.removeEventListener("close", onClose);
+            res(v);
+          };
+          const onSubmit = (e) => done(e.submitter?.value || null);
+          const onClose = () => done(null);
+          form.addEventListener("submit", onSubmit);
+          d.addEventListener("close", onClose);
+        });
       }
 
       async function deleteFile(t) {

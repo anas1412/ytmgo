@@ -65,6 +65,8 @@ type App struct {
 	save      func(db.Saved) error
 	unsave    func(kind, id string) error
 	loadSaved func(kind string) ([]db.Saved, error)
+	// pl is your own playlists, in the database.
+	pl *playlistStore
 	// located is the page ids Locate found, by library.MatchKey.
 	located map[string]queue.Track
 	// home is ytmusic.HomeFeed.
@@ -161,17 +163,19 @@ func New(d *db.DB) *App {
 			}
 			return ids, err
 		},
-		recommend:    search.FetchRecommendations,
-		recordPlay:   d.RecordPlay,
-		plays:        d.LoadPlayHistory,
-		clearPlays:   d.ClearPlayHistory,
-		saveFavs:     d.SaveFavorites,
-		lfm:          realLastFM,
-		discord:      realDiscord,
-		album:        ytmusic.AlbumTracks,
-		artist:       ytmusic.Artist,
-		playlist:     search.PlaylistTracks,
-		home:         ytmusic.HomeFeed,
+		recommend:  search.FetchRecommendations,
+		recordPlay: d.RecordPlay,
+		plays:      d.LoadPlayHistory,
+		clearPlays: d.ClearPlayHistory,
+		saveFavs:   d.SaveFavorites,
+		lfm:        realLastFM,
+		discord:    realDiscord,
+		album:      ytmusic.AlbumTracks,
+		artist:     ytmusic.Artist,
+		playlist:   search.PlaylistTracks,
+		home:       ytmusic.HomeFeed,
+		pl: &playlistStore{list: d.LoadPlaylists, load: d.LoadPlaylist, create: d.CreatePlaylist,
+			set: d.SetPlaylistTracks, rename: d.RenamePlaylist, remove: d.DeletePlaylist},
 		save:         d.Save,
 		unsave:       d.Unsave,
 		loadSaved:    d.LoadSaved,
