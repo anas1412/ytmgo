@@ -344,6 +344,11 @@ the built exe on Windows.
    → verify on Windows: media keys and the volume flyout drive playback, and
    title and art show in the overlay.
 
+**Status:** 1 and 2 built. Media keys go through the page's Media Session,
+with WebView2 started with `--enable-features=HardwareMediaKeyHandling`
+(through `WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS`), which other WebView2 apps
+report the overlay needs. Not yet verified on Windows. No tray icon.
+
 ---
 
 ## Phase 5: packaging and release
@@ -369,6 +374,15 @@ One Windows artefact per release, with a `.sha256` like the existing assets:
    that builds the installer (cross-compiled from Linux if S4 passes,
    otherwise on `windows-latest`).
 6. **Optional.** winget and Scoop manifests, once a release is stable.
+
+**Status (0.1.0):** the installer is `cmd/ytmgo-gui/build/windows/installer/
+project.nsi`, Wails' template in its per-user mode, plus `yt-dlp.exe`
+(`cmd/fetchdep`, from the pins in `internal/deps`). Uninstalling removes
+`%LOCALAPPDATA%\ytmgo\bin` too. `gui-release.yml` builds it on
+`windows-latest` on a `gui-v*` tag, its own pattern so that `release.yml`
+and `install.sh` (which installs "latest") never see it, and publishes a
+pre-release never marked latest; run by hand it only builds an artifact.
+Not done: updates (3), signing (4), winget and Scoop (6).
 
 → verify, on a clean Windows VM:
 - the installer gives a working app, a Start menu entry, and a clean uninstall

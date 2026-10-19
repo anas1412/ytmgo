@@ -1,0 +1,113 @@
+name: gui-release
+
+# Builds the Windows installer, ytmgo-gui-setup.exe, and publishes it
+# as a pre-release whenever you push a tag like `gui-v0.1.0`. Run by
+# hand (workflow_dispatch), it builds the installer as an artifact and
+# publishes nothing: a way to try it on Windows before tagging.
+#
+# A tag of its own, not `v*`: those are the terminal app's releases
+# (release.yml), and install.sh installs whatever release is "latest".
+# So this one is never marked latest, and a Windows release cannot
+# take the place of the Linux binaries.
+
+on:
+  push:
+    tags:
+      - "gui-v*"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gui-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    # Built where it runs: the installer needs makensis, and the exe is
+    # checked on the system it is for.
+    runs-on: windows-latest
+    permissions:
+      contents: write   # publishes the release
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      # The installer's version comes from wails.json; a tag that says
+      # something else would ship an installer that lies about itself.
+      - name: Version, and check a tag matches it
+        run: |
+          set -euo pipefail
+          json=$(grep -o '"productVersion": *"[^"]*"' cmd/ytmgo-gui/wails.json | grep -o '[0-9][^"]*')
+          if [ "$GITHUB_REF_TYPE" = tag ]; then
+            tag="${GITHUB_REF_NAME#gui-v}"
+            echo "tag $tag, wails.json $json"
+            [ "$tag" = "$json" ] || { echo "update productVersion in cmd/ytmgo-gui/wails.json"; exit 1; }
+          fi
+          echo "VERSION=$json" >> "$GITHUB_ENV"
+
+      - name: Test
+        run: go test -short $(go list ./internal/... | grep -v /internal/tui)
+
+      - name: Install Wails and NSIS
+        run: |
+          set -euo pipefail
+          go install github.com/wailsapp/wails/v2/cmd/wails@v2.17.0
+          choco install nsis -y --no-progress
+          echo "C:\\Program Files (x86)\\NSIS" >> "$GITHUB_PATH"
+
+      # yt-dlp ships beside the app (project.nsi). The pinned build,
+      # checked against its checksum, as the app itself would fetch it.
+      - name: Fetch yt-dlp
+        run: |
+          set -euo pipefail
+          mkdir -p cmd/ytmgo-gui/build/bin
+          go run ./cmd/fetchdep yt-dlp cmd/ytmgo-gui/build/bin
+
+      - name: Build the installer
+        working-directory: cmd/ytmgo-gui
+        env:
+          COMMIT: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          wails build -platform windows/amd64 -nsis -trimpath \
+            -ldflags "-s -w \
+              -X 'ytmgo/internal/version.Version=v$VERSION' \
+              -X 'ytmgo/internal/version.Commit=${COMMIT:0:7}' \
+              -X 'ytmgo/internal/version.BuildDate=$(date -u +%Y-%m-%dT%H:%M:%SZ)'"
+          cd build/bin
+          ls -la
+          sha256sum ytmgo-gui-setup.exe | tee ytmgo-gui-setup.exe.sha256
+
+      - name: Keep the installer as an artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: ytmgo-gui-setup
+          path: |
+            cmd/ytmgo-gui/build/bin/ytmgo-gui-setup.exe
+            cmd/ytmgo-gui/build/bin/ytmgo-gui-setup.exe.sha256
+          if-no-files-found: error
+
+      - name: Publish
+        if: github.ref_type == 'tag'
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: ytmgo for Windows ${{ env.VERSION }}
+          body_path: .github/gui-release-notes.md
+          prerelease: true
+          make_latest: "false"
+          files: |
+            cmd/ytmgo-gui/build/bin/ytmgo-gui-setup.exe
+            cmd/ytmgo-gui/build/bin/ytmgo-gui-setup.exe.sha256

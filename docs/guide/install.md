@@ -29,6 +29,31 @@ your shell's `PATH`.
 Override it with `YTMGO_INSTALL_DIR=/opt/bin curl ... | bash`.
 :::
 
+## Windows
+
+ytmgo on Windows is a desktop app, not the terminal one: the same
+library, queue, downloads, lyrics and Last.fm, in a window. Download
+`ytmgo-gui-setup.exe` from the newest
+[`gui-v` release](https://github.com/anas1412/ytmgo/releases) and run it.
+
+- It installs for you alone, with no administrator prompt, into
+  `%LOCALAPPDATA%\Programs\ytmgo`, with a Start menu entry and an
+  uninstaller in Settings → Apps.
+- yt-dlp comes with it. ffmpeg, which downloads need, is fetched the
+  first time you download something.
+- It needs Windows 10 or 11, 64-bit. The installer adds Microsoft's
+  WebView2 runtime if your system lacks it; Windows 11 has it already.
+
+::: warning SmartScreen
+The installer is not signed yet, so Windows warns about an unknown
+publisher. Choose **More info**, then **Run anyway**. Check the download
+against the `.sha256` file beside it on the release first if you want to
+be sure it is the one published here.
+:::
+
+Your library, downloads and settings live in `%LOCALAPPDATA%\ytmgo`;
+uninstalling leaves them there.
+
 ## Arch Linux
 
 The one-liner handles this, but both packages are on the AUR directly:
@@ -89,7 +114,7 @@ go build -o ytmgo .
 |---|---|
 | **Linux**, any distribution | x86_64 and arm64 |
 | macOS | Not supported |
-| Windows | Not supported |
+| Windows 10 and 11 | x86_64, as a desktop app ([above](#windows)) |
 
 *Any distribution* is meant literally: the binary is built with cgo off,
 so it is statically linked and depends on no system C library. It runs
@@ -103,11 +128,10 @@ loopback configured by hand. Nothing else cares which audio stack you
 run: playback goes through mpv, which picks its own output — PipeWire,
 PulseAudio, ALSA, JACK or sndio.
 
-Windows is not supported and is not planned. ytmgo runs mpv, yt-dlp and
-ffmpeg as child processes and has to kill a whole tree when a download
-is cancelled — yt-dlp spawns ffmpeg, and killing only the parent orphans
-it. That relies on POSIX process groups, which Windows has no equivalent
-of.
+The terminal app is Linux only. Windows gets the desktop app instead,
+built on the same code: there, a cancelled download's whole process tree
+goes with it through a Job Object, Windows' own equivalent of a process
+group.
 
 ## Requirements
 

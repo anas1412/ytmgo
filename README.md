@@ -153,8 +153,10 @@ or one of the nine built-in themes:
 
 ## Supported systems
 
-**Linux (any distribution)**, on x86_64 and arm64. macOS and Windows are
-not supported.
+**Linux (any distribution)**, on x86_64 and arm64. **Windows 10 and 11**
+get a desktop app instead, with an installer (see
+[Install](https://github.com/anas1412/ytmgo/blob/main/docs/guide/install.md#windows)).
+macOS is not supported.
 
 The binary is built with cgo off, so it is statically linked and depends
 on no system C library — the same build runs on glibc and on musl,

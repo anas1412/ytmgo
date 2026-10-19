@@ -48,3 +48,5 @@ videos/*/renders/
 # Wails output: the built app, and the JS bindings it generates on every build.
 cmd/ytmgo-gui/build/bin/
 cmd/ytmgo-gui/frontend/wailsjs/
+cmd/ytmgo-gui/build/windows/installer/wails_tools.nsh
+cmd/ytmgo-gui/build/windows/installer/tmp/
