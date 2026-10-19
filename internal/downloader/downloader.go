@@ -72,6 +72,7 @@ type Downloader struct {
 	ctx      context.Context // cancelled by Close; kills running yt-dlp/ffmpeg
 	cancel   context.CancelFunc
 	format   string         // output format: "m4a" or "mp3"
+	outDir   string         // used by a job enqueued without its own dir
 	wg       sync.WaitGroup // Close waits on the worker through this
 }
 
@@ -87,9 +88,10 @@ func New(outDir, format string) *Downloader {
 		ctx:      ctx,
 		cancel:   cancel,
 		format:   format,
+		outDir:   outDir,
 	}
 	d.wg.Add(1)
-	go d.worker(outDir)
+	go d.worker()
 	return d
 }
 
@@ -119,6 +121,9 @@ func (d *Downloader) Enqueue(trackID, title, uploader, url, outDir, coverURL str
 // EnqueueAs is Enqueue with an explicit output filename stem (no
 // extension), used by album downloads to number tracks.
 func (d *Downloader) EnqueueAs(trackID, title, uploader, url, outDir, coverURL, nameStem string) {
+	if outDir == "" {
+		outDir = d.outDir
+	}
 	ext := "." + d.currentFormat()
 	// Check if file already downloaded
 	expected := filepath.Join(outDir, stemFor(uploader, title, nameStem)+ext)
@@ -227,14 +232,14 @@ func (d *Downloader) Close() {
 	d.wg.Wait()
 }
 
-func (d *Downloader) worker(outDir string) {
+func (d *Downloader) worker() {
 	defer d.wg.Done()
 	for {
 		select {
 		case <-d.ctx.Done():
 			return
 		case job := <-d.jobCh:
-			d.runJob(job, outDir)
+			d.runJob(job)
 		}
 	}
 }
@@ -294,8 +299,13 @@ func stemFor(uploader, title, nameStem string) string {
 // progressRe matches yt-dlp's download progress lines.
 var progressRe = regexp.MustCompile(`\[download\]\s+(\d+\.\d+)%`)
 
-func (d *Downloader) runJob(job *Job, outDir string) {
+func (d *Downloader) runJob(job *Job) {
 	d.setJobStatus(job, StatusDownloading, nil)
+
+	// The job's own dir, not the one the downloader was created with:
+	// album downloads go to their own folder, and the TUI passes the
+	// current Download Dir so a change in Settings takes effect.
+	outDir := job.OutDir
 
 	// Read the format once and use it for both the yt-dlp argument and
 	// the output path. Reading it twice meant a format changed on the

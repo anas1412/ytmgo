@@ -3,6 +3,7 @@ package downloader
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -199,5 +200,30 @@ func TestProgressPatternMatchesYtDlp(t *testing.T) {
 		if got != c.want {
 			t.Errorf("%q matched %q, want %q", c.line, got, c.want)
 		}
+	}
+}
+
+// TestJobWritesToItsOwnDir: a job must be written to its own OutDir,
+// not the dir the downloader was created with — album downloads put
+// tracks in their own folder, and the TUI passes the current Download
+// Dir per job. The job's dir sits under a regular file, so creating it
+// fails before yt-dlp runs; a worker that used the downloader's dir
+// would create that one fine and fail later, at yt-dlp, instead.
+func TestJobWritesToItsOwnDir(t *testing.T) {
+	root := t.TempDir()
+	d := newIdle(t, root, "m4a")
+	blocker := filepath.Join(root, "not-a-dir")
+	if err := os.WriteFile(blocker, nil, 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	d.EnqueueAs("abc", "Song", "Artist", "https://example/x", filepath.Join(blocker, "Album"), "", "01 - Song")
+	select {
+	case ev := <-d.Progress():
+		if ev.Status != StatusFailed || ev.Err == nil || !strings.Contains(ev.Err.Error(), "create download dir") {
+			t.Errorf("got status %v, err %v; want the job's own dir to be created", ev.Status, ev.Err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("no progress event for the job")
 	}
 }
