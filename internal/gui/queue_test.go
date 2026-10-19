@@ -200,3 +200,20 @@ func TestInsertWithNothingPlaying(t *testing.T) {
 		t.Errorf("a drop started track %d", s.Current)
 	}
 }
+
+// Next is what the player shows as coming up: the following track, none
+// at the end, and none under repeat-one, where the same track plays.
+func TestNext(t *testing.T) {
+	a, _ := queueApp(t)
+	a.AddAll([]queue.Track{tr("a"), tr("b")})
+	if s := a.Jump(0); s.Next == nil || s.Next.ID != "b" {
+		t.Errorf("next after a: %v", s.Next)
+	}
+	if s := a.Jump(1); s.Next != nil {
+		t.Errorf("next at the end: %v", s.Next.ID)
+	}
+	a.Jump(0)
+	if s := a.CycleRepeat(); s.Next != nil {
+		t.Errorf("next under repeat-one: %v", s.Next.ID)
+	}
+}

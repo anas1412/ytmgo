@@ -31,8 +31,9 @@ type App struct {
 
 	// search and saveQueue are search.Search and the database's
 	// SaveQueue, swapped out in tests so they need no network or disk.
-	search    func(query string, limit int) ([]search.Result, error)
-	saveQueue func(tracks []queue.Track, current int, shuffle, repeat, repeatAll bool) error
+	search       func(query string, limit int) ([]search.Result, error)
+	saveQueue    func(tracks []queue.Track, current int, shuffle, repeat, repeatAll bool) error
+	saveSettings func(*settings.Settings) error
 }
 
 // New returns the App to bind, reading the user's settings and saved
@@ -50,7 +51,24 @@ func New(d *db.DB) *App {
 	if tracks, shuffle, repeat, repeatAll, err := d.LoadQueue(); err == nil {
 		q.LoadData(tracks, shuffle, repeat, repeatAll)
 	}
-	return &App{settings: s, q: q, search: search.Search, saveQueue: d.SaveQueue}
+	return &App{settings: s, q: q, search: search.Search, saveQueue: d.SaveQueue, saveSettings: d.SaveSettings}
+}
+
+// Volume is the volume to start at: the TUI's Default Volume, which
+// both apps keep up to date with the last level used.
+func (a *App) Volume() int {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.settings.DefaultVolume
+}
+
+// SetVolume saves the level, as the TUI does on every change, so the
+// next start, in either app, comes back to it. It stays within 0–100.
+func (a *App) SetVolume(v int) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.settings.DefaultVolume = min(max(v, 0), 100)
+	a.saveSettings(a.settings)
 }
 
 // Version is the build's version, e.g. "v1.4.0" or "dev".

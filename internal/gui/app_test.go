@@ -66,3 +66,19 @@ func TestUnsetLimitFallsBackToDefault(t *testing.T) {
 		t.Errorf("limit %d, want the default %d", f.limit, want)
 	}
 }
+
+// Volume is the TUI's Default Volume: saved on every change and kept
+// within 0–100.
+func TestSetVolumeSavesWithinRange(t *testing.T) {
+	saved := -1
+	a := &App{settings: settings.Defaults(), saveSettings: func(s *settings.Settings) error {
+		saved = s.DefaultVolume
+		return nil
+	}}
+	for in, want := range map[int]int{55: 55, 130: 100, -5: 0} {
+		a.SetVolume(in)
+		if saved != want || a.Volume() != want {
+			t.Errorf("SetVolume(%d): saved %d, Volume() %d, want %d", in, saved, a.Volume(), want)
+		}
+	}
+}

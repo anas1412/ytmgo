@@ -80,9 +80,10 @@ shared with the TUI on Linux. Copied: append on Enter, play if stopped;
   or "Playback finished" when the queue is not empty (`tui/view.go:2068-2181`).
 
 **GUI:** all of it, through the Go queue. Streams come from yt-dlp per song
-(they expire), played by `<audio>`. Shows the next song and the album the
-same way, with the same album filter. Shuffle and repeat buttons in the
-player, `s` and `r`. Volume is saved to the settings row like the TUI's,
+(they expire), played by `<audio>`. The next song is on the Next button
+("Next: <title>") and marked in the queue panel; the album, with the same
+play-count filter, is on hover over the title. Shuffle and repeat buttons
+in the player (repeat-one carries a small 1), `s` and `r`. Volume is saved to the settings row like the TUI's,
 not to browser storage. Failures: one unplayable song is skipped and named;
 three in a row stop. Offline and timeouts stop and say to press play.
 

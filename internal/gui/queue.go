@@ -11,6 +11,9 @@ type QueueState struct {
 	Current int           `json:"current"`
 	Shuffle bool          `json:"shuffle"`
 	Repeat  string        `json:"repeat"` // "off", "one" or "all"
+	// Next is what plays after the current track, as the TUI's ⏭ shows
+	// it: none under repeat-one, at the end, or with nothing playing.
+	Next *queue.Track `json:"next"`
 }
 
 // Step is the queue after moving to another track. Moved is false when
@@ -29,7 +32,11 @@ func (a *App) state() QueueState {
 	case a.q.IsRepeatAll():
 		repeat = "all"
 	}
-	return QueueState{Tracks: a.q.Tracks(), Current: a.q.CurrentIndex(), Shuffle: a.q.IsShuffle(), Repeat: repeat}
+	s := QueueState{Tracks: a.q.Tracks(), Current: a.q.CurrentIndex(), Shuffle: a.q.IsShuffle(), Repeat: repeat}
+	if next, ok := a.q.PeekNext(); ok {
+		s.Next = &next
+	}
+	return s
 }
 
 // changed saves the queue, as the TUI does after every change, and
