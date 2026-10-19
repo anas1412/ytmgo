@@ -1,3 +1,5 @@
+![ytmgo for Windows: search and the queue, an album, an artist's releases, and downloads](https://raw.githubusercontent.com/anas1412/ytmgo/main/docs/public/windows-app.jpg)
+
 The first release of ytmgo for Windows: a desktop app on the same code as
 the terminal app.
 
