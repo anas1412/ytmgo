@@ -122,6 +122,16 @@ CREATE TABLE IF NOT EXISTS queue_state (
 	    played_at    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
 	);
 
+CREATE TABLE IF NOT EXISTS saved_items (
+    kind      TEXT NOT NULL,
+    id        TEXT NOT NULL,
+    title     TEXT NOT NULL DEFAULT '',
+    subtitle  TEXT NOT NULL DEFAULT '',
+    cover_url TEXT NOT NULL DEFAULT '',
+    added_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    PRIMARY KEY (kind, id)
+);
+
 CREATE TABLE IF NOT EXISTS recent_sources (
     kind      TEXT NOT NULL,
     id        TEXT NOT NULL,

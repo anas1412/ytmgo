@@ -1593,7 +1593,7 @@
         aspect-ratio: 1;
         border-radius: var(--radius-s);
       }
-      .card.artist .art-wrap {
+      .card.k-artist .art-wrap {
         border-radius: 50%;
       }
       .card .c-title,
@@ -1872,6 +1872,23 @@
       .seg .tab[aria-pressed="true"] {
         background: var(--text);
         color: var(--bg);
+      }
+      /* Favourites' artists and albums: Home's cards, wrapping, their
+         covers on the line of the title above. */
+      .saved-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(176px, 1fr));
+        gap: 4px;
+        margin: 0 -2px;
+      }
+      .soft[aria-pressed="true"] {
+        border-color: var(--mint);
+        color: var(--mint);
+      }
+      .page-head .heart.like {
+        width: 36px;
+        height: 36px;
+        border: 1px solid var(--border);
       }
       .releases {
         display: grid;
@@ -2206,7 +2223,8 @@
         .track {
           grid-template-columns: 44px minmax(0, 1fr) 56px 64px;
         }
-        .album,
+        /* A song row's album column; not an album card's. */
+        .track .album,
         .head-row .col-album {
           display: none;
         }
@@ -2484,6 +2502,8 @@
         SetPlaybackMode,
         ShareLink,
         Locate,
+        Saved as fetchSaved,
+        ToggleSaved,
         MediaBase,
         SetCopyMusicLinks,
         Presence,
@@ -2799,11 +2819,9 @@
         list.setAttribute("aria-label", { favs: "Favourites", search: "Songs", album: "Songs", artist: "Top songs", library: "Library", history: "History", playlist: "Songs" }[view]);
         list.append(el("div", "cursor"), ...results.map(track));
         // An album or artist page draws its own header above the list.
-        if (["album", "artist", "library", "history", "playlist"].includes(view)) return { head, list };
+        if (["album", "artist", "library", "history", "playlist", "favs"].includes(view)) return { head, list };
         const top = el("div", "list-head");
-        if (view === "favs") {
-          top.append(el("h2", "", "Favourites"), el("span", "sub", `${results.length} ${results.length === 1 ? "song" : "songs"}`));
-        } else if (lastFound?.playlist) {
+        if (lastFound?.playlist) {
           const n = results.length;
           const missed = lastFound.missed ? `, ${lastFound.missed} not found on YouTube Music` : "";
           top.append(el("h2", "", lastFound.playlist), el("span", "sub", `${n} ${n === 1 ? "song" : "songs"}${missed}`));
@@ -4140,7 +4158,8 @@
         add.title = "Add every song to the queue (a)";
         const get = pill("Download", () => downloadAlbum(p, get));
         get.title = `Download every song into “${p.artist} - ${p.title}”`;
-        const head = header("album", p.coverURL, p.title, meta, n ? [play, add, get] : []);
+        const like = likeButton({ kind: "album", id: p.browseID, title: p.title, subtitle: p.artist, coverURL: p.coverURL });
+        const head = header("album", p.coverURL, p.title, meta, n ? [play, add, get, like] : [like]);
         if (!n) {
           pane.replaceChildren(backButton(), head);
           const empty = el("div");
@@ -4184,7 +4203,8 @@
         const meta = [];
         if (p.subscribers) meta.push(el("span", "", `${p.subscribers} subscribers`));
         meta.push(el("span", "", `${p.releases.length} ${p.releases.length === 1 ? "release" : "releases"}`));
-        const actions = p.songs.length ? [pill("Play", () => playList(p.songs), true)] : [];
+        const follow = followButton({ kind: "artist", id: p.browseID, title: p.name, subtitle: "", coverURL: p.photoURL });
+        const actions = p.songs.length ? [pill("Play", () => playList(p.songs), true), follow] : [follow];
         const head = header("artist", p.photoURL, p.name, meta, actions);
         const seg = el("div", "seg");
         for (const [key, label] of [
@@ -4306,14 +4326,139 @@
         if (view === "favs") showFavs();
       }
 
+      // Favourites: the songs with ♥, the artists followed, the albums
+      // liked, a tab each.
+      let favTab = "songs";
       function showFavs() {
-        results = favs;
-        selected = results.length ? Math.max(0, Math.min(selected, results.length - 1)) : -1;
-        if (!results.length) {
-          notice(pane, "No favourites yet", "Press f, or click ♥ on any song, to keep it here.", null, null, false);
+        const top = el("div", "list-head");
+        top.append(el("h2", "", "Favourites"));
+        const seg = el("div", "seg");
+        for (const [key, label, n] of [
+          ["songs", "Songs", favs.length],
+          ["artists", "Artists", saved.artist.length],
+          ["albums", "Albums", saved.album.length],
+        ]) {
+          const t = el("button", "tab", n ? `${label} · ${n}` : label);
+          t.type = "button";
+          t.setAttribute("aria-pressed", favTab === key);
+          t.addEventListener("click", () => {
+            favTab = key;
+            selected = 0;
+            showFavs();
+          });
+          seg.append(t);
+        }
+        const body = el("div");
+        if (favTab === "songs") {
+          results = favs;
+          selected = results.length ? Math.max(0, Math.min(selected, results.length - 1)) : -1;
+          if (!results.length) notice(body, "No favourite songs yet", "Press f, or click ♥ on any song, to keep it here.", null, null, false);
+          else {
+            const { head, list } = render();
+            body.append(head, list);
+          }
+          pane.replaceChildren(top, seg, body);
+          moveCursor();
           return;
         }
-        render();
+        results = [];
+        selected = -1;
+        const kind = favTab === "artists" ? "artist" : "album";
+        const items = saved[kind];
+        if (!items.length) {
+          notice(
+            body,
+            kind === "artist" ? "No artists followed yet" : "No albums liked yet",
+            kind === "artist" ? "Follow an artist from their page, and they show up here." : "Click ♥ on an album’s page, and it shows up here.",
+            null,
+            null,
+            false,
+          );
+        } else {
+          const grid = el("div", "saved-grid");
+          grid.append(...items.map(savedCard));
+          body.append(grid);
+        }
+        pane.replaceChildren(top, seg, body);
+      }
+
+      // ── Followed artists and liked albums ────────────────────────────
+      // Kept in Go (gui/saved.go), in the database the TUI reads too.
+      let saved = { artist: [], album: [] };
+      const isSaved = (kind, id) => saved[kind].some((s) => s.id === id);
+      async function loadSaved() {
+        const [artist, album] = await Promise.all([fetchSaved("artist"), fetchSaved("album")]);
+        saved = { artist: artist || [], album: album || [] };
+      }
+      loadSaved().then(() => view === "favs" && showFavs());
+
+      async function toggleSaved(item) {
+        let on;
+        try {
+          on = await ToggleSaved(item);
+        } catch (err) {
+          say("That didn’t save", { error: true, full: problemOf(err).detail });
+          return isSaved(item.kind, item.id);
+        }
+        await loadSaved();
+        if (item.kind === "artist") say(on ? `Following ${item.title}` : `Unfollowed ${item.title}`);
+        else say(on ? `Liked “${item.title}”` : `Unliked “${item.title}”`);
+        if (view === "favs") showFavs();
+        return on;
+      }
+
+      // An artist page's Follow, which reads Following once it is.
+      function followButton(item) {
+        const b = pill("", () => {}, false);
+        const paint = (on) => {
+          b.textContent = on ? "Following" : "Follow";
+          b.setAttribute("aria-pressed", on);
+          b.title = on ? `Unfollow ${item.title}` : `Follow ${item.title}, to keep them in Favourites`;
+        };
+        paint(isSaved("artist", item.id));
+        b.addEventListener("click", async () => paint(await toggleSaved(item)));
+        return b;
+      }
+
+      // An album page's ♥, as a song's: filled once the album is liked.
+      function likeButton(item) {
+        const b = el("button", "heart like");
+        b.type = "button";
+        b.append(icon(HEART));
+        const paint = (on) => {
+          b.setAttribute("aria-pressed", on);
+          b.setAttribute("aria-label", on ? "Unlike this album" : "Like this album");
+          b.title = on ? "Unlike this album" : "Like this album, to keep it in Favourites";
+        };
+        paint(isSaved("album", item.id));
+        b.addEventListener("click", async () => {
+          paint(await toggleSaved(item));
+          b.classList.remove("pop");
+          void b.offsetWidth;
+          b.classList.add("pop");
+        });
+        return b;
+      }
+
+      // A followed artist or a liked album, as a card: it opens; an
+      // album's button plays it.
+      function savedCard(s) {
+        if (s.kind === "artist") return cardShell("artist", s.coverURL, s.title, "Artist", () => openPage("artist", () => fetchArtist(s.id), s.title));
+        const load = () => fetchAlbum(s.id);
+        return cardShell(
+          "album",
+          s.coverURL,
+          s.title,
+          s.subtitle,
+          () => openPage("album", load, s.title),
+          async () => {
+            try {
+              playList((await load()).tracks || [], { kind: "album", id: s.id, title: s.title, subtitle: s.subtitle, coverURL: s.coverURL });
+            } catch (err) {
+              say(`Couldn’t open “${s.title}”`, { error: true, full: problemOf(err).detail });
+            }
+          },
+        );
       }
 
       // ── Pages ────────────────────────────────────────────────────────
@@ -5043,7 +5188,8 @@
 
       // A card: the whole of it opens, its round button plays.
       function cardShell(kind, coverURL, title, sub, open, play) {
-        const c = el("div", "card " + kind);
+        // k-: a song row's .artist and .album styles are not a card's.
+        const c = el("div", "card k-" + kind);
         c.tabIndex = 0;
         c.setAttribute("role", "button");
         c.title = sub ? `${title}, ${sub}` : title;

@@ -60,6 +60,11 @@ type App struct {
 	album    func(browseID string) (ytmusic.Album, error)
 	artist   func(browseID string) (ytmusic.ArtistPage, error)
 	playlist func(search.PlaylistRef) (title string, results []search.Result, missed int, err error)
+	// save, unsave and loadSaved are the database's followed artists
+	// and liked albums.
+	save      func(db.Saved) error
+	unsave    func(kind, id string) error
+	loadSaved func(kind string) ([]db.Saved, error)
 	// located is the page ids Locate found, by library.MatchKey.
 	located map[string]queue.Track
 	// home is ytmusic.HomeFeed.
@@ -167,6 +172,9 @@ func New(d *db.DB) *App {
 		artist:       ytmusic.Artist,
 		playlist:     search.PlaylistTracks,
 		home:         ytmusic.HomeFeed,
+		save:         d.Save,
+		unsave:       d.Unsave,
+		loadSaved:    d.LoadSaved,
 		recordSource: d.RecordSource,
 		sources:      d.LoadSources,
 		scanLibrary: func(downloads string, extra []string) ([]queue.Track, error) {
