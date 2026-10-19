@@ -1418,14 +1418,20 @@
       }
 
       /* ── Home ─────────────────────────────────────────────────────── */
-      .home {
-        padding: 4px 8px 28px;
+      .home,
+      .browse {
+        padding: 4px 8px 40px;
       }
+      /* Home keeps one rhythm: 24px between its blocks, 40px between
+         shelves, 16px from a shelf's title to its covers, 24px between
+         covers, and every left edge on the same line. */
       .chips {
         display: flex;
         gap: 8px;
         overflow-x: auto;
         scrollbar-width: none;
+        /* The last chips fade out where the row runs on, rather than cut. */
+        mask-image: linear-gradient(to right, #000 calc(100% - 48px), transparent);
       }
       .chips::-webkit-scrollbar {
         display: none;
@@ -1451,7 +1457,7 @@
         display: grid;
         grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
         gap: 8px;
-        margin-top: 18px;
+        margin-top: 24px;
       }
       .tile {
         display: flex;
@@ -1522,13 +1528,14 @@
         fill: currentColor;
       }
       .shelf {
-        margin-top: 30px;
+        margin-top: 40px;
       }
       .shelf-head {
         display: flex;
         align-items: flex-end;
         gap: 8px;
-        margin-bottom: 12px;
+        /* With a card's own 10px, 16px to the covers. */
+        margin-bottom: 6px;
       }
       .shelf-head .names {
         flex: 1;
@@ -1552,11 +1559,17 @@
         opacity: 0.35;
         cursor: default;
       }
+      /* A card's padding sits outside the line, so its cover lines up
+         with the title above; the row's edges move out by as much. */
       .row {
         display: grid;
         grid-auto-flow: column;
         grid-auto-columns: 176px;
-        gap: 6px;
+        align-items: start;
+        gap: 4px;
+        margin-inline: -10px;
+        /* …and covers stop at the right edge, under the arrows. */
+        clip-path: inset(0 10px 0 0);
         overflow-x: auto;
         scroll-behavior: smooth;
         scrollbar-width: none;
@@ -1642,13 +1655,13 @@
       }
       /* Search with nothing typed: moods to browse, Spotify's "Browse all". */
       .browse h2 {
-        margin: 6px 0 14px;
+        margin: 6px 0 16px;
         font-size: 22px;
       }
       .browse .grid {
         display: grid;
         grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-        gap: 14px;
+        gap: 16px;
       }
       .mood-tile {
         height: 96px;
@@ -5005,7 +5018,15 @@
 
       // Search with nothing typed: the moods, to browse, as Spotify's
       // search page has its genres. A mood opens Home filtered to it.
-      const MOOD_HUES = [262, 168, 330, 24, 205, 290, 140, 4, 222, 48];
+      // ytmgo's own colours, violet, mint and pink, each into a deeper
+      // shade of itself or of the next, so white type reads on every one.
+      const MOOD_FILLS = [
+        "linear-gradient(135deg, #7c3aed, #4c1d95)",
+        "linear-gradient(135deg, #059b74, #04614a)",
+        "linear-gradient(135deg, #d61f73, #7c3aed)",
+        "linear-gradient(135deg, #5b21b6, #059b74)",
+        "linear-gradient(135deg, #b0175e, #5a0b30)",
+      ];
       function searchLanding() {
         view = "search";
         results = [];
@@ -5021,8 +5042,7 @@
         moods.forEach((m, i) => {
           const t = el("button", "mood-tile", m.title);
           t.type = "button";
-          const h = MOOD_HUES[i % MOOD_HUES.length];
-          t.style.background = `linear-gradient(135deg, hsl(${h} 62% 46%), hsl(${(h + 40) % 360} 58% 32%))`;
+          t.style.background = MOOD_FILLS[i % MOOD_FILLS.length];
           t.addEventListener("click", () => {
             homeMood = m.params;
             homeFailed = null;
