@@ -9,8 +9,10 @@ package gui
 
 import (
 	"strings"
+	"sync"
 
 	"ytmgo/internal/db"
+	"ytmgo/internal/queue"
 	"ytmgo/internal/search"
 	"ytmgo/internal/settings"
 	"ytmgo/internal/version"
@@ -18,22 +20,37 @@ import (
 )
 
 // App is what the frontend talks to.
+//
+// Wails calls bound methods from goroutines of its own, so everything
+// that reads or changes the queue holds mu: a change is often several
+// queue calls that must not interleave with another.
 type App struct {
 	settings *settings.Settings
-	// search is search.Search, swapped out in tests so they need no
-	// network.
-	search func(query string, limit int) ([]search.Result, error)
+	mu       sync.Mutex
+	q        *queue.Queue
+
+	// search and saveQueue are search.Search and the database's
+	// SaveQueue, swapped out in tests so they need no network or disk.
+	search    func(query string, limit int) ([]search.Result, error)
+	saveQueue func(tracks []queue.Track, current int, shuffle, repeat, repeatAll bool) error
 }
 
-// New returns the App to bind, reading the user's settings from d. A
-// database that cannot be read leaves the defaults in place rather than
-// failing to open the window.
+// New returns the App to bind, reading the user's settings and saved
+// queue from d. A database that cannot be read leaves the defaults and
+// an empty queue in place rather than failing to open the window.
+//
+// The queue is the same one the TUI saves: on Linux, where both run,
+// they share it.
 func New(d *db.DB) *App {
 	s, err := d.LoadSettings()
 	if err != nil {
 		s = settings.Defaults()
 	}
-	return &App{settings: s, search: search.Search}
+	q := queue.New()
+	if tracks, shuffle, repeat, repeatAll, err := d.LoadQueue(); err == nil {
+		q.LoadData(tracks, shuffle, repeat, repeatAll)
+	}
+	return &App{settings: s, q: q, search: search.Search, saveQueue: d.SaveQueue}
 }
 
 // Version is the build's version, e.g. "v1.4.0" or "dev".
@@ -41,18 +58,26 @@ func (a *App) Version() string { return version.Version }
 
 // Search runs a YouTube Music song search, returning as many results as
 // the user's search limit allows. An empty query returns nothing and
-// asks nobody.
-func (a *App) Search(query string) ([]search.Result, error) {
+// asks nobody. Results come as queue tracks, the one shape the page
+// works with, so a result can go into the queue as it is.
+func (a *App) Search(query string) ([]queue.Track, error) {
 	query = strings.TrimSpace(query)
 	if query == "" {
-		return []search.Result{}, nil
+		return []queue.Track{}, nil
 	}
 	limit := a.settings.SearchLimit
 	if limit <= 0 {
 		limit = settings.Defaults().SearchLimit
 	}
 	results, err := a.search(query, limit)
-	return results, problem(err)
+	if err != nil {
+		return nil, problem(err)
+	}
+	tracks := make([]queue.Track, len(results))
+	for i, r := range results {
+		tracks[i] = r.ToTrack()
+	}
+	return tracks, nil
 }
 
 // StreamURL turns a track's watch URL into a direct audio stream the

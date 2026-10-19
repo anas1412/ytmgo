@@ -36,7 +36,7 @@ func TestSearchTrimsAndUsesTheUsersLimit(t *testing.T) {
 	if f.query != "night drive" || f.limit != 7 {
 		t.Errorf("searched %q with limit %d, want %q with 7", f.query, f.limit, "night drive")
 	}
-	if len(got) != 1 || got[0].ID != "abc" {
+	if len(got) != 1 || got[0].ID != "abc" || got[0].Title != "Song" {
 		t.Errorf("got %v", got)
 	}
 }

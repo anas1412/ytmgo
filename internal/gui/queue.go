@@ -1,0 +1,220 @@
+package gui
+
+import "ytmgo/internal/queue"
+
+// QueueState is everything the page shows of the queue: the tracks,
+// which one is playing (-1 for none), and the modes. Every change to the
+// queue answers with the whole of it, so the page never has to keep its
+// own copy in step.
+type QueueState struct {
+	Tracks  []queue.Track `json:"tracks"`
+	Current int           `json:"current"`
+	Shuffle bool          `json:"shuffle"`
+	Repeat  string        `json:"repeat"` // "off", "one" or "all"
+}
+
+// Step is the queue after moving to another track. Moved is false when
+// there was nowhere to go: the end of the queue, with repeat off.
+type Step struct {
+	QueueState
+	Moved bool `json:"moved"`
+}
+
+// state reads the queue. Callers hold a.mu.
+func (a *App) state() QueueState {
+	repeat := "off"
+	switch {
+	case a.q.IsRepeat():
+		repeat = "one"
+	case a.q.IsRepeatAll():
+		repeat = "all"
+	}
+	return QueueState{Tracks: a.q.Tracks(), Current: a.q.CurrentIndex(), Shuffle: a.q.IsShuffle(), Repeat: repeat}
+}
+
+// changed saves the queue, as the TUI does after every change, and
+// returns it for the page. Callers hold a.mu. A save that fails leaves
+// the queue as it is in memory; the next change tries again.
+func (a *App) changed() QueueState {
+	s := a.state()
+	a.saveQueue(s.Tracks, s.Current, a.q.IsShuffle(), a.q.IsRepeat(), a.q.IsRepeatAll())
+	return s
+}
+
+// Queue is the queue as it stands, for the page to draw on startup.
+func (a *App) Queue() QueueState {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.state()
+}
+
+// PlayNow makes t the playing track. A track already in the queue is
+// jumped to rather than added twice; a new one goes straight after the
+// one playing, so what was coming next still comes next.
+func (a *App) PlayNow(t queue.Track) QueueState {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	tracks := a.q.Tracks()
+	for i, have := range tracks {
+		if have.ID == t.ID {
+			a.q.SetCurrentIndex(i)
+			return a.changed()
+		}
+	}
+	at := a.q.CurrentIndex() + 1
+	tracks = append(tracks[:at], append([]queue.Track{t}, tracks[at:]...)...)
+	a.q.LoadData(tracks, a.q.IsShuffle(), a.q.IsRepeat(), a.q.IsRepeatAll())
+	a.q.SetCurrentIndex(at)
+	return a.changed()
+}
+
+// Add puts t at the end of the queue.
+func (a *App) Add(t queue.Track) QueueState {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.q.Add(t)
+	return a.changed()
+}
+
+// AddAll puts every track at the end of the queue, in order, saving
+// once: the TUI's e, which queues the whole list on screen.
+func (a *App) AddAll(ts []queue.Track) QueueState {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	for _, t := range ts {
+		a.q.Add(t)
+	}
+	return a.changed()
+}
+
+// Jump makes the track at i the playing one.
+func (a *App) Jump(i int) QueueState {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.q.SetCurrentIndex(i)
+	return a.changed()
+}
+
+// Move puts the track at from at position to, sliding the tracks in
+// between along: dragging a row in the queue. The playing track stays
+// the playing track wherever it ends up.
+func (a *App) Move(from, to int) QueueState {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if !a.moveLocked(from, to) {
+		return a.state()
+	}
+	return a.changed()
+}
+
+// moveLocked moves one track by swapping it along, which keeps the
+// queue's playing index right at every step. Callers hold a.mu.
+func (a *App) moveLocked(from, to int) bool {
+	n := a.q.Len()
+	if from < 0 || from >= n || to < 0 || to >= n || from == to {
+		return false
+	}
+	for ; from < to; from++ {
+		a.q.MoveDown(from)
+	}
+	for ; from > to; from-- {
+		a.q.MoveUp(from)
+	}
+	return true
+}
+
+// Insert puts t at position at, from 0 (first) to the queue's length
+// (last): a song dropped into the queue. A song already queued is moved
+// there rather than added twice. What is playing keeps playing.
+func (a *App) Insert(t queue.Track, at int) QueueState {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	tracks := a.q.Tracks()
+	at = min(max(at, 0), len(tracks))
+	for i, have := range tracks {
+		if have.ID == t.ID {
+			// Dropped below itself, it lands one higher once it has
+			// left its old place.
+			if at > i {
+				at--
+			}
+			a.moveLocked(i, min(at, len(tracks)-1))
+			return a.changed()
+		}
+	}
+	cur := a.q.CurrentIndex()
+	tracks = append(tracks[:at], append([]queue.Track{t}, tracks[at:]...)...)
+	a.q.LoadData(tracks, a.q.IsShuffle(), a.q.IsRepeat(), a.q.IsRepeatAll())
+	if cur >= 0 {
+		if at <= cur {
+			cur++
+		}
+		a.q.SetCurrentIndex(cur)
+	}
+	return a.changed()
+}
+
+// Remove takes the track at i out of the queue.
+func (a *App) Remove(i int) QueueState {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.q.Remove(i)
+	return a.changed()
+}
+
+// Clear empties the queue.
+func (a *App) Clear() QueueState {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.q.Clear()
+	return a.changed()
+}
+
+// Ended moves on when a track finishes by itself. Repeat-one plays the
+// same track again.
+func (a *App) Ended() Step {
+	return a.step(a.q.Next)
+}
+
+// Skip moves on because the user asked to. Repeat-one governs what
+// happens when a track ends, not whether the user may move on, so it
+// moves even then.
+func (a *App) Skip() Step {
+	return a.step(a.q.Skip)
+}
+
+// Back goes to the track before.
+func (a *App) Back() Step {
+	return a.step(a.q.Prev)
+}
+
+func (a *App) step(move func() (queue.Track, bool)) Step {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	_, moved := move()
+	return Step{QueueState: a.changed(), Moved: moved}
+}
+
+// ToggleShuffle turns shuffle on or off.
+func (a *App) ToggleShuffle() QueueState {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.q.ToggleShuffle()
+	return a.changed()
+}
+
+// CycleRepeat goes off → one → all → off, as the TUI's r does.
+func (a *App) CycleRepeat() QueueState {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	switch {
+	case a.q.IsRepeat():
+		a.q.ToggleRepeat()
+		a.q.ToggleRepeatAll()
+	case a.q.IsRepeatAll():
+		a.q.ToggleRepeatAll()
+	default:
+		a.q.ToggleRepeat()
+	}
+	return a.changed()
+}
