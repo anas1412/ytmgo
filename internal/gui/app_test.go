@@ -29,10 +29,11 @@ func app(limit int) (*App, *fake) {
 
 func TestSearchTrimsAndUsesTheUsersLimit(t *testing.T) {
 	a, f := app(7)
-	got, err := a.Search("  night drive \n")
+	found, err := a.Search("  night drive \n")
 	if err != nil {
 		t.Fatal(err)
 	}
+	got := found.Tracks
 	if f.query != "night drive" || f.limit != 7 {
 		t.Errorf("searched %q with limit %d, want %q with 7", f.query, f.limit, "night drive")
 	}
@@ -45,14 +46,14 @@ func TestSearchTrimsAndUsesTheUsersLimit(t *testing.T) {
 // page gets an empty list rather than null.
 func TestBlankQueryAsksNobody(t *testing.T) {
 	a, f := app(7)
-	got, err := a.Search("   ")
+	found, err := a.Search("   ")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if f.calls != 0 {
 		t.Error("a blank query reached the search")
 	}
-	if got == nil {
+	if found.Tracks == nil {
 		t.Error("got nil, want an empty list")
 	}
 }

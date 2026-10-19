@@ -1147,6 +1147,126 @@
         font-variant-numeric: tabular-nums;
       }
 
+      /* ── Album and artist pages ────────────────────────────────────── */
+      .page-head {
+        display: flex;
+        align-items: flex-end;
+        gap: 22px;
+        padding: 4px 8px 22px;
+      }
+      .page-head .art-wrap {
+        width: 156px;
+        height: 156px;
+        flex: none;
+        border-radius: 6px;
+        box-shadow: 0 14px 34px -16px rgb(0 0 0 / 80%);
+      }
+      .page-head.round .art-wrap {
+        border-radius: 50%;
+      }
+      .page-head .info {
+        min-width: 0;
+      }
+      .page-head h1 {
+        margin: 0 0 8px;
+        font-family: "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif;
+        font-size: 34px;
+        font-weight: 800;
+        letter-spacing: -0.02em;
+        line-height: 1.1;
+        overflow-wrap: anywhere;
+      }
+      .page-head .meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px 14px;
+        color: var(--mid);
+      }
+      .page-head .meta .strong {
+        color: var(--text);
+        font-weight: 600;
+      }
+      .page-head .actions {
+        display: flex;
+        gap: 8px;
+        margin-top: 16px;
+      }
+      .page-back {
+        margin: 0 0 6px 4px;
+      }
+      @container view (max-width: 520px) {
+        .page-head .art-wrap {
+          width: 104px;
+          height: 104px;
+        }
+        .page-head h1 {
+          font-size: 24px;
+        }
+      }
+      .seg {
+        display: flex;
+        gap: 6px;
+        margin: 0 8px 12px;
+      }
+      .seg .tab[aria-pressed="true"] {
+        background: var(--text);
+        color: var(--bg);
+      }
+      .releases {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+        gap: 16px;
+        padding: 0 8px 20px;
+      }
+      .release {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        padding: 10px;
+        border-radius: var(--radius-m);
+        text-align: left;
+        transition: background var(--fast);
+      }
+      .release:hover,
+      .release:focus-visible {
+        background: var(--hover);
+      }
+      .release .art-wrap {
+        width: 100%;
+        height: auto;
+        aspect-ratio: 1;
+      }
+      .release .r-title {
+        overflow: hidden;
+        white-space: nowrap;
+        text-overflow: ellipsis;
+        font-weight: 600;
+      }
+      .release .r-year {
+        color: var(--mid);
+        font-size: 13px;
+      }
+      /* Track numbers on an album page, where the cover would repeat. */
+      .track .num {
+        color: var(--dim);
+        text-align: center;
+        font-variant-numeric: tabular-nums;
+      }
+      .track.selected .num {
+        color: #ede9fe;
+      }
+      /* An artist or album name that opens its page. */
+      .link {
+        cursor: pointer;
+      }
+      .link:hover {
+        color: var(--text);
+        text-decoration: underline;
+      }
+      .track.selected .link:hover {
+        color: #fff;
+      }
+
       /* ✓: the song is on disk, as in the TUI. */
       .dl {
         color: var(--mint);
@@ -1613,6 +1733,9 @@
         DisconnectLastFM,
         ScrobbleAfter,
         Scrobble,
+        Album as fetchAlbum,
+        Artist as fetchArtist,
+        ArtistOfAlbum as fetchArtistOfAlbum,
       } from "./wailsjs/go/gui/App.js";
 
       const $ = (id) => document.getElementById(id);
@@ -1761,6 +1884,7 @@
       // back without asking again.
       let view = "home"; // "search", or "favs" for the Favourites page
       let searchResults = []; // the last search's, kept while on another page
+      let lastFound = null; // the last search's full answer: a pasted playlist's title and misses
       let recs = null; // null until loaded
       let recsSeq = 0;
       let recsFailed = false;
@@ -1846,10 +1970,14 @@
         row.style.animationDelay = `${Math.min(i, 10) * 24}ms`;
         row.setAttribute("role", "option");
 
-        const wrap = cover(r.cover_url, 120);
-        const play = el("div", "play");
-        play.append(icon('<path d="M8 5v14l11-7z"/>'));
-        wrap.append(play);
+        let wrap;
+        if (view === "album") wrap = el("div", "num", String(i + 1));
+        else {
+          wrap = cover(r.cover_url, 120);
+          const play = el("div", "play");
+          play.append(icon('<path d="M8 5v14l11-7z"/>'));
+          wrap.append(play);
+        }
 
         const who = el("div", "who");
         const artist = el("div", "artist");
@@ -1858,11 +1986,20 @@
           dl.title = "Downloaded";
           artist.append(dl);
         }
-        artist.append(r.artist || "");
+        // On an artist's own page their name would lead nowhere new.
+        const toArtist = view !== "artist" && (r.artist_browse_id || r.album_browse_id);
+        artist.append(toArtist ? pageLink(r.artist || "", () => openArtistOf(r)) : r.artist || "");
         who.append(el("div", "title", r.title), artist);
         who.title = `${r.title}, ${r.artist}`;
-        const album = el("div", "album", albumOf(r));
-        album.title = albumOf(r);
+        let album;
+        if (view === "album") {
+          album = el("div", "album", r.plays || "");
+          album.title = r.plays ? `${r.plays} plays` : "";
+        } else {
+          album = el("div", "album");
+          album.append(r.album_browse_id && albumOf(r) ? pageLink(albumOf(r), () => openAlbumOf(r)) : albumOf(r));
+          album.title = albumOf(r);
+        }
 
         const add = el("button", "add");
         add.type = "button";
@@ -1892,11 +2029,19 @@
           return;
         }
         const head = el("div", "head-row");
-        head.append(el("span"), el("span", "", "Title"), el("span", "col-album", "Album"), el("span", "", "Length"), el("span"));
+        head.append(
+          el("span", "", view === "album" ? "#" : ""),
+          el("span", "", "Title"),
+          el("span", "col-album", view === "album" ? "Plays" : "Album"),
+          el("span", "", "Length"),
+          el("span"),
+        );
         const list = el("div", "list");
         list.setAttribute("role", "listbox");
-        list.setAttribute("aria-label", { home: "Recommended songs", favs: "Favourites", search: "Songs" }[view]);
+        list.setAttribute("aria-label", { home: "Recommended songs", favs: "Favourites", search: "Songs", album: "Songs", artist: "Top songs" }[view]);
         list.append(el("div", "cursor"), ...results.map(track));
+        // An album or artist page draws its own header above the list.
+        if (view === "album" || view === "artist") return { head, list };
         const top = el("div", "list-head");
         if (view === "favs") {
           top.append(el("h2", "", "Favourites"), el("span", "sub", `${results.length} ${results.length === 1 ? "song" : "songs"}`));
@@ -1909,6 +2054,10 @@
           again.append(icon('<path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" /><path d="M3 3v5h5" /><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16" /><path d="M16 16h5v5" />'));
           again.addEventListener("click", refreshRecs);
           top.append(again);
+        } else if (lastFound?.playlist) {
+          const n = results.length;
+          const missed = lastFound.missed ? `, ${lastFound.missed} not found on YouTube Music` : "";
+          top.append(el("h2", "", lastFound.playlist), el("span", "sub", `${n} ${n === 1 ? "song" : "songs"}${missed}`));
         } else top.append(el("h2", "", "Songs"));
         pane.replaceChildren(top, head, list);
         pane.scrollTop = 0;
@@ -1953,7 +2102,8 @@
         try {
           const found = await Search(q);
           if (mine !== seq) return;
-          results = found || [];
+          lastFound = found || { tracks: [] };
+          results = lastFound.tracks || [];
           searchResults = results;
           lastQuery = q;
           failedQuery = "";
@@ -1962,6 +2112,7 @@
         } catch (err) {
           if (mine !== seq) return;
           lastQuery = "";
+          lastFound = null;
           results = [];
           const p = problemOf(err);
           const [title, body] = SEARCH_COPY[p.kind] || SEARCH_COPY.other;
@@ -1977,7 +2128,7 @@
       // TUI's Enter does.
       query.addEventListener("input", () => {
         field.classList.toggle("has-text", query.value.length > 0);
-        if (view === "favs" || view === "settings") navTo("search");
+        if (!["home", "search"].includes(view)) navTo("search");
         clearTimeout(debounce);
         debounce = setTimeout(() => run(query.value), 320);
       });
@@ -2909,6 +3060,24 @@
           case "6":
             navTo("settings");
             return true;
+          case "a":
+          case "A": {
+            // On an album page, a queues it all; on an artist page, A
+            // switches songs and releases: the TUI's keys there.
+            if (e.key === "a" && view === "album" && page) {
+              queueAll();
+              return true;
+            }
+            if (e.key === "A" && view === "artist" && page) {
+              artistTab = artistTab === "songs" ? "releases" : "songs";
+              renderArtist();
+              return true;
+            }
+            const row = document.activeElement?.closest?.(".q-row");
+            const t = row ? qs.tracks[+row.dataset.index] : results[selected] || now?.track;
+            if (t) (e.key === "a" ? openAlbumOf : openArtistOf)(t);
+            return true;
+          }
           case "f": {
             // The focused queue row, else the selected song, else the one
             // playing: the TUI's f works on whichever list has focus.
@@ -2941,6 +3110,8 @@
           query.focus();
           query.select();
         } else if (e.key === "Escape") {
+          // Back out of an album or artist page first, as the TUI's Esc.
+          if (!typing && back()) return;
           query.focus();
           query.select();
         } else if (e.key === "y" && !typing) {
@@ -2967,6 +3138,231 @@
         ms.setActionHandler("pause", togglePlay);
         ms.setActionHandler("nexttrack", next);
         ms.setActionHandler("previoustrack", prev);
+      }
+
+      // ── Album and artist pages ───────────────────────────────────────
+      // Opened from a song (a, A, or its album or artist name), they sit
+      // on a stack: Back and Esc return to what was there before, as the
+      // TUI's Esc steps back from album to artist to results.
+      let stack = [];
+      let page = null; // the album or artist on screen
+      let pageSeq = 0;
+      let artistTab = "songs";
+
+      function pageLink(text, open) {
+        const a = el("span", "link", text);
+        a.addEventListener("click", (e) => {
+          e.stopPropagation();
+          open();
+        });
+        a.addEventListener("dblclick", (e) => e.stopPropagation());
+        return a;
+      }
+
+      function snapshot() {
+        return { view, results, selected, page, artistTab, lastFound, scroll: pane.scrollTop };
+      }
+      function back() {
+        if (!stack.length) return false;
+        pageSeq++;
+        const s = stack.pop();
+        ({ view, results, selected, page, artistTab, lastFound } = s);
+        if (view === "album") renderAlbum();
+        else if (view === "artist") renderArtist();
+        else if (view === "favs") showFavs();
+        else if (view === "settings") renderSettings();
+        else if (view === "home") home();
+        else render();
+        pane.scrollTop = s.scroll;
+        return true;
+      }
+
+      function backButton() {
+        const b = el("button", "icon-btn page-back");
+        b.type = "button";
+        b.title = "Back (Esc)";
+        b.setAttribute("aria-label", "Back");
+        b.append(icon('<path d="m15 18-6-6 6-6" />'));
+        b.addEventListener("click", back);
+        return b;
+      }
+
+      async function openPage(kind, load, name) {
+        stack.push(snapshot());
+        const mine = ++pageSeq;
+        view = kind;
+        page = null;
+        results = [];
+        selected = -1;
+        // The header's shape, and the rows, while it loads.
+        skeleton();
+        const head = el("div", "page-head" + (kind === "artist" ? " round" : ""));
+        const info = el("div", "info");
+        info.append(el("h1", "", name || ""), el("div", "meta", "Loading…"));
+        head.append(el("div", "art-wrap"), info);
+        pane.prepend(backButton(), head);
+        try {
+          const p = await load();
+          if (mine !== pageSeq) return;
+          page = p;
+          selected = 0;
+          if (kind === "album") {
+            results = p.tracks;
+            renderAlbum();
+          } else {
+            artistTab = p.songs.length ? "songs" : "releases";
+            renderArtist();
+          }
+        } catch (err) {
+          if (mine !== pageSeq) return;
+          const pr = problemOf(err);
+          const offline = pr.kind === "offline";
+          notice(
+            pane,
+            kind === "album" ? "This album didn’t open" : "This artist didn’t open",
+            offline ? "You’re offline. Try again once you’re back online." : "YouTube Music didn’t give the page back. Try again.",
+            {
+              label: "Try again",
+              run: () => {
+                stack.pop();
+                openPage(kind, load, name);
+              },
+            },
+            pr.detail,
+          );
+          pane.prepend(backButton());
+        }
+      }
+
+      function openAlbumOf(t) {
+        if (!t.album_browse_id) {
+          say(`No album page for “${albumOf(t) || t.title}”`);
+          return;
+        }
+        openPage("album", () => fetchAlbum(t.album_browse_id), albumOf(t));
+      }
+      function openArtistOf(t) {
+        if (t.artist_browse_id) openPage("artist", () => fetchArtist(t.artist_browse_id), t.artist);
+        // Songs saved before they carried an artist id reach the artist
+        // through their album, as in the TUI.
+        else if (t.album_browse_id) openPage("artist", () => fetchArtistOfAlbum(t.album_browse_id), t.artist);
+        else say(`No artist page for “${t.artist || t.title}”`);
+      }
+
+      // "51 min", "1 hr 4 min": an album's length, the way a header says it.
+      function long(secs) {
+        const h = Math.floor(secs / 3600);
+        const m = Math.round((secs % 3600) / 60);
+        return h ? `${h} hr ${m} min` : `${m} min`;
+      }
+
+      function header(kind, coverURL, title, meta, actions) {
+        const head = el("div", "page-head" + (kind === "artist" ? " round" : ""));
+        const info = el("div", "info");
+        const m = el("div", "meta");
+        m.append(...meta);
+        info.append(el("h1", "", title), m);
+        if (actions.length) {
+          const a = el("div", "actions");
+          a.append(...actions);
+          info.append(a);
+        }
+        head.append(cover(coverURL, 320), info);
+        return head;
+      }
+      function pill(text, run, primary = false) {
+        const b = el("button", "soft" + (primary ? " primary" : ""), text);
+        b.type = "button";
+        b.addEventListener("click", run);
+        return b;
+      }
+
+      function renderAlbum() {
+        const p = page;
+        const meta = [];
+        if (p.artist) {
+          const by = el("span", "strong");
+          by.append(p.artistBrowseID ? pageLink(p.artist, () => openPage("artist", () => fetchArtist(p.artistBrowseID), p.artist)) : p.artist);
+          meta.push(by);
+        }
+        if (p.year) meta.push(el("span", "", p.year));
+        const n = p.tracks.length;
+        meta.push(el("span", "", `${n} ${n === 1 ? "song" : "songs"}${p.seconds ? `, ${long(p.seconds)}` : ""}`));
+        const play = pill("Play", () => playList(p.tracks), true);
+        const add = pill("Add to queue", () => queueAll());
+        add.title = "Add every song to the queue (a)";
+        const head = header("album", p.coverURL, p.title, meta, n ? [play, add] : []);
+        if (!n) {
+          pane.replaceChildren(backButton(), head);
+          const empty = el("div");
+          notice(empty, "Nothing to play here", "This album has no songs YouTube Music can play.", null, null, false);
+          pane.append(empty);
+          return;
+        }
+        const { head: cols, list } = render();
+        pane.replaceChildren(backButton(), head, cols, list);
+        pane.scrollTop = 0;
+        moveCursor();
+      }
+
+      function renderArtist() {
+        const p = page;
+        const meta = [];
+        if (p.subscribers) meta.push(el("span", "", `${p.subscribers} subscribers`));
+        meta.push(el("span", "", `${p.releases.length} ${p.releases.length === 1 ? "release" : "releases"}`));
+        const actions = p.songs.length ? [pill("Play", () => playList(p.songs), true)] : [];
+        const head = header("artist", p.photoURL, p.name, meta, actions);
+        const seg = el("div", "seg");
+        for (const [key, label] of [
+          ["songs", "Top songs"],
+          ["releases", "Releases"],
+        ]) {
+          const t = el("button", "tab", label);
+          t.type = "button";
+          t.setAttribute("aria-pressed", artistTab === key);
+          t.title = "Switch with A";
+          t.addEventListener("click", () => {
+            artistTab = key;
+            renderArtist();
+          });
+          seg.append(t);
+        }
+        if (artistTab === "songs") {
+          results = p.songs;
+          selected = Math.max(0, Math.min(selected, results.length - 1));
+          if (!results.length) {
+            const empty = el("div");
+            notice(empty, "No songs listed", "YouTube Music lists no top songs for this artist. Their releases are next door.", null, null, false);
+            pane.replaceChildren(backButton(), head, seg, empty);
+            return;
+          }
+          const { head: cols, list } = render();
+          pane.replaceChildren(backButton(), head, seg, cols, list);
+          moveCursor();
+          return;
+        }
+        results = [];
+        const grid = el("div", "releases");
+        for (const r of p.releases) {
+          const card = el("button", "release");
+          card.type = "button";
+          card.title = r.year ? `${r.title}, ${r.year}` : r.title;
+          card.append(cover(r.coverURL, 320), el("div", "r-title", r.title), el("div", "r-year", r.year || ""));
+          card.addEventListener("click", () => openPage("album", () => fetchAlbum(r.browseID), r.title));
+          grid.append(card);
+        }
+        pane.replaceChildren(backButton(), head, seg, grid);
+      }
+
+      // Play: every song of the page into the queue, starting with the
+      // first, whatever was playing.
+      async function playList(tracks) {
+        if (!tracks.length) return;
+        begin(tracks[0]);
+        let s = await AddAll(tracks);
+        s = await Jump(s.tracks.length - tracks.length);
+        setQueue(s);
+        start();
       }
 
       // ── Favourites ───────────────────────────────────────────────────
@@ -3050,6 +3446,8 @@
       // The sidebar's pages, in the TUI's order. Search keeps its query
       // and results while another page is open.
       function navTo(page) {
+        stack = [];
+        pageSeq++;
         for (const b of document.querySelectorAll(".nav-item[data-page]"))
           if (b.dataset.page === page) b.setAttribute("aria-current", "page");
           else b.removeAttribute("aria-current");

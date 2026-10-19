@@ -16,6 +16,7 @@ import (
 	"ytmgo/internal/search"
 	"ytmgo/internal/settings"
 	"ytmgo/internal/version"
+	"ytmgo/internal/ytmusic"
 	"ytmgo/internal/ytresolve"
 )
 
@@ -42,6 +43,11 @@ type App struct {
 	recommend  func(limit int, seeds []string) ([]search.Result, error)
 	recordPlay func(queue.Track) error
 	saveFavs   func([]queue.Track) error
+	// album, artist and playlist are the ytmusic and search fetches the
+	// pages and pasted links use.
+	album    func(browseID string) (ytmusic.Album, error)
+	artist   func(browseID string) (ytmusic.ArtistPage, error)
+	playlist func(search.PlaylistRef) (title string, results []search.Result, missed int, err error)
 
 	lfm      lastfmAPI
 	lfmToken string // while the user is approving ytmgo on last.fm
@@ -85,6 +91,9 @@ func New(d *db.DB) *App {
 		recordPlay: d.RecordPlay,
 		saveFavs:   d.SaveFavorites,
 		lfm:        realLastFM,
+		album:      ytmusic.AlbumTracks,
+		artist:     ytmusic.Artist,
+		playlist:   search.PlaylistTracks,
 	}
 }
 
@@ -108,14 +117,32 @@ func (a *App) SetVolume(v int) {
 // Version is the build's version, e.g. "v1.4.0" or "dev".
 func (a *App) Version() string { return version.Version }
 
+// Found is what a search found. A pasted YouTube or Spotify playlist
+// link is read as that playlist (search.ParsePlaylist): then Playlist is
+// its title and Missed the Spotify songs not found on YouTube Music, as
+// the TUI reports them.
+type Found struct {
+	Tracks   []queue.Track `json:"tracks"`
+	Playlist string        `json:"playlist"`
+	Missed   int           `json:"missed"`
+}
+
 // Search runs a YouTube Music song search, returning as many results as
-// the user's search limit allows. An empty query returns nothing and
-// asks nobody. Results come as queue tracks, the one shape the page
-// works with, so a result can go into the queue as it is.
-func (a *App) Search(query string) ([]queue.Track, error) {
+// the user's search limit allows, or a pasted playlist link's songs. An
+// empty query returns nothing and asks nobody. Results come as queue
+// tracks, the one shape the page works with, so a result can go into
+// the queue as it is.
+func (a *App) Search(query string) (Found, error) {
 	query = strings.TrimSpace(query)
 	if query == "" {
-		return []queue.Track{}, nil
+		return Found{Tracks: []queue.Track{}}, nil
+	}
+	if ref, ok := search.ParsePlaylist(query); ok {
+		title, results, missed, err := a.playlist(ref)
+		if err != nil {
+			return Found{}, problem(err)
+		}
+		return Found{Tracks: asTracks(results), Playlist: title, Missed: missed}, nil
 	}
 	limit := a.settings.SearchLimit
 	if limit <= 0 {
@@ -123,9 +150,9 @@ func (a *App) Search(query string) ([]queue.Track, error) {
 	}
 	results, err := a.search(query, limit)
 	if err != nil {
-		return nil, problem(err)
+		return Found{}, problem(err)
 	}
-	return asTracks(results), nil
+	return Found{Tracks: asTracks(results)}, nil
 }
 
 func asTracks(results []search.Result) []queue.Track {

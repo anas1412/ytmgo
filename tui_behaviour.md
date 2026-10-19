@@ -176,9 +176,12 @@ are worth adding later; not in the TUI today.
   Esc goes back to the results.
 
 **GUI:** both as pages in the main view with a header (cover or photo,
-title, stats), and Back. Buttons for queue all, download album, and
-songs ⇄ releases; the same keys. Back keeps a history, so album over artist
-over results unwinds in order.
+title, stats), and Back. **Play** and **Add to queue**; songs ⇄ releases as
+tabs; the same keys (`a` queues an open album, `A` switches an artist's
+tabs, Esc steps back). Back keeps a history, so album over artist over
+results unwinds in order. Artist and album names on any row open their
+pages. Differs: the search box always searches, so an artist page has no
+filter as you type; downloading an album comes with downloads.
 
 ## 8. Library and downloads
 
