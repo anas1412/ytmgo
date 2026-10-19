@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"ytmgo/internal/queue"
+	"ytmgo/internal/search"
 	"ytmgo/internal/settings"
 )
 
@@ -215,5 +216,86 @@ func TestNext(t *testing.T) {
 	a.Jump(0)
 	if s := a.CycleRepeat(); s.Next != nil {
 		t.Errorf("next under repeat-one: %v", s.Next.ID)
+	}
+}
+
+// recApp is a queueApp with a history and recommendations of its own.
+func recApp(t *testing.T, history []string, recs []search.Result) (*App, *[]string) {
+	t.Helper()
+	a, _ := queueApp(t)
+	var asked []string
+	a.history = func(int) ([]string, error) { return history, nil }
+	a.recommend = func(limit int, seeds []string) ([]search.Result, error) {
+		asked = seeds
+		return recs, nil
+	}
+	a.saveSettings = func(*settings.Settings) error { return nil }
+	return a, &asked
+}
+
+const (
+	vidA = "aaaaaaaaaaa"
+	vidB = "bbbbbbbbbbb"
+	vidC = "ccccccccccc"
+)
+
+// Autoplay adds one song, and never one already in the queue.
+func TestAutoplayAddSkipsQueued(t *testing.T) {
+	a, asked := recApp(t, []string{vidA}, []search.Result{{ID: vidB, Title: "b"}, {ID: vidC, Title: "c"}})
+	a.Add(queue.Track{ID: vidB})
+	s, err := a.AutoplayAdd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !eq(ids(s), []string{vidB, vidC}) {
+		t.Errorf("queue %v, want b then the new c", ids(s))
+	}
+	if len(*asked) != 1 || (*asked)[0] != vidA {
+		t.Errorf("seeded with %v, want the history", *asked)
+	}
+}
+
+// Nothing new, or nothing played yet, is an error the page can say, and
+// leaves the queue alone.
+func TestAutoplayAddWithNothingToAdd(t *testing.T) {
+	a, _ := recApp(t, []string{vidA}, []search.Result{{ID: vidB}})
+	a.Add(queue.Track{ID: vidB})
+	if s, err := a.AutoplayAdd(); err == nil || len(s.Tracks) != 1 {
+		t.Errorf("all queued: err %v, %d tracks", err, len(s.Tracks))
+	}
+	a, _ = recApp(t, nil, nil)
+	if _, err := a.AutoplayAdd(); err == nil {
+		t.Error("with no history: no error")
+	}
+}
+
+// The home list is seeded from history; with nothing played there is
+// nothing to ask, and it is empty rather than an error.
+func TestRecommendations(t *testing.T) {
+	a, asked := recApp(t, []string{vidA, "/a/file.mp3", vidB}, []search.Result{{ID: vidC, Title: "c"}})
+	got, err := a.Recommendations()
+	if err != nil || len(got) != 1 || got[0].ID != vidC {
+		t.Errorf("got %v, %v", got, err)
+	}
+	if !eq(*asked, []string{vidA, vidB}) {
+		t.Errorf("seeds %v, want the two video ids", *asked)
+	}
+	a, _ = recApp(t, nil, nil)
+	a.recommend = func(int, []string) ([]search.Result, error) {
+		t.Error("asked YouTube Music with no seeds")
+		return nil, nil
+	}
+	if got, err := a.Recommendations(); err != nil || got == nil || len(got) != 0 {
+		t.Errorf("no history: %v, %v", got, err)
+	}
+}
+
+func TestToggleAutoplaySaves(t *testing.T) {
+	a, _ := recApp(t, nil, nil)
+	saved := 0
+	a.saveSettings = func(*settings.Settings) error { saved++; return nil }
+	on := a.Autoplay()
+	if a.ToggleAutoplay() == on || saved != 1 {
+		t.Errorf("toggle from %v: saved %d", on, saved)
 	}
 }

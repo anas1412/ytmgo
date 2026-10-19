@@ -373,7 +373,8 @@
         scrollbar-width: thin;
         scrollbar-color: var(--border) transparent;
       }
-      .results h2 {
+      .results h2,
+      .list-head h2 {
         margin: 6px 8px 10px;
         font-family: "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif;
         font-size: 22px;
@@ -1183,6 +1184,26 @@
       .extras .icon-btn[aria-pressed="true"] {
         color: var(--mint);
       }
+      /* The heading of the home list, with its refresh button. */
+      .list-head {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin: 6px 8px 10px;
+      }
+      .list-head h2 {
+        margin: 0;
+      }
+      .list-head .sub {
+        color: var(--dim);
+        font-size: 13px;
+      }
+      .list-head .icon-btn {
+        margin-left: auto;
+      }
+      .list-head .icon-btn.spin svg {
+        animation: spin 0.7s linear infinite;
+      }
 
       /* A sidebar dragged narrow folds to icons, as Spotify's does. */
       .app.side-collapsed .nav-item span,
@@ -1340,6 +1361,9 @@
           </div>
         </div>
         <div class="extras">
+          <button class="icon-btn" id="autoplay" aria-pressed="true" aria-label="Autoplay" title="Autoplay (c)">
+            <svg viewBox="0 0 24 24"><path d="M12 12c-2-2.67-4-4-6-4a4 4 0 1 0 0 8c2 0 4-1.33 6-4Zm0 0c2 2.67 4 4 6 4a4 4 0 0 0 0-8c-2 0-4 1.33-6 4Z" /></svg>
+          </button>
           <button class="icon-btn" data-open="lyrics" aria-pressed="false" aria-label="Lyrics" title="Lyrics (y)">
             <svg viewBox="0 0 24 24"><path d="m12 8-9.04 9.06a2.82 2.82 0 1 0 3.98 3.98L16 12" /><circle cx="17" cy="7" r="5" /></svg>
           </button>
@@ -1378,6 +1402,11 @@
         CycleRepeat,
         Volume,
         SetVolume,
+        Recommendations,
+        Played,
+        Autoplay,
+        ToggleAutoplay,
+        AutoplayAdd,
       } from "./wailsjs/go/gui/App.js";
 
       const $ = (id) => document.getElementById(id);
@@ -1501,8 +1530,8 @@
         other: ["Search didn’t work", "Something went wrong talking to YouTube Music. Try again."],
       };
 
-      function notice(target, title, body, action, detail) {
-        const box = el("div", "notice" + (action ? " error" : ""));
+      function notice(target, title, body, action, detail, error = true) {
+        const box = el("div", "notice" + (action && error ? " error" : ""));
         box.append(el("strong", "", title), el("p", "", body));
         if (action) {
           const b = el("button", "pill", action.label);
@@ -1517,8 +1546,69 @@
         target.replaceChildren(box);
       }
 
-      function empty() {
-        notice(pane, "Find something to play", "Search for a song or an artist. Press / from anywhere to jump back here.");
+      // ── Home: recommendations ────────────────────────────────────────
+      // With nothing searched, the main view lists songs related to what
+      // was played lately, as the TUI's Stream page does. They load at
+      // start and on Refresh or R; clearing a search brings the same list
+      // back without asking again.
+      let view = "home"; // or "search"
+      let recs = null; // null until loaded
+      let recsSeq = 0;
+      let recsFailed = false;
+      const REC_COPY = {
+        offline: ["You’re offline", "Recommendations need an internet connection. They load on their own once you’re back online."],
+        timeout: ["YouTube Music didn’t answer", "Recommendations took too long. Try again in a moment."],
+        "missing-tool": ["yt-dlp isn’t installed", "ytmgo needs yt-dlp to find and play music."],
+        unavailable: ["Recommendations didn’t load", "Try again in a moment."],
+        other: ["Recommendations didn’t load", "Something went wrong talking to YouTube Music. Try again."],
+      };
+
+      function home() {
+        view = "home";
+        lastQuery = "";
+        if (recs === null) {
+          refreshRecs();
+          return;
+        }
+        results = recs;
+        selected = results.length ? Math.max(0, Math.min(selected, results.length - 1)) : -1;
+        if (!results.length) {
+          notice(
+            pane,
+            "Play something and recommendations will follow",
+            "They come from what you’ve played lately. Search for a song to start.",
+            { label: "Refresh", run: refreshRecs },
+            null,
+            false,
+          );
+          return;
+        }
+        render();
+      }
+
+      async function refreshRecs() {
+        const mine = ++recsSeq;
+        recsFailed = false;
+        const btn = pane.querySelector(".list-head .icon-btn");
+        if (btn) btn.classList.add("spin");
+        else if (view === "home") skeleton();
+        try {
+          const got = await Recommendations();
+          if (mine !== recsSeq) return;
+          recs = got || [];
+          if (view === "home") {
+            selected = recs.length ? 0 : -1;
+            home();
+          }
+        } catch (err) {
+          if (mine !== recsSeq) return;
+          recsFailed = true;
+          if (view !== "home") return;
+          const p = problemOf(err);
+          const [title, body] = REC_COPY[p.kind] || REC_COPY.other;
+          results = [];
+          notice(pane, title, body, { label: "Try again", run: refreshRecs }, p.detail);
+        }
       }
 
       function skeleton() {
@@ -1594,9 +1684,20 @@
         head.append(el("span"), el("span", "", "Title"), el("span", "col-album", "Album"), el("span", "", "Length"), el("span"));
         const list = el("div", "list");
         list.setAttribute("role", "listbox");
-        list.setAttribute("aria-label", "Songs");
+        list.setAttribute("aria-label", view === "home" ? "Recommended songs" : "Songs");
         list.append(el("div", "cursor"), ...results.map(track));
-        pane.replaceChildren(el("h2", "", "Songs"), head, list);
+        const top = el("div", "list-head");
+        if (view === "home") {
+          top.append(el("h2", "", "Recommended"), el("span", "sub", "from what you’ve played lately"));
+          const again = el("button", "icon-btn");
+          again.type = "button";
+          again.title = "Refresh (R)";
+          again.setAttribute("aria-label", "Refresh recommendations");
+          again.append(icon('<path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" /><path d="M3 3v5h5" /><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16" /><path d="M16 16h5v5" />'));
+          again.addEventListener("click", refreshRecs);
+          top.append(again);
+        } else top.append(el("h2", "", "Songs"));
+        pane.replaceChildren(top, head, list);
         pane.scrollTop = 0;
         moveCursor();
       }
@@ -1624,15 +1725,14 @@
         q = q.trim();
         if (!q) {
           seq++;
-          results = [];
-          selected = -1;
-          lastQuery = "";
           field.classList.remove("busy");
-          empty();
+          if (view !== "home") selected = 0;
+          home();
           return;
         }
         if (q === lastQuery && results.length) return;
         const mine = ++seq;
+        view = "search";
         // First search, or after an empty or error state: placeholder
         // rows. Refining a list keeps it on screen, with the working line.
         if (!pane.querySelector(".list") || pane.querySelector(".skeleton")) skeleton();
@@ -2248,7 +2348,13 @@
         const fresh = !now || now.track.id !== track.id;
         // retried stays with the song across restarts of it, so a stream
         // that keeps failing is given up on rather than retried forever.
-        now = { track, retried: fresh ? false : now.retried };
+        now = {
+          track,
+          retried: fresh ? false : now.retried,
+          // History records a song once it has started, as the TUI's does.
+          recorded: fresh ? false : now.recorded,
+        };
+        if (fresh) autoplayTried = false;
         const mine = ++playSeq;
         audio.pause();
         playState = "playing";
@@ -2311,6 +2417,7 @@
         const s = await Skip();
         setQueue(s);
         if (s.moved) start();
+        else if (autoplayOn) suggest(true);
         else {
           setLoading(false);
           say("End of the queue", { full: "That was the last song in the queue." });
@@ -2333,11 +2440,16 @@
         const s = await Ended();
         setQueue(s);
         if (!s.moved) {
+          if (autoplayOn) {
+            suggest(true);
+            return;
+          }
           playState = "stopped";
           say("End of the queue", { full: "That was the last song in the queue." });
           return;
         }
         if (s.current === before && s.repeat === "one") {
+          now.recorded = false; // a replay is a play, as in the TUI
           audio.currentTime = 0;
           audio.play().catch(() => {});
           return;
@@ -2380,6 +2492,10 @@
       audio.addEventListener("playing", () => {
         failures = 0;
         playState = "playing";
+        if (now && !now.recorded) {
+          now.recorded = true;
+          Played(now.track).catch(() => {});
+        }
         if (sayingSticky) unsay();
         setLoading(false);
         toggle.classList.add("playing");
@@ -2397,6 +2513,21 @@
       });
       audio.addEventListener("timeupdate", () => {
         if (!seeking && isFinite(audio.duration) && audio.duration > 0) updateSeek(audio.currentTime / audio.duration);
+        // With 30s left of the last song, autoplay adds what comes next,
+        // so it is ready when this one ends — the TUI's trigger.
+        if (
+          autoplayOn &&
+          !autoplayTried &&
+          playState === "playing" &&
+          isFinite(audio.duration) &&
+          audio.duration - audio.currentTime <= 30 &&
+          qs.current >= 0 &&
+          !qs.next &&
+          qs.repeat === "off"
+        ) {
+          autoplayTried = true;
+          suggest(false);
+        }
       });
       audio.addEventListener("ended", ended);
       // A stream that breaks mid-song has usually expired (they last
@@ -2528,6 +2659,15 @@
           case "e":
             queueAll();
             return true;
+          case "c":
+            $("autoplay").click();
+            return true;
+          case "R":
+            query.value = "";
+            field.classList.remove("has-text");
+            view = "home";
+            refreshRecs();
+            return true;
         }
         return false;
       }
@@ -2574,6 +2714,69 @@
         ms.setActionHandler("previoustrack", prev);
       }
 
+      // ── Autoplay ─────────────────────────────────────────────────────
+      // Keeps the music going when the queue runs out, with one song
+      // related to what was played lately (internal/gui AutoplayAdd).
+      let autoplayOn = true;
+      // Tried for the song playing now, so the 30s trigger asks once.
+      let autoplayTried = false;
+
+      function autoplayButton() {
+        const b = $("autoplay");
+        b.setAttribute("aria-pressed", autoplayOn);
+        b.title = autoplayOn
+          ? "Autoplay is on: similar songs follow when the queue runs out (c)"
+          : "Autoplay is off: playback stops at the end of the queue (c)";
+      }
+      Autoplay().then((on) => {
+        autoplayOn = on;
+        autoplayButton();
+      });
+      $("autoplay").addEventListener("click", async () => {
+        autoplayOn = await ToggleAutoplay();
+        autoplayButton();
+        say(autoplayOn ? "Autoplay on" : "Autoplay off", {
+          full: autoplayOn ? "Autoplay on: similar songs follow when the queue runs out." : "Autoplay off: playback stops at the end of the queue.",
+        });
+      });
+
+      // Adds one suggestion; play also moves to it and starts it, for
+      // when the queue has already run out.
+      async function suggest(play) {
+        if (play) {
+          setLoading(true);
+          say("Finding something to play next…", { sticky: true });
+        }
+        let s;
+        try {
+          s = await AutoplayAdd();
+        } catch (err) {
+          const p = problemOf(err);
+          if (!play) return; // ahead of time: the end of the queue tries again
+          setLoading(false);
+          playState = "stopped";
+          const offline = p.kind === "offline";
+          say(offline ? "Offline, so autoplay stopped" : "Autoplay found nothing new", {
+            error: offline,
+            sticky: true,
+            full: offline
+              ? "You’re offline, so autoplay couldn’t find a next song."
+              : "Autoplay found nothing new to play. Search for something, or press play to hear this again.",
+          });
+          return;
+        }
+        const added = s.tracks[s.tracks.length - 1];
+        landed = s.tracks.length - 1;
+        setQueue(s);
+        if (!play) {
+          say(`Up next: “${added.title}”`, { full: `Autoplay added “${added.title}” by ${added.artist} to play next.` });
+          return;
+        }
+        const st = await Skip();
+        setQueue(st);
+        if (st.moved) start();
+      }
+
       // ── Connection ───────────────────────────────────────────────────
       // A slim banner while offline. Coming back runs the search that
       // failed and resumes a song the connection cut off.
@@ -2581,6 +2784,7 @@
         $("offline").hidden = navigator.onLine;
         if (!navigator.onLine) return;
         if (failedQuery && query.value.trim() === failedQuery) run(failedQuery);
+        if (recsFailed && view === "home") refreshRecs();
         if (resumeAt != null && now) {
           const at = resumeAt;
           resumeAt = null;
@@ -2593,7 +2797,7 @@
       new ResizeObserver(apply).observe(app);
       apply();
       connection();
-      empty();
+      home();
       Queue().then(setQueue);
     </script>
   </body>

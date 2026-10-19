@@ -34,6 +34,12 @@ type App struct {
 	search       func(query string, limit int) ([]search.Result, error)
 	saveQueue    func(tracks []queue.Track, current int, shuffle, repeat, repeatAll bool) error
 	saveSettings func(*settings.Settings) error
+	// history is the track ids of the newest plays, newest first;
+	// recommend is search.FetchRecommendations; recordPlay is the
+	// database's RecordPlay.
+	history    func(limit int) ([]string, error)
+	recommend  func(limit int, seeds []string) ([]search.Result, error)
+	recordPlay func(queue.Track) error
 }
 
 // New returns the App to bind, reading the user's settings and saved
@@ -51,7 +57,23 @@ func New(d *db.DB) *App {
 	if tracks, shuffle, repeat, repeatAll, err := d.LoadQueue(); err == nil {
 		q.LoadData(tracks, shuffle, repeat, repeatAll)
 	}
-	return &App{settings: s, q: q, search: search.Search, saveQueue: d.SaveQueue, saveSettings: d.SaveSettings}
+	return &App{
+		settings:     s,
+		q:            q,
+		search:       search.Search,
+		saveQueue:    d.SaveQueue,
+		saveSettings: d.SaveSettings,
+		history: func(limit int) ([]string, error) {
+			entries, err := d.LoadPlayHistory(limit, 0)
+			ids := make([]string, len(entries))
+			for i, e := range entries {
+				ids[i] = e.TrackID
+			}
+			return ids, err
+		},
+		recommend:  search.FetchRecommendations,
+		recordPlay: d.RecordPlay,
+	}
 }
 
 // Volume is the volume to start at: the TUI's Default Volume, which
@@ -91,11 +113,54 @@ func (a *App) Search(query string) ([]queue.Track, error) {
 	if err != nil {
 		return nil, problem(err)
 	}
+	return asTracks(results), nil
+}
+
+func asTracks(results []search.Result) []queue.Track {
 	tracks := make([]queue.Track, len(results))
 	for i, r := range results {
 		tracks[i] = r.ToTrack()
 	}
-	return tracks, nil
+	return tracks
+}
+
+// seeds are the radio seeds, from the newest plays, as the TUI picks
+// them for its recommendations and autoplay.
+func (a *App) seeds() ([]string, error) {
+	ids, err := a.history(search.SeedHistory)
+	if err != nil {
+		return nil, err
+	}
+	return search.Seeds(ids, search.SeedCount), nil
+}
+
+// Recommendations is the home list when nothing is searched: songs
+// related to what was played lately, as many as the search limit. With
+// nothing played yet there is nothing to go on, and it is empty.
+func (a *App) Recommendations() ([]queue.Track, error) {
+	seeds, err := a.seeds()
+	if err != nil {
+		return nil, problem(err)
+	}
+	if len(seeds) == 0 {
+		return []queue.Track{}, nil
+	}
+	limit := a.settings.SearchLimit
+	if limit <= 0 {
+		limit = settings.Defaults().SearchLimit
+	}
+	results, err := a.recommend(limit, seeds)
+	if err != nil {
+		return nil, problem(err)
+	}
+	return asTracks(results), nil
+}
+
+// Played records that t has started, as the TUI does at the start of a
+// song rather than after a while. Playing the same song again straight
+// after only updates its time (db.RecordPlay).
+func (a *App) Played(t queue.Track) error {
+	return problem(a.recordPlay(t))
 }
 
 // StreamURL turns a track's watch URL into a direct audio stream the

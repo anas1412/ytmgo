@@ -99,9 +99,14 @@ three in a row stop. Offline and timeouts stop and say to press play.
 - Result: appended. If playing, "Autoplay: N suggestions added to queue";
   otherwise it starts playing ("Autoplay: playing suggestions").
 
-**GUI:** same triggers, seeds and batch, in Go. Not copied: the stuck latch
-(a failed fetch leaves "Autoplay loading suggestions…" forever), and a
-result replacing a paused song. Also skips suggestions already in the queue.
+**GUI:** same triggers, seeds and batch, in Go (`AutoplayAdd`; the seed rule
+is shared as `search.Seeds`). Not copied: the stuck latch (a failed fetch
+leaves "Autoplay loading suggestions…" forever), and a result replacing a
+paused song. Also skips suggestions already in the queue, and `n` on the
+last song asks autoplay too, where the TUI's does nothing. The ∞ button and
+`c` toggle it; the player line says "Up next: “T”" when it adds one, and
+"Autoplay found nothing new" or "Offline, so autoplay stopped" when it
+cannot.
 
 ## 4. History, favourites, Last.fm, Discord, media keys
 

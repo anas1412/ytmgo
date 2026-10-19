@@ -1,6 +1,10 @@
 package gui
 
-import "ytmgo/internal/queue"
+import (
+	"errors"
+
+	"ytmgo/internal/queue"
+)
 
 // QueueState is everything the page shows of the queue: the tracks,
 // which one is playing (-1 for none), and the modes. Every change to the
@@ -225,3 +229,63 @@ func (a *App) CycleRepeat() QueueState {
 	}
 	return a.changed()
 }
+
+// Autoplay is whether the queue keeps going by itself when it runs out:
+// the TUI's autoplay, on by default.
+func (a *App) Autoplay() bool {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.settings.AutoplayEnabled
+}
+
+// ToggleAutoplay turns autoplay on or off and saves it, as the TUI's c
+// does.
+func (a *App) ToggleAutoplay() bool {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.settings.AutoplayEnabled = !a.settings.AutoplayEnabled
+	a.saveSettings(a.settings)
+	return a.settings.AutoplayEnabled
+}
+
+// AutoplayAdd appends one song related to what was played lately, for
+// when the queue is about to run out. Unlike the TUI's, it skips songs
+// already in the queue, so autoplay does not bring back what is there.
+// Finding nothing new is an error the page can say.
+func (a *App) AutoplayAdd() (QueueState, error) {
+	seeds, err := a.seeds()
+	if err != nil {
+		return a.Queue(), problem(err)
+	}
+	if len(seeds) == 0 {
+		return a.Queue(), problem(errNothingToGoOn)
+	}
+	// More than one, so there is something left once the queued songs
+	// are skipped.
+	results, err := a.recommend(autoplayAsk, seeds)
+	if err != nil {
+		return a.Queue(), problem(err)
+	}
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	queued := map[string]bool{}
+	for _, t := range a.q.Tracks() {
+		queued[t.ID] = true
+	}
+	for _, r := range results {
+		if !queued[r.ID] {
+			a.q.Add(r.ToTrack())
+			return a.changed(), nil
+		}
+	}
+	return a.state(), problem(errNothingNew)
+}
+
+// autoplayAsk is how many suggestions AutoplayAdd asks for, of which it
+// adds one.
+const autoplayAsk = 10
+
+var (
+	errNothingToGoOn = errors.New("autoplay: nothing has been played yet to base suggestions on")
+	errNothingNew    = errors.New("autoplay: every suggestion is already in the queue")
+)
