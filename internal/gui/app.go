@@ -28,6 +28,7 @@ type App struct {
 	settings *settings.Settings
 	mu       sync.Mutex
 	q        *queue.Queue
+	favs     []queue.Track
 
 	// search and saveQueue are search.Search and the database's
 	// SaveQueue, swapped out in tests so they need no network or disk.
@@ -40,6 +41,7 @@ type App struct {
 	history    func(limit int) ([]string, error)
 	recommend  func(limit int, seeds []string) ([]search.Result, error)
 	recordPlay func(queue.Track) error
+	saveFavs   func([]queue.Track) error
 }
 
 // New returns the App to bind, reading the user's settings and saved
@@ -57,9 +59,14 @@ func New(d *db.DB) *App {
 	if tracks, shuffle, repeat, repeatAll, err := d.LoadQueue(); err == nil {
 		q.LoadData(tracks, shuffle, repeat, repeatAll)
 	}
+	favs, err := d.LoadFavorites()
+	if err != nil {
+		favs = []queue.Track{}
+	}
 	return &App{
 		settings:     s,
 		q:            q,
+		favs:         favs,
 		search:       search.Search,
 		saveQueue:    d.SaveQueue,
 		saveSettings: d.SaveSettings,
@@ -73,6 +80,7 @@ func New(d *db.DB) *App {
 		},
 		recommend:  search.FetchRecommendations,
 		recordPlay: d.RecordPlay,
+		saveFavs:   d.SaveFavorites,
 	}
 }
 
