@@ -51,6 +51,10 @@ func main() {
 		Height:    760,
 		MinWidth:  800,
 		MinHeight: 520,
+		// The page draws its own title bar, with Windows' buttons in its
+		// corner (frontend: .titlebar). Windows keeps the resize edges,
+		// snapping and the shadow of a framed window.
+		Frameless: true,
 		// The page's own background, so the window does not flash white
 		// before the first paint.
 		BackgroundColour: &options.RGBA{R: 0x11, G: 0x11, B: 0x18, A: 255},
