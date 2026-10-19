@@ -206,7 +206,10 @@ filter as you type; downloading an album comes with downloads.
   with a bar, then Pending, Completed, Failed (with the error). `o` opens the
   download folder.
 - **Playback mode** setting: stream only, download while playing, download
-  first.
+  first. **GUI (built):** a Playback row in Settings, the same saved setting.
+  Download while playing starts a download as the stream starts; download
+  first waits for the file, with "Downloading first… N%" on the player line,
+  and a failed download says why instead of streaming (TUI bug 16).
 
 **GUI:** all of it. The Downloads page gets an **Open downloads folder**
 button (Explorer). Folder adding uses the native dialog. Album downloads go

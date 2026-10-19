@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
 	"ytmgo/internal/db"
 	"ytmgo/internal/deps"
@@ -89,6 +90,8 @@ type App struct {
 	host Host
 	// dl is the downloader, started on first use by newDownloader;
 	// dlMu guards it, apart from mu, which its progress needs.
+	// pollEvery is how often a "download first" play checks its job.
+	pollEvery     time.Duration
 	dlMu          sync.Mutex
 	dl            downloads
 	newDownloader func(dir, format string) downloads
@@ -162,6 +165,7 @@ func New(d *db.DB) *App {
 		fetchLyrics:  lyrics.Fetch,
 		streamURL:    ytresolve.StreamURL,
 		open:         proc.Open,
+		pollEvery:    250 * time.Millisecond,
 		newDownloader: func(dir, format string) downloads {
 			return downloader.New(dir, format)
 		},
@@ -277,6 +281,7 @@ func (a *App) Played(t queue.Track) error {
 // SettingsView is the settings the Settings page edits so far.
 type SettingsView struct {
 	SearchLimit    int    `json:"searchLimit"`
+	PlaybackMode   int    `json:"playbackMode"` // settings.PlaybackStream, Hybrid or Offline
 	Autoplay       bool   `json:"autoplay"`
 	DownloadFormat string `json:"downloadFormat"` // "m4a" or "mp3"
 	DownloadDir    string `json:"downloadDir"`    // where downloads go, resolved
@@ -290,10 +295,24 @@ func (a *App) Settings() SettingsView {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	return SettingsView{
-		SearchLimit: a.settings.SearchLimit, Autoplay: a.settings.AutoplayEnabled,
+		SearchLimit: a.settings.SearchLimit, Autoplay: a.settings.AutoplayEnabled, PlaybackMode: a.settings.PlaybackMode,
 		DownloadFormat: a.settings.DownloadFormat, DownloadDir: a.settings.ResolveDownloadDir(),
 		LibraryFolders: append([]string{}, a.settings.ResolveLibraryDirs()...),
 	}
+}
+
+// SetPlaybackMode sets how songs play: settings.PlaybackStream,
+// PlaybackHybrid or PlaybackOffline, and saves it. Anything else is
+// stream only, as the TUI reads it.
+func (a *App) SetPlaybackMode(mode int) int {
+	if mode != settings.PlaybackHybrid && mode != settings.PlaybackOffline {
+		mode = settings.PlaybackStream
+	}
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.settings.PlaybackMode = mode
+	a.saveSettings(a.settings)
+	return mode
 }
 
 // SetSearchLimit sets how many results a search or the home list shows,

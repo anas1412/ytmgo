@@ -184,3 +184,76 @@ func TestPlaySourceStreamsAGoneFile(t *testing.T) {
 		t.Errorf("plays from %q", src)
 	}
 }
+
+// finish ends the fake's job for id as the downloader would.
+func (f *fakeDL) finish(t *testing.T, id string, path string, err error) {
+	t.Helper()
+	deadline := time.Now().Add(time.Second)
+	for {
+		f.mu.Lock()
+		for i := range f.enqueued {
+			if f.enqueued[i].TrackID == id {
+				f.enqueued[i].Status, f.enqueued[i].FilePath, f.enqueued[i].Err = downloader.StatusDone, path, err
+				if err != nil {
+					f.enqueued[i].Status = downloader.StatusFailed
+				}
+				f.mu.Unlock()
+				return
+			}
+		}
+		f.mu.Unlock()
+		if time.Now().After(deadline) {
+			t.Fatalf("%s was never downloaded", id)
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+}
+
+func modeApp(t *testing.T, mode int) (*App, *fakeDL) {
+	a, f, _ := dlApp(t)
+	a.settings.PlaybackMode = mode
+	a.pollEvery = time.Millisecond
+	a.streamURL = func(string) (string, error) { return "https://stream", nil }
+	return a, f
+}
+
+func TestPlaybackModes(t *testing.T) {
+	song := queue.Track{ID: "s", Title: "T", Artist: "A", URL: "https://watch"}
+
+	a, f := modeApp(t, settings.PlaybackStream)
+	if src, _ := a.PlaySource(song); src != "https://stream" || len(f.Jobs()) != 0 {
+		t.Errorf("stream only: %q, %d downloads", src, len(f.Jobs()))
+	}
+
+	a, f = modeApp(t, settings.PlaybackHybrid)
+	if src, _ := a.PlaySource(song); src != "https://stream" {
+		t.Errorf("download while playing plays from %q", src)
+	}
+	f.finish(t, "s", "", nil) // it was downloaded too
+
+	// Download first waits for the file, and plays it.
+	a, f = modeApp(t, settings.PlaybackOffline)
+	path := filepath.Join(t.TempDir(), "A - T.m4a")
+	os.WriteFile(path, []byte("audio"), 0644)
+	got := make(chan string)
+	go func() {
+		src, _ := a.PlaySource(song)
+		got <- src
+	}()
+	f.finish(t, "s", path, nil)
+	if src := <-got; src != "/local/s" {
+		t.Errorf("download first plays from %q", src)
+	}
+
+	// A download that fails says why, rather than streaming anyway.
+	a, f = modeApp(t, settings.PlaybackOffline)
+	errs := make(chan error)
+	go func() {
+		_, err := a.PlaySource(song)
+		errs <- err
+	}()
+	f.finish(t, "s", "", errors.New("ERROR: Video unavailable"))
+	if p, ok := (<-errs).(*Problem); !ok || p.Kind != KindUnavailable {
+		t.Errorf("failed download: %v", p)
+	}
+}

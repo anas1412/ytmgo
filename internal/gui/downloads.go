@@ -6,6 +6,7 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"time"
 
 	"ytmgo/internal/downloader"
 	"ytmgo/internal/library"
@@ -303,12 +304,48 @@ func (a *App) ChooseDownloadFolder() (string, error) {
 }
 
 // PlaySource is where the page's <audio> plays t from: the file, for a
-// track downloaded and still on disk, else a fresh stream. Streams
-// expire after some hours, so the page asks each time a track starts.
+// track downloaded and still on disk, else by the playback mode, the
+// TUI's setting:
 //
-// A file is served by Media under /local/, by track id. Only files
-// handed out here are served, so the page cannot read others off disk.
+//   - stream only: a fresh stream, nothing saved;
+//   - download while playing: the stream, with a download started too;
+//   - download first, then play: the file, once downloaded. The TUI
+//     streams at once in this mode, like the one before.
+//
+// Streams expire after some hours, so the page asks each time a track
+// starts. A file is served by Media under /local/, by track id. Only
+// files handed out here are served, so the page cannot read others off
+// disk.
 func (a *App) PlaySource(t queue.Track) (string, error) {
+	if path := a.fileOf(t); path != "" {
+		return a.serve(t.ID, path), nil
+	}
+	a.mu.Lock()
+	mode := a.settings.PlaybackMode
+	a.mu.Unlock()
+	switch mode {
+	case settings.PlaybackHybrid:
+		go a.Download(t)
+	case settings.PlaybackOffline:
+		path, err := a.downloadFirst(t)
+		if err != nil {
+			return "", err
+		}
+		if path != "" {
+			return a.serve(t.ID, path), nil
+		}
+		// On disk under a name the library does not know: stream it.
+	}
+	if t.URL == "" {
+		return "", problem(errNoSource)
+	}
+	src, err := a.streamURL(t.URL)
+	return src, problem(err)
+}
+
+// fileOf is t's file, when the queue or the library has one still on
+// disk.
+func (a *App) fileOf(t queue.Track) string {
 	a.mu.Lock()
 	path := ""
 	for _, have := range append(a.q.Tracks(), t) {
@@ -321,22 +358,55 @@ func (a *App) PlaySource(t queue.Track) (string, error) {
 		path = f.FilePath
 	}
 	a.mu.Unlock()
-	if path != "" {
-		if _, err := os.Stat(path); err == nil {
-			a.localMu.Lock()
-			if a.local == nil {
-				a.local = map[string]string{}
+	if path == "" {
+		return ""
+	}
+	if _, err := os.Stat(path); err != nil {
+		return ""
+	}
+	return path
+}
+
+func (a *App) serve(id, path string) string {
+	a.localMu.Lock()
+	defer a.localMu.Unlock()
+	if a.local == nil {
+		a.local = map[string]string{}
+	}
+	a.local[id] = path
+	return "/local/" + url.PathEscape(id)
+}
+
+// downloadFirst downloads t and waits for it, behind whatever else is
+// downloading, and returns its file. It is empty when t was on disk
+// already, under a name only the downloader recognises.
+//
+// ponytail: polls the job list; a per-job done channel in downloader
+// would save the wakeups.
+func (a *App) downloadFirst(t queue.Track) (string, error) {
+	if did, err := a.Download(t); err != nil || did == AlreadyThere {
+		return "", err
+	}
+	a.dlMu.Lock()
+	dl := a.dl
+	a.dlMu.Unlock()
+	for {
+		jobs := dl.Jobs()
+		for i := len(jobs) - 1; i >= 0; i-- {
+			j := jobs[i]
+			if j.TrackID != t.ID {
+				continue
 			}
-			a.local[t.ID] = path
-			a.localMu.Unlock()
-			return "/local/" + url.PathEscape(t.ID), nil
+			switch j.Status {
+			case downloader.StatusDone, downloader.StatusSkipped:
+				return j.FilePath, nil
+			case downloader.StatusFailed:
+				return "", problem(j.Err)
+			}
+			break
 		}
+		time.Sleep(a.pollEvery)
 	}
-	if t.URL == "" {
-		return "", problem(errNoSource)
-	}
-	src, err := a.streamURL(t.URL)
-	return src, problem(err)
 }
 
 var errNoSource = errors.New("this track has no link to play it from")

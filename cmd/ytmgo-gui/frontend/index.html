@@ -2091,6 +2091,7 @@
         Downloads,
         OpenDownloads,
         SetDownloadFormat,
+        SetPlaybackMode,
         ChooseDownloadFolder,
         Lyrics as fetchLyrics,
         History,
@@ -3137,6 +3138,7 @@
           updateSeek(0);
         }
         setLoading(true);
+        if (playbackMode === 2 && !track.downloaded) say("Downloading first…", { sticky: true, full: `Downloading “${track.title}” before it plays (Settings, Playback).` });
         let url;
         try {
           url = await PlaySource(track);
@@ -3999,6 +4001,29 @@
           });
           fmt.append(t);
         }
+        // Playback mode, the TUI's: 0 stream, 1 download while playing,
+        // 2 download first (internal/settings).
+        const modes = el("div", "seg");
+        for (const [key, label] of [
+          [0, "Stream"],
+          [1, "Download while playing"],
+          [2, "Download first"],
+        ]) {
+          const t = el("button", "tab", label);
+          t.type = "button";
+          t.setAttribute("aria-pressed", s.playbackMode === key);
+          t.addEventListener("click", async () => {
+            playbackMode = await SetPlaybackMode(key);
+            renderSettings();
+          });
+          modes.append(t);
+        }
+        const MODE_DESC = [
+          "Songs stream from YouTube. Nothing is saved.",
+          "Songs start at once, and are saved to your download folder as they play.",
+          "Songs are downloaded before they play, then play from the file. The first play of a song waits for its download.",
+        ];
+        box.append(setting("Playback", MODE_DESC[s.playbackMode] || MODE_DESC[0], modes));
         box.append(setting("Download format", "M4A keeps YouTube’s own audio, at its best quality. MP3 plays on every device.", fmt));
         const folders = el("div", "folders");
         for (const dir of s.libraryFolders) {
@@ -4465,6 +4490,8 @@
 
       function setJobs(list) {
         jobs = list || [];
+        const waiting = playbackMode === 2 && now && toggle.classList.contains("loading") && jobs.find((j) => j.id === now.track.id && j.status === "downloading");
+        if (waiting) say(`Downloading first… ${Math.round(waiting.progress)}%`, { sticky: true, full: `Downloading “${now.track.title}” before it plays (Settings, Playback).` });
         const done = jobs.filter((j) => j.status === "done").map((j) => j.id);
         const fresh = done.filter((id) => !dlDone.has(id));
         for (const id of fresh) dlDone.add(id);
@@ -4621,6 +4648,8 @@
       // Keeps the music going when the queue runs out, with one song
       // related to what was played lately (internal/gui AutoplayAdd).
       let autoplayOn = true;
+      let playbackMode = 0; // Settings' Playback, read at start
+      Settings().then((s) => (playbackMode = s.playbackMode));
       // Tried for the song playing now, so the 30s trigger asks once.
       let autoplayTried = false;
 
