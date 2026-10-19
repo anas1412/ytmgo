@@ -102,6 +102,10 @@ type App struct {
 	// track id, for Media to serve.
 	localMu sync.Mutex
 	local   map[string]string
+	// art is the covers read out of library files, by path; mediaBase
+	// is where ServeMedia serves both, "" until it does.
+	art       map[string][]byte
+	mediaBase string
 }
 
 // New returns the App to bind, reading the user's settings and saved

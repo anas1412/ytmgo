@@ -2,8 +2,12 @@ package gui
 
 import (
 	"errors"
+	"io"
+	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -255,5 +259,61 @@ func TestPlaybackModes(t *testing.T) {
 	f.finish(t, "s", "", errors.New("ERROR: Video unavailable"))
 	if p, ok := (<-errs).(*Problem); !ok || p.Kind != KindUnavailable {
 		t.Errorf("failed download: %v", p)
+	}
+}
+
+// Local files are served over loopback HTTP, behind a secret part of
+// the address: the song with ranges, and the cover inside a library
+// file. Nothing outside the library is served.
+func TestServeMedia(t *testing.T) {
+	if _, err := exec.LookPath("ffmpeg"); err != nil {
+		t.Skip("ffmpeg makes the test file")
+	}
+	dir := t.TempDir()
+	png, song := filepath.Join(dir, "c.png"), filepath.Join(dir, "A - T.m4a")
+	for _, args := range [][]string{
+		{"-f", "lavfi", "-i", "color=red:s=16x16", "-frames:v", "1", png},
+		{"-f", "lavfi", "-t", "0.3", "-i", "anullsrc", "-i", png, "-map", "0", "-map", "1", "-c:a", "aac", "-c:v", "mjpeg", "-disposition:v", "attached_pic", song},
+	} {
+		if out, err := exec.Command("ffmpeg", append([]string{"-v", "error", "-y"}, args...)...).CombinedOutput(); err != nil {
+			t.Fatalf("ffmpeg: %v %s", err, out)
+		}
+	}
+	f := queue.Track{ID: song, Title: "T", Artist: "A", FilePath: song, Downloaded: true}
+	a, _ := libApp(t, f)
+	a.Library()
+	if err := ServeMedia(a); err != nil {
+		t.Fatal(err)
+	}
+	get := func(u string, hdr ...string) (int, string, []byte) {
+		req, _ := http.NewRequest("GET", u, nil)
+		if len(hdr) == 2 {
+			req.Header.Set(hdr[0], hdr[1])
+		}
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer resp.Body.Close()
+		b, _ := io.ReadAll(resp.Body)
+		return resp.StatusCode, resp.Header.Get("Content-Type"), b
+	}
+
+	src, err := a.PlaySource(f)
+	if err != nil || !strings.HasPrefix(src, a.MediaBase()+"/local/") || !strings.HasPrefix(src, "http://127.0.0.1:") {
+		t.Fatalf("plays from %q, %v", src, err)
+	}
+	if code, _, b := get(src, "Range", "bytes=0-3"); code != 206 || len(b) != 4 {
+		t.Errorf("ranged read: %d, %d bytes", code, len(b))
+	}
+	if code, ctype, _ := get(a.MediaBase() + "/art?p=" + url.QueryEscape(song)); code != 200 || !strings.HasPrefix(ctype, "image/") {
+		t.Errorf("cover: %d %s", code, ctype)
+	}
+	if code, _, _ := get(a.MediaBase() + "/art?p=" + url.QueryEscape(png)); code != 404 {
+		t.Errorf("a file outside the library: %d", code)
+	}
+	without := strings.Replace(src, a.MediaBase(), "http://"+strings.Split(strings.TrimPrefix(a.MediaBase(), "http://"), "/")[0], 1)
+	if code, _, _ := get(without); code != 404 {
+		t.Errorf("without the secret: %d", code)
 	}
 }

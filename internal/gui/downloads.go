@@ -1,15 +1,22 @@
 package gui
 
 import (
+	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
+	"slices"
 	"strings"
 	"time"
 
+	"ytmgo/internal/deps"
 	"ytmgo/internal/downloader"
 	"ytmgo/internal/library"
+	"ytmgo/internal/proc"
 	"ytmgo/internal/queue"
 	"ytmgo/internal/settings"
 	"ytmgo/internal/ytmusic"
@@ -377,7 +384,7 @@ func (a *App) serve(id, path string) string {
 		a.local = map[string]string{}
 	}
 	a.local[id] = path
-	return "/local/" + url.PathEscape(id)
+	return a.mediaBase + "/local/" + url.PathEscape(id)
 }
 
 // downloadFirst downloads t and waits for it, behind whatever else is
@@ -415,18 +422,83 @@ func (a *App) downloadFirst(t queue.Track) (string, error) {
 var errNoSource = errors.New("this track has no link to play it from")
 
 // Media serves the files PlaySource hands out, with ranges, so the
-// player can seek in them. cmd/ytmgo-gui gives it to Wails' asset server,
-// which asks it for whatever is not one of the page's own files.
+// player can seek in them, and under /art the cover embedded in a
+// library file, which has no link of its own to show.
 func Media(a *App) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		id, ok := strings.CutPrefix(r.URL.Path, "/local/")
+	mux := http.NewServeMux()
+	mux.HandleFunc("/local/", func(w http.ResponseWriter, r *http.Request) {
 		a.localMu.Lock()
-		path := a.local[id]
+		path := a.local[strings.TrimPrefix(r.URL.Path, "/local/")]
 		a.localMu.Unlock()
-		if !ok || path == "" {
+		if path == "" {
 			http.NotFound(w, r)
 			return
 		}
 		http.ServeFile(w, r, path)
 	})
+	mux.HandleFunc("/art", func(w http.ResponseWriter, r *http.Request) {
+		img := a.embeddedArt(r.URL.Query().Get("p"))
+		if img == nil {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", http.DetectContentType(img))
+		w.Header().Set("Cache-Control", "max-age=86400")
+		w.Write(img)
+	})
+	return mux
+}
+
+// ServeMedia serves Media over HTTP on the loopback address, for the
+// page's <audio> and <img>. Not through Wails' asset server: WebKitGTK
+// loads pictures from its custom scheme but never plays media from it,
+// so downloaded songs sat waiting there on Linux while streams played.
+// Plain HTTP on 127.0.0.1 is what streams already use, on every system.
+// A random part in every address keeps other programs on the machine
+// from guessing at it.
+func ServeMedia(a *App) error {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		return err
+	}
+	secret := make([]byte, 16)
+	rand.Read(secret)
+	prefix := "/" + hex.EncodeToString(secret)
+	a.mediaBase = "http://" + ln.Addr().String() + prefix
+	go http.Serve(ln, http.StripPrefix(prefix, Media(a)))
+	return nil
+}
+
+// MediaBase is where the page finds the covers inside library files:
+// MediaBase() + "/art?p=" + the file's path.
+func (a *App) MediaBase() string { return a.mediaBase }
+
+// embeddedArt is the cover inside a library file, read with ffmpeg once
+// and kept; nil for a file outside the library, one without a cover,
+// or with no ffmpeg to read it.
+func (a *App) embeddedArt(path string) []byte {
+	a.mu.Lock()
+	known := slices.ContainsFunc(a.lib, func(t queue.Track) bool { return t.FilePath == path })
+	a.mu.Unlock()
+	if path == "" || !known {
+		return nil
+	}
+	a.localMu.Lock()
+	img, ok := a.art[path]
+	a.localMu.Unlock()
+	if ok {
+		return img
+	}
+	out, err := proc.CommandContext(context.Background(), deps.Path("ffmpeg"),
+		"-v", "quiet", "-i", path, "-an", "-c:v", "copy", "-frames:v", "1", "-f", "image2pipe", "-").Output()
+	if err != nil || len(out) == 0 {
+		out = nil
+	}
+	a.localMu.Lock()
+	if a.art == nil {
+		a.art = map[string][]byte{}
+	}
+	a.art[path] = out
+	a.localMu.Unlock()
+	return out
 }

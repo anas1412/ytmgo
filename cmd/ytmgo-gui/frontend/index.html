@@ -2465,6 +2465,7 @@
         SetDownloadFormat,
         SetPlaybackMode,
         ShareLink,
+        MediaBase,
         SetCopyMusicLinks,
         Presence,
         SetDiscord,
@@ -2533,6 +2534,13 @@
       // Old rows stored a play count where the album goes; the TUI hides
       // those, and so does this (tui/actions.go albumLabel).
       const albumOf = (t) => (t.album && !/ (plays|views)$/.test(t.album) ? t.album : "");
+
+      // A song's cover: its link, or for a file without one (the library
+      // reads files, not YouTube), the cover inside the file, which Go
+      // serves to the page (gui.ServeMedia).
+      let mediaBase = "";
+      MediaBase().then((b) => (mediaBase = b));
+      const artOf = (t) => t?.cover_url || (t?.file_path && mediaBase ? `${mediaBase}/art?p=${encodeURIComponent(t.file_path)}` : "");
 
       // A cover image that retries once and falls back to a music note.
       function cover(url, px) {
@@ -2682,7 +2690,7 @@
         let wrap;
         if (view === "album") wrap = el("div", "num", String(i + 1));
         else {
-          wrap = cover(r.cover_url, 120);
+          wrap = cover(artOf(r), 120);
           const play = el("div", "play");
           play.append(icon('<path d="M8 5v14l11-7z"/>'));
           wrap.append(play);
@@ -3083,7 +3091,7 @@
         const time = el("span", "q-time");
         if (favSet.has(t.id)) time.append(qFav());
         time.append(t.duration || duration(t.duration_sec));
-        row.append(num, cover(t.cover_url, 120), who, time);
+        row.append(num, cover(artOf(t), 120), who, time);
         // The playing song is not removable: the TUI lets it be removed
         // and then keeps playing it while the marker moves on.
         if (i !== qs.current) {
@@ -3250,7 +3258,7 @@
         drag.node.classList.add("dragged-from");
         const text = el("div", "g-text");
         text.append(el("div", "g-title", drag.track.title), el("div", "g-sub", drag.track.artist || ""));
-        ghost.replaceChildren(cover(drag.track.cover_url, 120), text);
+        ghost.replaceChildren(cover(artOf(drag.track), 120), text);
         ghost.classList.add("show");
         // A song dragged from the results needs somewhere to land.
         if (drag.kind === "result" && (!layout.rightOpen || layout.tab !== "queue")) openPanel("queue", true);
@@ -3379,13 +3387,14 @@
         const art = $("np-art");
         const wrap = art.parentElement;
         art.classList.remove("loaded");
-        wrap.classList.toggle("missing", !t.cover_url);
+        const art_ = artOf(t);
+        wrap.classList.toggle("missing", !art_);
         art.onload = () => art.classList.add("loaded");
         art.onerror = () => {
           wrap.classList.add("missing");
           art.removeAttribute("src");
         };
-        if (t.cover_url) art.src = sized(t.cover_url, 120);
+        if (art_) art.src = sized(art_, 120);
         else art.removeAttribute("src");
         const heart = $("np-heart");
         heart.hidden = false;
@@ -3406,7 +3415,7 @@
             title: t.title,
             artist: t.artist,
             album: albumOf(t),
-            artwork: t.cover_url ? [{ src: sized(t.cover_url, 512), sizes: "512x512", type: "image/jpeg" }] : [],
+            artwork: art_ ? [{ src: sized(art_, 512), sizes: "512x512" }] : [],
           });
         }
       }
@@ -4899,7 +4908,7 @@
         fav.classList.add("fav");
         grid.append(fav);
         for (const t of recent) {
-          const tile = tileOf(cover(t.cover_url, 120), t.title, `${t.title}, ${t.artist}`, () => playTrack(t), () => playTrack(t));
+          const tile = tileOf(cover(artOf(t), 120), t.title, `${t.title}, ${t.artist}`, () => playTrack(t), () => playTrack(t));
           draggable(tile, () => ({ kind: "result", index: -1, track: t }));
           grid.append(tile);
         }
@@ -4979,7 +4988,7 @@
       }
 
       function songCard(t) {
-        const c = cardShell("song", t.cover_url, t.title, t.artist, () => playTrack(t), () => playTrack(t));
+        const c = cardShell("song", artOf(t), t.title, t.artist, () => playTrack(t), () => playTrack(t));
         draggable(c, () => ({ kind: "result", index: -1, track: t }));
         return c;
       }

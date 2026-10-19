@@ -55,6 +55,11 @@ func main() {
 		args := os.Getenv("WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS")
 		os.Setenv("WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS", strings.TrimSpace(args+" --enable-features=HardwareMediaKeyHandling"))
 	}
+	// Downloaded and library songs, and their covers, over loopback HTTP
+	// (gui.ServeMedia says why not through the asset server).
+	if err := gui.ServeMedia(app); err != nil {
+		log.Fatal(err)
+	}
 	var ctx context.Context // the window's, from OnStartup
 	err = wails.Run(&options.App{
 		Title:     "ytmgo",
@@ -69,9 +74,8 @@ func main() {
 		// The page's own background, so the window does not flash white
 		// before the first paint.
 		BackgroundColour: &options.RGBA{R: 0x11, G: 0x11, B: 0x18, A: 255},
-		// Handler serves downloaded files for playback, under /local/.
-		AssetServer: &assetserver.Options{Assets: assets, Handler: gui.Media(app)},
-		Bind:        []interface{}{app},
+		AssetServer:      &assetserver.Options{Assets: assets},
+		Bind:             []interface{}{app},
 		// One ytmgo at a time, as one player: a second launch brings the
 		// open window forward instead of playing over it.
 		SingleInstanceLock: &options.SingleInstanceLock{

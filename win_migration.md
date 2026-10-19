@@ -415,8 +415,12 @@ Not done: updates (3), signing (4), winget and Scoop (6).
 - **Clickable links everywhere:** song names, artists and albums are clickable in every view.
 - **Follow and like:** follow artists, and like albums.
 - **Favourites tabs:** Songs, Artists and Albums.
-- **Playlists:** the logic and the UI.
+- **Playlists:** the logic and the UI. A pasted YouTube or Spotify playlist link, once its songs
+  show in Search, gets a **Save as playlist** button that saves them under
+  the playlist's own name.
 - **Right panel:** song and artist details after the Lyrics tab. Opened by clicking the cover in the player bar.
+- **Queue order, in both apps:** the queue reads upside down. Fix it in
+  the TUI and the GUI alike, with songs added going to the top.
 
 ## Open decisions
 
