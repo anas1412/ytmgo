@@ -3,6 +3,9 @@ package proc
 import (
 	"bytes"
 	"context"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"testing"
 	"time"
 )
@@ -26,5 +29,42 @@ func TestCancelKillsTree(t *testing.T) {
 	cmd.Wait()
 	if d := time.Since(start); d > 10*time.Second {
 		t.Fatalf("child still running %s after cancel", d)
+	}
+}
+
+// TestMain lets the test binary stand in for a tool and its child, so
+// TestWaitKillsOrphans needs no shell and no quoting: as "parent" it
+// starts a copy of itself as "child" and exits without waiting; the
+// child writes a marker after a few seconds, unless killed first.
+func TestMain(m *testing.M) {
+	switch os.Getenv("PROC_TEST_ROLE") {
+	case "parent":
+		child := exec.Command(os.Args[0])
+		child.Env = append(os.Environ(), "PROC_TEST_ROLE=child")
+		if err := child.Start(); err != nil {
+			os.Exit(2)
+		}
+		os.Exit(0)
+	case "child":
+		time.Sleep(3 * time.Second)
+		os.WriteFile(os.Getenv("PROC_TEST_MARKER"), []byte("alive"), 0644)
+		os.Exit(0)
+	}
+	os.Exit(m.Run())
+}
+
+// A child that outlives its parent is still in the job, and goes when
+// Wait closes it. Walking the process tree (taskkill /T) would not find
+// it any more: its parent is gone.
+func TestWaitKillsOrphans(t *testing.T) {
+	marker := filepath.Join(t.TempDir(), "alive")
+	cmd := CommandContext(context.Background(), os.Args[0])
+	cmd.Env = append(os.Environ(), "PROC_TEST_ROLE=parent", "PROC_TEST_MARKER="+marker)
+	if err := cmd.Run(); err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(5 * time.Second)
+	if _, err := os.Stat(marker); err == nil {
+		t.Fatal("the orphaned child was still running after Wait")
 	}
 }

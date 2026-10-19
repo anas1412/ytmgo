@@ -157,12 +157,16 @@ Only what the GUI needs from the shared packages. SQLite is
    which do not exist on Windows; this is the only thing stopping
    `GOOS=windows CGO_ENABLED=0 go build ./...` today. Move them into one
    helper with Unix and Windows files. On Unix it keeps today's process-group
-   kill. On Windows it starts children with `CREATE_NO_WINDOW` and kills the
-   tree with `taskkill /T /F`.
+   kill. On Windows it starts children with `CREATE_NO_WINDOW` and puts each
+   tool in its own Job Object set to kill on close. (The first version used
+   `taskkill /T`, which imitated Unix process groups. It missed a child
+   whose parent had already exited, and left the tools running if ytmgo
+   crashed. The Job Object covers cancel, leftover children, and crashes,
+   and the tests fail without it.)
    → verify: the Windows cross-build succeeds; a Unix test shows cancelling
-   kills a grandchild; a Windows test shows it kills a child (under Wine,
-   and it fails if `taskkill /T` is swapped for a plain kill); existing
-   tests pass. **Done.**
+   kills a grandchild; Windows tests show that cancel kills a child and that
+   `Wait` kills an orphan whose parent already exited (under Wine; both fail
+   with the job disabled); existing tests pass. **Done.**
 2. **Route the remaining tool calls through `internal/proc`:** `ffprobe` in
    `internal/library`, and `mpv` only if S2 falls back to it. Otherwise each
    one flashes a console window in the GUI. **Done for ffprobe.**
