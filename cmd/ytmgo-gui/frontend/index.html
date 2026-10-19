@@ -1031,6 +1031,122 @@
         transition: opacity var(--fast), transform var(--fast) var(--ease);
       }
 
+      .nav-bottom {
+        margin-top: auto;
+      }
+
+      /* ── Settings page ────────────────────────────────────────────── */
+      .settings {
+        max-width: 720px;
+        padding: 0 8px 24px;
+      }
+      .settings h2 {
+        margin: 6px 0 14px;
+        font-family: "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif;
+        font-size: 22px;
+      }
+      .setting {
+        display: flex;
+        align-items: center;
+        gap: 20px;
+        padding: 16px 0;
+        border-top: 1px solid var(--border);
+      }
+      .setting .what {
+        flex: 1;
+        min-width: 0;
+      }
+      .setting .name {
+        font-weight: 600;
+      }
+      .setting .desc {
+        margin-top: 2px;
+        color: var(--mid);
+        font-size: 13px;
+      }
+      .setting .note {
+        margin-top: 6px;
+        color: var(--mid);
+        font-size: 13px;
+      }
+      .setting .note.error {
+        color: var(--pink);
+      }
+      .setting .note a {
+        color: var(--violet-text);
+        word-break: break-all;
+        user-select: text;
+      }
+      .setting .control {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex: none;
+      }
+      .soft {
+        padding: 7px 16px;
+        border-radius: 999px;
+        border: 1px solid var(--border);
+        color: var(--text);
+        font-weight: 600;
+        white-space: nowrap;
+        transition: border-color var(--fast), background var(--fast);
+      }
+      .soft:hover {
+        border-color: var(--mid);
+        background: var(--hover);
+      }
+      .soft.primary {
+        border-color: transparent;
+        background: var(--text);
+        color: var(--bg);
+      }
+      .soft.primary:hover {
+        background: #fff;
+      }
+      .soft:disabled {
+        opacity: 0.6;
+        cursor: default;
+      }
+      /* A switch: mint when on, as every "on" in the app is. */
+      .switch {
+        position: relative;
+        width: 40px;
+        height: 22px;
+        border-radius: 11px;
+        background: var(--border);
+        transition: background var(--fast);
+      }
+      .switch::after {
+        content: "";
+        position: absolute;
+        top: 3px;
+        left: 3px;
+        width: 16px;
+        height: 16px;
+        border-radius: 50%;
+        background: var(--text);
+        transition: transform var(--fast) var(--ease);
+      }
+      .switch[aria-checked="true"] {
+        background: var(--mint);
+      }
+      .switch[aria-checked="true"]::after {
+        transform: translateX(18px);
+        background: var(--bg);
+      }
+      .stepper {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+      }
+      .stepper output {
+        min-width: 34px;
+        text-align: center;
+        font-weight: 600;
+        font-variant-numeric: tabular-nums;
+      }
+
       /* ✓: the song is on disk, as in the TUI. */
       .dl {
         color: var(--mint);
@@ -1357,6 +1473,10 @@
           <svg viewBox="0 0 24 24"><path d="M12 15V3" /><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><path d="m7 10 5 5 5-5" /></svg>
           <span>Downloads</span>
         </button>
+        <button class="nav-item nav-bottom" data-page="settings" title="Settings (6)">
+          <svg viewBox="0 0 24 24"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" /><circle cx="12" cy="12" r="3" /></svg>
+          <span>Settings</span>
+        </button>
       </nav>
 
       <div class="splitter split-left" role="separator" aria-orientation="vertical" aria-label="Resize sidebar" tabindex="0" title="Drag to resize, double-click to reset"></div>
@@ -1484,6 +1604,15 @@
         AutoplayAdd,
         Favourites,
         ToggleFavourite,
+        Settings,
+        SetSearchLimit,
+        LastFM,
+        ConnectLastFM,
+        CheckLastFM,
+        CancelLastFM,
+        DisconnectLastFM,
+        ScrobbleAfter,
+        Scrobble,
       } from "./wailsjs/go/gui/App.js";
 
       const $ = (id) => document.getElementById(id);
@@ -1848,7 +1977,7 @@
       // TUI's Enter does.
       query.addEventListener("input", () => {
         field.classList.toggle("has-text", query.value.length > 0);
-        if (view === "favs") navTo("search");
+        if (view === "favs" || view === "settings") navTo("search");
         clearTimeout(debounce);
         debounce = setTimeout(() => run(query.value), 320);
       });
@@ -2591,6 +2720,15 @@
         if (now && !now.recorded) {
           now.recorded = true;
           Played(now.track).catch(() => {});
+          // Last.fm: once the song has played past the point the rule
+          // gives (half, at most four minutes), it is scrobbled, with the
+          // time it started. -1 means not connected, or too short.
+          const playing = now;
+          playing.startedAt = Math.floor(Date.now() / 1000);
+          playing.scrobbled = false;
+          playing.scrobbleAt = -1;
+          const length = isFinite(audio.duration) ? audio.duration : playing.track.duration_sec || 0;
+          ScrobbleAfter(length).then((at) => (playing.scrobbleAt = at));
         }
         if (sayingSticky) unsay();
         setLoading(false);
@@ -2609,6 +2747,10 @@
       });
       audio.addEventListener("timeupdate", () => {
         if (!seeking && isFinite(audio.duration) && audio.duration > 0) updateSeek(audio.currentTime / audio.duration);
+        if (now && now.scrobbleAt >= 0 && !now.scrobbled && audio.currentTime >= now.scrobbleAt) {
+          now.scrobbled = true;
+          Scrobble(now.track, now.startedAt).catch(() => {});
+        }
         // With 30s left of the last song, autoplay adds what comes next,
         // so it is ready when this one ends — the TUI's trigger.
         if (
@@ -2764,6 +2906,9 @@
           case "2":
             navTo("favs");
             return true;
+          case "6":
+            navTo("settings");
+            return true;
           case "f": {
             // The focused queue row, else the selected song, else the one
             // playing: the TUI's f works on whichever list has focus.
@@ -2915,7 +3060,15 @@
           showFavs();
           return;
         }
-        if (view !== "favs") return;
+        if (page === "settings") {
+          if (view === "settings") return;
+          view = "settings";
+          results = [];
+          selected = -1;
+          renderSettings();
+          return;
+        }
+        if (view === "home" || view === "search") return;
         selected = 0;
         if (lastQuery && query.value.trim() === lastQuery) {
           view = "search";
@@ -2925,6 +3078,150 @@
         else home();
       }
       for (const b of document.querySelectorAll(".nav-item[data-page]")) b.addEventListener("click", () => navTo(b.dataset.page));
+
+      // ── Settings ─────────────────────────────────────────────────────
+      // The settings the GUI has so far, saved where the TUI keeps them.
+      // The rest of the TUI's join as their features do.
+      let lfm = { available: false, user: "", waiting: false, authURL: "" };
+      let lfmNote = null; // { text, error } shown under the Last.fm row
+      let lfmPoll = null;
+      let lfmDeadline = 0;
+
+      function setting(name, desc, control, note) {
+        const row = el("div", "setting");
+        const what = el("div", "what");
+        what.append(el("div", "name", name), el("div", "desc", desc));
+        if (note) what.append(note);
+        const c = el("div", "control");
+        c.append(...[].concat(control));
+        row.append(what, c);
+        return row;
+      }
+      function button(text, run, primary = false) {
+        const b = el("button", "soft" + (primary ? " primary" : ""), text);
+        b.type = "button";
+        b.addEventListener("click", run);
+        return b;
+      }
+
+      async function renderSettings() {
+        if (view !== "settings") return;
+        const [s, l] = await Promise.all([Settings(), LastFM()]);
+        lfm = l;
+        if (view !== "settings") return;
+        const box = el("div", "settings");
+        box.append(el("h2", "", "Settings"));
+
+        // Search results, 5–100 in fives, as the TUI's Search Limit.
+        const out = el("output", "", String(s.searchLimit));
+        const step = async (d) => {
+          out.textContent = await SetSearchLimit(+out.textContent + d);
+        };
+        const stepper = el("div", "stepper");
+        const less = button("−", () => step(-5));
+        less.setAttribute("aria-label", "Fewer results");
+        const more = button("+", () => step(5));
+        more.setAttribute("aria-label", "More results");
+        stepper.append(less, out, more);
+        box.append(setting("Search results", "How many songs a search, or the home list, shows.", stepper));
+
+        // Autoplay, the same switch as the ∞ in the player.
+        const sw = el("button", "switch");
+        sw.type = "button";
+        sw.setAttribute("role", "switch");
+        sw.setAttribute("aria-checked", s.autoplay);
+        sw.setAttribute("aria-label", "Autoplay");
+        sw.addEventListener("click", () => $("autoplay").click());
+        box.append(setting("Autoplay", "When the queue runs out, keep playing songs like the ones you played.", sw));
+
+        // Last.fm, by state, as the TUI's row.
+        let control;
+        let note = null;
+        const noteFor = (n) => {
+          if (!n) return null;
+          const p = el("div", "note" + (n.error ? " error" : ""), n.text);
+          return p;
+        };
+        if (!lfm.available) control = el("span", "desc", "Not available in this build");
+        else if (lfm.user) {
+          note = noteFor(lfmNote) || noteFor({ text: `Connected as ${lfm.user}. Songs you hear past halfway go to your profile.` });
+          control = button("Disconnect", async () => {
+            lfm = await DisconnectLastFM();
+            lfmNote = { text: "Disconnected. Nothing more is sent to Last.fm." };
+            renderSettings();
+          });
+        } else if (lfm.waiting) {
+          note = el("div", "note");
+          note.append("Approve ytmgo on the Last.fm page that opened, and it connects on its own. Didn’t open? ");
+          const a = el("a", "", lfm.authURL);
+          a.href = lfm.authURL;
+          a.addEventListener("click", (e) => {
+            e.preventDefault();
+            openLink(lfm.authURL);
+          });
+          note.append(a);
+          control = [button("Open again", () => openLink(lfm.authURL)), button("Cancel", cancelLastFM)];
+        } else {
+          note = noteFor(lfmNote);
+          control = button("Connect", connectLastFM, true);
+        }
+        box.append(setting("Last.fm scrobbling", "Send the songs you hear to your Last.fm profile. You approve ytmgo on last.fm; no password is typed here.", control, note));
+        pane.replaceChildren(box);
+      }
+
+      // Links open in the user's browser, through Wails.
+      function openLink(url) {
+        if (window.runtime?.BrowserOpenURL) window.runtime.BrowserOpenURL(url);
+        else window.open(url, "_blank");
+      }
+
+      async function connectLastFM() {
+        lfmNote = null;
+        try {
+          lfm = await ConnectLastFM();
+        } catch (err) {
+          const p = problemOf(err);
+          lfmNote = { text: p.kind === "offline" ? "You’re offline. Connect once you’re back online." : "Last.fm didn’t answer. Try again in a moment.", error: true };
+          renderSettings();
+          return;
+        }
+        if (lfm.waiting) {
+          openLink(lfm.authURL);
+          // Asks every 3s, for ten minutes, as the TUI does.
+          lfmDeadline = Date.now() + 10 * 60 * 1000;
+          clearInterval(lfmPoll);
+          lfmPoll = setInterval(checkLastFM, 3000);
+        }
+        renderSettings();
+      }
+      async function checkLastFM() {
+        if (Date.now() > lfmDeadline) {
+          clearInterval(lfmPoll);
+          lfm = await CancelLastFM();
+          lfmNote = { text: "No approval after ten minutes. Connect again for a fresh link.", error: true };
+          renderSettings();
+          return;
+        }
+        try {
+          lfm = await CheckLastFM();
+        } catch (err) {
+          clearInterval(lfmPoll);
+          lfmNote = { text: "Last.fm turned the link down. Connect again for a fresh one.", error: true };
+          renderSettings();
+          return;
+        }
+        if (lfm.user) {
+          clearInterval(lfmPoll);
+          lfmNote = { text: `Connected as ${lfm.user}. Scrobbling is on.` };
+          renderSettings();
+        }
+      }
+      async function cancelLastFM() {
+        clearInterval(lfmPoll);
+        lfm = await CancelLastFM();
+        lfmNote = null;
+        renderSettings();
+      }
 
       // ── Autoplay ─────────────────────────────────────────────────────
       // Keeps the music going when the queue runs out, with one song
@@ -2947,6 +3244,7 @@
       $("autoplay").addEventListener("click", async () => {
         autoplayOn = await ToggleAutoplay();
         autoplayButton();
+        if (view === "settings") renderSettings();
         say(autoplayOn ? "Autoplay on" : "Autoplay off", {
           full: autoplayOn ? "Autoplay on: similar songs follow when the queue runs out." : "Autoplay off: playback stops at the end of the queue.",
         });

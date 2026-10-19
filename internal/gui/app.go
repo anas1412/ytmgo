@@ -42,6 +42,9 @@ type App struct {
 	recommend  func(limit int, seeds []string) ([]search.Result, error)
 	recordPlay func(queue.Track) error
 	saveFavs   func([]queue.Track) error
+
+	lfm      lastfmAPI
+	lfmToken string // while the user is approving ytmgo on last.fm
 }
 
 // New returns the App to bind, reading the user's settings and saved
@@ -81,6 +84,7 @@ func New(d *db.DB) *App {
 		recommend:  search.FetchRecommendations,
 		recordPlay: d.RecordPlay,
 		saveFavs:   d.SaveFavorites,
+		lfm:        realLastFM,
 	}
 }
 
@@ -168,7 +172,32 @@ func (a *App) Recommendations() ([]queue.Track, error) {
 // song rather than after a while. Playing the same song again straight
 // after only updates its time (db.RecordPlay).
 func (a *App) Played(t queue.Track) error {
+	a.nowPlaying(t)
 	return problem(a.recordPlay(t))
+}
+
+// SettingsView is the settings the Settings page edits so far.
+type SettingsView struct {
+	SearchLimit int  `json:"searchLimit"`
+	Autoplay    bool `json:"autoplay"`
+}
+
+// Settings reads them.
+func (a *App) Settings() SettingsView {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return SettingsView{SearchLimit: a.settings.SearchLimit, Autoplay: a.settings.AutoplayEnabled}
+}
+
+// SetSearchLimit sets how many results a search or the home list shows,
+// within the TUI's 5–100, in its steps of 5, and saves it.
+func (a *App) SetSearchLimit(n int) int {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	n = min(max((n+2)/5*5, 5), 100)
+	a.settings.SearchLimit = n
+	a.saveSettings(a.settings)
+	return n
 }
 
 // StreamURL turns a track's watch URL into a direct audio stream the
