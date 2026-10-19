@@ -766,7 +766,6 @@
         color: var(--bg);
       }
       .main .i-pause,
-      .main .spinner,
       .main.playing .i-play,
       .main.loading .i-play,
       .main.loading .i-pause {
@@ -775,14 +774,23 @@
       .main.playing .i-pause {
         display: block;
       }
-      .main.loading .spinner {
-        display: block;
-        width: 16px;
-        height: 16px;
+      /* The spinner is always there and always turning, only invisible:
+         loading fades it in. Showing it only while loading made the
+         browser start its animation at that moment, and on a busy frame
+         it sat still before it began to turn. */
+      .main .spinner {
+        position: absolute;
+        inset: 10px;
         border: 2px solid currentColor;
         border-right-color: transparent;
         border-radius: 50%;
+        opacity: 0;
         animation: spin 0.7s linear infinite;
+        transition: opacity var(--fast);
+        pointer-events: none;
+      }
+      .main.loading .spinner {
+        opacity: 1;
       }
       @keyframes spin {
         to {
@@ -1817,6 +1825,21 @@
       function renderQueue(follow = false) {
         const body = $("panel-body");
         if (layout.tab !== "queue") return;
+        // The same songs in the same order, only another one playing (a
+        // song starting, next, previous): swap the two rows that changed
+        // rather than rebuild the list and every cover in it, which is
+        // work the page would be doing just as a song starts.
+        const sig = qs.tracks.map((t) => t.id).join("\n") + "|" + clearArmed;
+        const list0 = body.querySelector(".q-list");
+        if (list0 && list0.dataset.sig === sig && landed < 0) {
+          for (const row of list0.querySelectorAll(".q-row")) {
+            const i = +row.dataset.index;
+            if (row.classList.contains("current") !== (i === qs.current)) row.replaceWith(queueRow(qs.tracks[i], i));
+          }
+          const cur = list0.children[qs.current];
+          if (follow && cur) cur.scrollIntoView({ block: "nearest" });
+          return;
+        }
         if (!qs.tracks.length) {
           notice(body, "Your queue is empty", "Songs you play or add show up here, with what comes next. Drag a song here to queue it.");
           return;
@@ -1833,6 +1856,7 @@
         head.append(clear);
 
         const list = el("ol", "q-list");
+        list.dataset.sig = sig;
         list.setAttribute("aria-label", "Queue");
         qs.tracks.forEach((t, i) => list.append(queueRow(t, i)));
         body.replaceChildren(head, list);
@@ -1912,6 +1936,7 @@
       }
 
       async function jump(i) {
+        begin(qs.tracks[i]);
         setQueue(await Jump(i));
         start();
       }
@@ -1941,6 +1966,7 @@
       // is. button, if given, turns into a tick for a moment.
       async function enqueue(t, button) {
         if (!t) return;
+        if (playState === "stopped") begin(t);
         let s = await Add(t);
         if (playState === "stopped") {
           s = await Jump(s.tracks.length - 1);
@@ -1965,6 +1991,7 @@
       // Double-click: now, straight after the song playing.
       async function playNow(i) {
         select(i);
+        begin(results[i]);
         setQueue(await PlayNow(results[i]));
         start();
       }
@@ -1973,6 +2000,7 @@
       // nothing is.
       async function queueAll() {
         if (!results.length) return;
+        if (playState === "stopped") begin(results[0]);
         let s = await AddAll(results);
         const first = s.tracks.length - results.length;
         if (playState === "stopped") {
@@ -2136,7 +2164,20 @@
         rep.title = { off: "Repeat: off (r)", one: "Repeat this song (r)", all: "Repeat the queue (r)" }[qs.repeat];
       }
 
+      // What the player bar shows, so a song shown early (on the click,
+      // before the queue has answered) is not shown again when it starts.
+      let shownId = null;
+
+      // Called the moment the user asks for a song: the player shows it,
+      // and the spinner, before anything has been asked of Go. t may be
+      // unknown (previous), then only the spinner.
+      function begin(t) {
+        if (t && t.id !== shownId) showTrack(t);
+        setLoading(true);
+      }
+
       function showTrack(t) {
+        shownId = t.id;
         const art = $("np-art");
         const wrap = art.parentElement;
         art.classList.remove("loaded");
@@ -2169,6 +2210,7 @@
 
       // Back to "Nothing playing yet", as after clearing the queue.
       function idle() {
+        shownId = null;
         $("np-title").textContent = "";
         $("np-sub").textContent = "Nothing playing yet";
         $("np-text").removeAttribute("title");
@@ -2211,7 +2253,7 @@
         audio.pause();
         playState = "playing";
         if (fresh) {
-          showTrack(track);
+          if (shownId !== track.id) showTrack(track);
           markPlaying();
           updateSeek(0);
         }
@@ -2265,10 +2307,14 @@
       // repeat-one; previous restarts a song more than 3s in.
       async function next() {
         if (!qs.tracks.length) return;
+        if (qs.next) begin(qs.next);
         const s = await Skip();
         setQueue(s);
         if (s.moved) start();
-        else say("End of the queue", { full: "That was the last song in the queue." });
+        else {
+          setLoading(false);
+          say("End of the queue", { full: "That was the last song in the queue." });
+        }
       }
       async function prev() {
         if (now && audio.currentTime > 3) {
@@ -2276,6 +2322,7 @@
           return;
         }
         if (!qs.tracks.length) return;
+        begin(qs.current > 0 ? qs.tracks[qs.current - 1] : null);
         setQueue(await Back());
         start();
       }
@@ -2300,8 +2347,11 @@
 
       async function togglePlay() {
         if (!now) {
-          if (qs.current >= 0) start();
-          else if (qs.tracks.length) {
+          if (qs.current >= 0) {
+            begin(current());
+            start();
+          } else if (qs.tracks.length) {
+            begin(qs.tracks[0]);
             setQueue(await Jump(0));
             start();
           } else if (results.length) playNow(Math.max(selected, 0));
