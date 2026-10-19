@@ -81,8 +81,9 @@
          The columns between panels are the splitters. Their widths live
          in --side-w and --right-w, set by dragging. */
       /* The window has no system frame (main.go: Frameless): this strip
-         is its title bar. Its empty part moves the window, and Windows'
-         three buttons sit flush in the corner, as in any Windows app. */
+         is its title bar, with the app's name on the left. Its empty part
+         moves the window, and Windows' three buttons sit flush in the
+         corner, as in any Windows app. */
       body {
         display: flex;
         flex-direction: column;
@@ -90,9 +91,16 @@
       .titlebar {
         flex: none;
         display: flex;
-        justify-content: flex-end;
-        height: 32px;
+        align-items: center;
+        height: 40px;
         --wails-draggable: drag;
+      }
+      .tb-logo {
+        height: 26px;
+        width: auto;
+        margin: 0 auto 0 18px;
+        /* Part of the bar: dragging the logo drags the window. */
+        pointer-events: none;
       }
       .titlebar button {
         --wails-draggable: none;
@@ -215,20 +223,6 @@
       .app.right-closed .split-right,
       .app.right-closed .side-panel {
         display: none;
-      }
-      .brand {
-        display: block;
-        padding: 2px 10px 22px;
-      }
-      .brand img {
-        display: block;
-        height: 34px;
-        width: auto;
-        pointer-events: none;
-      }
-      .brand .mark {
-        display: none;
-        height: 32px;
       }
       .nav-item {
         display: flex;
@@ -1843,17 +1837,8 @@
       }
 
       /* A sidebar dragged narrow folds to icons, as Spotify's does. */
-      .app.side-collapsed .nav-item span,
-      .app.side-collapsed .brand .wordmark {
+      .app.side-collapsed .nav-item span {
         display: none;
-      }
-      .app.side-collapsed .brand .mark {
-        display: block;
-        margin: 0 auto;
-      }
-      .app.side-collapsed .brand {
-        padding-left: 0;
-        padding-right: 0;
       }
       .app.side-collapsed .nav-item {
         justify-content: center;
@@ -1895,6 +1880,7 @@
   </head>
   <body>
     <header class="titlebar" id="titlebar">
+      <img class="tb-logo" src="ytmgo-logo.png" alt="ytmgo" />
       <button type="button" id="win-min" aria-label="Minimise" title="Minimise">
         <svg viewBox="0 0 12 12"><path d="M1 6h10" /></svg>
       </button>
@@ -1908,10 +1894,6 @@
     </header>
     <div class="app" id="app">
       <nav aria-label="Main">
-        <div class="brand">
-          <img class="wordmark" src="ytmgo-logo.png" alt="ytmgo" />
-          <img class="mark" src="ytmgo-icon.png" alt="ytmgo" />
-        </div>
         <!-- The TUI's tabs, in its order; 1 to 5 go to them. -->
         <button class="nav-item" data-page="search" aria-current="page" title="Search (1)">
           <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" /></svg>
