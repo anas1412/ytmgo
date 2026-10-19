@@ -407,7 +407,11 @@ Not done: updates (3), signing (4), winget and Scoop (6).
 
 ## Backlog: GUI features requested after 1.5.0
 
-- **Home:** a Home button and a home screen, with recommendations on it.
+- ~~**Home:** a Home button and a home screen, with recommendations on it.~~ Done:
+  Home is first in the sidebar (`1`), YouTube Music's signed-out home
+  (`ytmusic.HomeFeed`, its moods and shelves), quick tiles and your
+  recommendations; Search shows moods to browse when empty. Playlists of
+  your own have a placeholder in the sidebar.
 - **Clickable links everywhere:** song names, artists and albums are clickable in every view.
 - **Follow and like:** follow artists, and like albums.
 - **Favourites tabs:** Songs, Artists and Albums.

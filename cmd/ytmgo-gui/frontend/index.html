@@ -1417,6 +1417,282 @@
         background: #ff3d97;
       }
 
+      /* ── Home ─────────────────────────────────────────────────────── */
+      .home {
+        padding: 4px 8px 28px;
+      }
+      .chips {
+        display: flex;
+        gap: 8px;
+        overflow-x: auto;
+        scrollbar-width: none;
+      }
+      .chips::-webkit-scrollbar {
+        display: none;
+      }
+      .chip {
+        flex: none;
+        padding: 6px 14px;
+        border-radius: 999px;
+        background: var(--raised);
+        font-size: 13px;
+        font-weight: 600;
+        transition: background var(--fast), color var(--fast);
+      }
+      .chip:hover {
+        background: var(--border);
+      }
+      .chip[aria-pressed="true"] {
+        background: var(--text);
+        color: var(--bg);
+      }
+      /* Quick tiles: Favourites and what was played lately, as Spotify's. */
+      .tiles {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+        gap: 8px;
+        margin-top: 18px;
+      }
+      .tile {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        height: 56px;
+        padding-right: 12px;
+        border-radius: var(--radius-s);
+        background: rgb(255 255 255 / 0.06);
+        overflow: hidden;
+        text-align: left;
+        font-size: 13px;
+        font-weight: 700;
+        transition: background var(--fast);
+      }
+      .tile:hover {
+        background: rgb(255 255 255 / 0.12);
+      }
+      .tile .art-wrap {
+        flex: none;
+        width: 56px;
+        height: 56px;
+        border-radius: 0;
+      }
+      /* Play, at the tile's end, under the pointer, as on Spotify. */
+      .tile .t-play {
+        flex: none;
+        display: grid;
+        place-items: center;
+        width: 34px;
+        height: 34px;
+        margin-left: auto;
+        border-radius: 50%;
+        background: var(--mint);
+        color: var(--bg);
+        box-shadow: 0 6px 14px rgb(0 0 0 / 0.4);
+        opacity: 0;
+        transition: opacity var(--fast), transform var(--fast) var(--ease);
+      }
+      .tile .t-play svg {
+        width: 16px;
+        height: 16px;
+        fill: currentColor;
+        stroke: none;
+      }
+      .tile:hover .t-play,
+      .tile:focus-within .t-play {
+        opacity: 1;
+      }
+      .tile .t-play:hover {
+        transform: scale(1.06);
+      }
+      .tile .t-name {
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+      }
+      .tile.fav .art-wrap {
+        display: grid;
+        place-items: center;
+        background: linear-gradient(135deg, var(--violet), var(--mint));
+        color: #fff;
+      }
+      .tile.fav svg {
+        width: 22px;
+        height: 22px;
+        fill: currentColor;
+      }
+      .shelf {
+        margin-top: 30px;
+      }
+      .shelf-head {
+        display: flex;
+        align-items: flex-end;
+        gap: 8px;
+        margin-bottom: 12px;
+      }
+      .shelf-head .names {
+        flex: 1;
+        min-width: 0;
+      }
+      .shelf-head .strap {
+        color: var(--dim);
+        font-size: 12px;
+      }
+      .shelf-head h2 {
+        margin: 0;
+        font-size: 22px;
+        font-weight: 700;
+        letter-spacing: -0.01em;
+      }
+      .shelf-head .icon-btn {
+        border: 1px solid var(--border);
+        border-radius: 50%;
+      }
+      .shelf-head .icon-btn:disabled {
+        opacity: 0.35;
+        cursor: default;
+      }
+      .row {
+        display: grid;
+        grid-auto-flow: column;
+        grid-auto-columns: 176px;
+        gap: 6px;
+        overflow-x: auto;
+        scroll-behavior: smooth;
+        scrollbar-width: none;
+      }
+      .row::-webkit-scrollbar {
+        display: none;
+      }
+      .card {
+        padding: 10px;
+        border-radius: var(--radius-m);
+        cursor: pointer;
+        transition: background var(--fast);
+      }
+      .card:hover,
+      .card:focus-visible {
+        background: var(--hover);
+      }
+      .card .art-wrap {
+        width: 100%;
+        height: auto;
+        aspect-ratio: 1;
+        border-radius: var(--radius-s);
+      }
+      .card.artist .art-wrap {
+        border-radius: 50%;
+      }
+      .card .c-title,
+      .card .c-sub {
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+      }
+      .card .c-title {
+        margin-top: 8px;
+        font-weight: 600;
+      }
+      .card .c-sub {
+        margin-top: 2px;
+        color: var(--mid);
+        font-size: 13px;
+      }
+      /* Play, on the cover, appears under the pointer, as on Spotify. */
+      .card .c-play {
+        position: absolute;
+        right: 8px;
+        bottom: 8px;
+        display: grid;
+        place-items: center;
+        width: 44px;
+        height: 44px;
+        border-radius: 50%;
+        background: var(--mint);
+        color: var(--bg);
+        box-shadow: 0 8px 18px rgb(0 0 0 / 0.45);
+        opacity: 0;
+        transform: translateY(8px);
+        transition: opacity var(--fast), transform var(--fast) var(--ease);
+      }
+      .card .c-play svg {
+        width: 20px;
+        height: 20px;
+        fill: currentColor;
+        stroke: none;
+      }
+      .card:hover .c-play,
+      .card:focus-visible .c-play {
+        opacity: 1;
+        transform: none;
+      }
+      .card .c-play:hover {
+        transform: scale(1.06);
+      }
+      .card .c-play.spin {
+        opacity: 1;
+        transform: none;
+      }
+      .card .c-play.spin svg {
+        animation: spin 0.7s linear infinite;
+      }
+      .card.skeleton .art-wrap {
+        animation: none;
+      }
+      /* Search with nothing typed: moods to browse, Spotify's "Browse all". */
+      .browse h2 {
+        margin: 6px 0 14px;
+        font-size: 22px;
+      }
+      .browse .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+        gap: 14px;
+      }
+      .mood-tile {
+        height: 96px;
+        padding: 14px 16px;
+        border-radius: var(--radius-m);
+        color: #fff;
+        font-size: 19px;
+        font-weight: 800;
+        text-align: left;
+        text-shadow: 0 1px 2px rgb(0 0 0 / 0.25);
+        transition: transform var(--fast) var(--ease), filter var(--fast);
+      }
+      .mood-tile:hover {
+        transform: translateY(-2px);
+        filter: brightness(1.08);
+      }
+      /* The sidebar's place for playlists, for when they come. */
+      .nav-playlists {
+        margin: 18px 4px 0;
+        padding-top: 14px;
+        border-top: 1px solid var(--border);
+      }
+      .nav-playlists .np-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        color: var(--mid);
+        font-weight: 600;
+        padding-left: 6px;
+      }
+      .nav-playlists .icon-btn:disabled {
+        opacity: 0.4;
+        cursor: default;
+      }
+      .nav-playlists p {
+        margin: 8px 6px 0;
+        color: var(--dim);
+        font-size: 12px;
+        line-height: 1.45;
+      }
+      .app.side-collapsed .nav-playlists {
+        display: none;
+      }
+
       /* ── Downloads page ───────────────────────────────────────────── */
       .downloads .top {
         display: flex;
@@ -1948,8 +2224,12 @@
     </header>
     <div class="app" id="app">
       <nav aria-label="Main">
-        <!-- The TUI's tabs, in its order; 1 to 5 go to them. -->
-        <button class="nav-item" data-page="search" aria-current="page" title="Search (1)">
+        <!-- Home is the TUI's Stream page (1); 2 to 6 go to the TUI's other tabs. -->
+        <button class="nav-item" data-page="home" aria-current="page" title="Home (1)">
+          <svg viewBox="0 0 24 24"><path d="M3 10.5 12 3l9 7.5" /><path d="M5 9.5V20a1 1 0 0 0 1 1h4v-6h4v6h4a1 1 0 0 0 1-1V9.5" /></svg>
+          <span>Home</span>
+        </button>
+        <button class="nav-item" data-page="search" title="Search (/)">
           <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" /></svg>
           <span>Search</span>
         </button>
@@ -1972,6 +2252,16 @@
           <span>Downloads</span>
           <b class="count" id="dl-count" hidden></b>
         </button>
+        <!-- Playlists of your own are on their way: the place they will live. -->
+        <div class="nav-playlists">
+          <div class="np-head">
+            <span>Playlists</span>
+            <button type="button" class="icon-btn" disabled aria-label="Create a playlist" title="Playlists of your own are on their way">
+              <svg viewBox="0 0 24 24"><path d="M12 5v14" /><path d="M5 12h14" /></svg>
+            </button>
+          </div>
+          <p>Playlists of your own are coming. For now, keep songs with ♥ in Favourites.</p>
+        </div>
         <button class="nav-item nav-bottom" data-page="settings" title="Settings (6)">
           <svg viewBox="0 0 24 24"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" /><circle cx="12" cy="12" r="3" /></svg>
           <span>Settings</span>
@@ -2167,6 +2457,8 @@
         SetDiscord,
         ChooseDownloadFolder,
         Lyrics as fetchLyrics,
+        Home as fetchHome,
+        Playlist as fetchPlaylist,
         History,
         ClearHistory,
         Library,
@@ -2315,12 +2607,10 @@
         target.replaceChildren(box);
       }
 
-      // ── Home: recommendations ────────────────────────────────────────
-      // With nothing searched, the main view lists songs related to what
-      // was played lately, as the TUI's Stream page does. They load at
-      // start and on Refresh or R; clearing a search brings the same list
-      // back without asking again.
-      let view = "home"; // "search", or "favs" for the Favourites page
+      // ── Recommendations ──────────────────────────────────────────────
+      // Songs related to what was played lately, as the TUI's Stream page
+      // has them: a shelf on Home. They load at start and on R.
+      let view = ""; // "home", "search", "favs" for the Favourites page…
       let searchResults = []; // the last search's, kept while on another page
       let lastFound = null; // the last search's full answer: a pasted playlist's title and misses
       let recs = null; // null until loaded
@@ -2334,52 +2624,19 @@
         other: ["Recommendations didn’t load", "Something went wrong talking to YouTube Music. Try again."],
       };
 
-      function home() {
-        view = "home";
-        lastQuery = "";
-        if (recs === null) {
-          refreshRecs();
-          return;
-        }
-        results = recs;
-        selected = results.length ? Math.max(0, Math.min(selected, results.length - 1)) : -1;
-        if (!results.length) {
-          notice(
-            pane,
-            "Play something and recommendations will follow",
-            "They come from what you’ve played lately. Search for a song to start.",
-            { label: "Refresh", run: refreshRecs },
-            null,
-            false,
-          );
-          return;
-        }
-        render();
-      }
-
       async function refreshRecs() {
         const mine = ++recsSeq;
         recsFailed = false;
-        const btn = pane.querySelector(".list-head .icon-btn");
-        if (btn) btn.classList.add("spin");
-        else if (view === "home") skeleton();
         try {
           const got = await Recommendations();
           if (mine !== recsSeq) return;
           recs = got || [];
-          if (view === "home") {
-            selected = recs.length ? 0 : -1;
-            home();
-          }
         } catch (err) {
           if (mine !== recsSeq) return;
           recsFailed = true;
-          if (view !== "home") return;
-          const p = problemOf(err);
-          const [title, body] = REC_COPY[p.kind] || REC_COPY.other;
-          results = [];
-          notice(pane, title, body, { label: "Try again", run: refreshRecs }, p.detail);
+          recs = recs || [];
         }
+        if (view === "home") renderHome();
       }
 
       function skeleton() {
@@ -2500,22 +2757,13 @@
         );
         const list = el("div", "list");
         list.setAttribute("role", "listbox");
-        list.setAttribute("aria-label", { home: "Recommended songs", favs: "Favourites", search: "Songs", album: "Songs", artist: "Top songs", library: "Library", history: "History" }[view]);
+        list.setAttribute("aria-label", { favs: "Favourites", search: "Songs", album: "Songs", artist: "Top songs", library: "Library", history: "History", playlist: "Songs" }[view]);
         list.append(el("div", "cursor"), ...results.map(track));
         // An album or artist page draws its own header above the list.
-        if (view === "album" || view === "artist" || view === "library" || view === "history") return { head, list };
+        if (["album", "artist", "library", "history", "playlist"].includes(view)) return { head, list };
         const top = el("div", "list-head");
         if (view === "favs") {
           top.append(el("h2", "", "Favourites"), el("span", "sub", `${results.length} ${results.length === 1 ? "song" : "songs"}`));
-        } else if (view === "home") {
-          top.append(el("h2", "", "Recommended"), el("span", "sub", "from what you’ve played lately"));
-          const again = el("button", "icon-btn");
-          again.type = "button";
-          again.title = "Refresh (R)";
-          again.setAttribute("aria-label", "Refresh recommendations");
-          again.append(icon('<path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" /><path d="M3 3v5h5" /><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16" /><path d="M16 16h5v5" />'));
-          again.addEventListener("click", refreshRecs);
-          top.append(again);
         } else if (lastFound?.playlist) {
           const n = results.length;
           const missed = lastFound.missed ? `, ${lastFound.missed} not found on YouTube Music` : "";
@@ -2550,8 +2798,8 @@
         if (!q) {
           seq++;
           field.classList.remove("busy");
-          if (view !== "home") selected = 0;
-          home();
+          lastQuery = "";
+          searchLanding();
           return;
         }
         if (q === lastQuery && results.length) return;
@@ -2590,7 +2838,7 @@
       // TUI's Enter does.
       query.addEventListener("input", () => {
         field.classList.toggle("has-text", query.value.length > 0);
-        if (!["home", "search"].includes(view)) navTo("search");
+        if (view !== "search") navTo("search");
         clearTimeout(debounce);
         debounce = setTimeout(() => run(query.value), 320);
       });
@@ -3527,7 +3775,7 @@
             $("autoplay").click();
             return true;
           case "1":
-            navTo("search");
+            navTo("home");
             return true;
           case "2":
             navTo("favs");
@@ -3594,9 +3842,8 @@
             return true;
           }
           case "R":
-            query.value = "";
-            field.classList.remove("has-text");
-            view = "home";
+            homeCache = {};
+            navTo("home", true);
             refreshRecs();
             return true;
         }
@@ -3683,7 +3930,9 @@
         else if (view === "downloads") renderDownloads();
         else if (view === "library") renderLibrary();
         else if (view === "history") renderHistory();
-        else if (view === "home") home();
+        else if (view === "home") renderHome();
+        else if (view === "playlist") renderPlaylist();
+        else if (view === "search" && !lastQuery) searchLanding();
         else render();
         pane.scrollTop = s.scroll;
         return true;
@@ -3699,7 +3948,9 @@
         return b;
       }
 
-      async function openPage(kind, load, name) {
+      // extra is what the page's header needs that the fetch does not
+      // return: a home card's cover and line, for a playlist.
+      async function openPage(kind, load, name, extra = {}) {
         stack.push(snapshot());
         const mine = ++pageSeq;
         view = kind;
@@ -3714,13 +3965,16 @@
         head.append(el("div", "art-wrap"), info);
         pane.prepend(backButton(), head);
         try {
-          const p = await load();
+          const p = { ...(await load()), ...extra };
           if (mine !== pageSeq) return;
           page = p;
           selected = 0;
           if (kind === "album") {
             results = p.tracks;
             renderAlbum();
+          } else if (kind === "playlist") {
+            results = p.tracks;
+            renderPlaylist();
           } else {
             artistTab = p.songs.length ? "songs" : "releases";
             renderArtist();
@@ -3731,13 +3985,13 @@
           const offline = pr.kind === "offline";
           notice(
             pane,
-            kind === "album" ? "This album didn’t open" : "This artist didn’t open",
+            { album: "This album didn’t open", artist: "This artist didn’t open", playlist: "This playlist didn’t open" }[kind],
             offline ? "You’re offline. Try again once you’re back online." : "YouTube Music didn’t give the page back. Try again.",
             {
               label: "Try again",
               run: () => {
                 stack.pop();
-                openPage(kind, load, name);
+                openPage(kind, load, name, extra);
               },
             },
             pr.detail,
@@ -3810,6 +4064,31 @@
           pane.replaceChildren(backButton(), head);
           const empty = el("div");
           notice(empty, "Nothing to play here", "This album has no songs YouTube Music can play.", null, null, false);
+          pane.append(empty);
+          return;
+        }
+        const { head: cols, list } = render();
+        pane.replaceChildren(backButton(), head, cols, list);
+        pane.scrollTop = 0;
+        moveCursor();
+      }
+
+      // A YouTube Music playlist opened from Home: the album page's
+      // shape, with each song's own cover, as the playlist mixes albums.
+      function renderPlaylist() {
+        const p = page;
+        const n = p.tracks.length;
+        const meta = [];
+        if (p.subtitle) meta.push(el("span", "strong", p.subtitle));
+        meta.push(el("span", "", `${n} ${n === 1 ? "song" : "songs"}${p.seconds ? `, ${long(p.seconds)}` : ""}`));
+        const play = pill("Play", () => playList(p.tracks), true);
+        const add = pill("Add to queue", () => queueAll());
+        add.title = "Add every song to the queue (e)";
+        const head = header("playlist", p.coverURL, p.title || p.name || "Playlist", meta, n ? [play, add] : []);
+        if (!n) {
+          pane.replaceChildren(backButton(), head);
+          const empty = el("div");
+          notice(empty, "Nothing to play here", "This playlist has no songs YouTube Music can play.", null, null, false);
           pane.append(empty);
           return;
         }
@@ -3959,12 +4238,24 @@
       // ── Pages ────────────────────────────────────────────────────────
       // The sidebar's pages, in the TUI's order. Search keeps its query
       // and results while another page is open.
-      function navTo(page) {
+      // again redraws a page already open: R on Home.
+      function navTo(page, again = false) {
         stack = [];
         pageSeq++;
         for (const b of document.querySelectorAll(".nav-item[data-page]"))
           if (b.dataset.page === page) b.setAttribute("aria-current", "page");
           else b.removeAttribute("aria-current");
+        if (page === "home") {
+          if (view === "home" && !again) {
+            pane.scrollTo({ top: 0, behavior: "smooth" });
+            return;
+          }
+          view = "home";
+          results = [];
+          selected = -1;
+          renderHome();
+          return;
+        }
         if (page === "favs") {
           if (view === "favs") return;
           view = "favs";
@@ -4004,14 +4295,17 @@
           renderSettings();
           return;
         }
-        if (view === "home" || view === "search") return;
+        // Search: the last results, or the moods to browse, and the box
+        // ready to type in.
+        query.focus();
+        if (view === "search") return;
         selected = 0;
         if (lastQuery && query.value.trim() === lastQuery) {
           view = "search";
           results = searchResults;
           render();
         } else if (query.value.trim()) run(query.value);
-        else home();
+        else searchLanding();
       }
       for (const b of document.querySelectorAll(".nav-item[data-page]")) b.addEventListener("click", () => navTo(b.dataset.page));
 
@@ -4478,6 +4772,268 @@
         if (view === "history") renderHistory();
       }
 
+      // ── Home ─────────────────────────────────────────────────────────
+      // YouTube Music's home, as its web app shows it signed out: mood
+      // chips, then shelves of albums and playlists. Above them, as on
+      // Spotify, quick tiles (Favourites and what was played lately) and
+      // the recommendations from your own history.
+      let homeCache = {}; // mood params → the home it filters to
+      let homeMood = "";
+      let homeSeq = 0;
+      let homeFailed = null; // the problem, while the feed will not load
+      let recent = []; // the newest plays, for the quick tiles
+      const PLAY = '<path d="M8 5v14l11-7z" />';
+      const CHEVRON_L = '<path d="m15 18-6-6 6-6" />';
+      const CHEVRON_R = '<path d="m9 18 6-6-6-6" />';
+
+      async function loadHome(mood) {
+        const mine = ++homeSeq;
+        homeFailed = null;
+        try {
+          homeCache[mood] = await fetchHome(mood);
+        } catch (err) {
+          if (mine === homeSeq) homeFailed = problemOf(err);
+        }
+        if (mine === homeSeq && view === "home") renderHome();
+      }
+
+      function renderHome() {
+        view = "home";
+        lastQuery = "";
+        results = [];
+        selected = -1;
+        if (recs === null && !recsSeq) refreshRecs();
+        if (!homeCache[homeMood] && !homeFailed) loadHome(homeMood);
+        History()
+          .then((h) => {
+            const seen = new Set();
+            recent = (h || []).filter((t) => !seen.has(t.id) && seen.add(t.id)).slice(0, 7);
+            const tiles = pane.querySelector(".tiles");
+            if (tiles && view === "home") tiles.replaceWith(quickTiles());
+          })
+          .catch(() => {});
+        const keep = pane.querySelector(".home") ? pane.scrollTop : 0;
+        const box = el("div", "home");
+        const feed = homeCache[homeMood] || homeCache[""];
+        box.append(moodChips(feed?.moods || []), quickTiles());
+        if (recs?.length) {
+          box.append(shelfOf("Recommended for you", "From what you’ve played lately", recs.map(songCard)));
+        }
+        const h = homeCache[homeMood];
+        if (h) for (const s of h.shelves) box.append(shelfOf(s.title, s.strapline, s.cards.map(card)));
+        else if (homeFailed) {
+          const n = el("div", "shelf");
+          const offline = homeFailed.kind === "offline";
+          notice(
+            n,
+            offline ? "You’re offline" : "YouTube Music’s home didn’t load",
+            offline ? "The home loads once you’re back online." : "Try again in a moment.",
+            { label: "Try again", run: () => loadHome(homeMood) },
+            homeFailed.detail,
+          );
+          box.append(n);
+        } else box.append(skeletonShelf(), skeletonShelf());
+        pane.replaceChildren(box);
+        pane.scrollTop = keep;
+      }
+
+      function moodChips(moods) {
+        const row = el("div", "chips");
+        for (const m of [{ title: "All", params: "" }, ...moods]) {
+          const c = el("button", "chip", m.title);
+          c.type = "button";
+          c.setAttribute("aria-pressed", homeMood === m.params);
+          c.addEventListener("click", () => {
+            homeMood = m.params;
+            homeFailed = null;
+            renderHome();
+          });
+          row.append(c);
+        }
+        return row;
+      }
+
+      // A tile opens; its round button, shown under the pointer, plays.
+      function tileOf(art, name, title, open, play) {
+        const tile = el("div", "tile");
+        tile.tabIndex = 0;
+        tile.setAttribute("role", "button");
+        tile.title = title;
+        const b = el("button", "t-play");
+        b.type = "button";
+        b.setAttribute("aria-label", `Play ${name}`);
+        b.append(icon(PLAY));
+        b.addEventListener("click", (e) => {
+          e.stopPropagation();
+          play();
+        });
+        tile.append(art, el("span", "t-name", name), b);
+        tile.addEventListener("click", open);
+        tile.addEventListener("keydown", (e) => {
+          if (e.key === "Enter" && e.target === tile) {
+            e.stopPropagation();
+            open();
+          }
+        });
+        return tile;
+      }
+
+      function quickTiles() {
+        const grid = el("div", "tiles");
+        const heart = el("div", "art-wrap");
+        heart.append(icon(HEART));
+        const fav = tileOf(heart, "Favourites", `${favs.length} ${favs.length === 1 ? "song" : "songs"}`, () => navTo("favs"), () => playList(favs));
+        fav.classList.add("fav");
+        grid.append(fav);
+        for (const t of recent) {
+          const tile = tileOf(cover(t.cover_url, 120), t.title, `${t.title}, ${t.artist}`, () => playTrack(t), () => playTrack(t));
+          draggable(tile, () => ({ kind: "result", index: -1, track: t }));
+          grid.append(tile);
+        }
+        return grid;
+      }
+
+      function shelfOf(title, strap, cards) {
+        const shelf = el("section", "shelf");
+        const head = el("div", "shelf-head");
+        const names = el("div", "names");
+        if (strap) names.append(el("div", "strap", strap));
+        names.append(el("h2", "", title));
+        const row = el("div", "row");
+        row.append(...cards);
+        const arrow = (path, dir, label) => {
+          const b = el("button", "icon-btn");
+          b.type = "button";
+          b.setAttribute("aria-label", label);
+          b.append(icon(path));
+          b.addEventListener("click", () => row.scrollBy({ left: dir * row.clientWidth * 0.9 }));
+          return b;
+        };
+        const prev = arrow(CHEVRON_L, -1, `Back through ${title}`);
+        const next = arrow(CHEVRON_R, 1, `More of ${title}`);
+        const ends = () => {
+          prev.disabled = row.scrollLeft <= 2;
+          next.disabled = row.scrollLeft + row.clientWidth >= row.scrollWidth - 2;
+        };
+        row.addEventListener("scroll", ends, { passive: true });
+        requestAnimationFrame(ends);
+        head.append(names, prev, next);
+        shelf.append(head, row);
+        return shelf;
+      }
+
+      function skeletonShelf() {
+        const cards = [];
+        for (let i = 0; i < 6; i++) {
+          const c = el("div", "card skeleton");
+          const a = el("div", "bar");
+          a.style.width = `${50 + ((i * 29) % 40)}%`;
+          c.append(el("div", "art-wrap"), a);
+          cards.push(c);
+        }
+        const s = shelfOf("", "", cards);
+        s.querySelector(".shelf-head").append(el("div", "bar"));
+        return s;
+      }
+
+      // A card: the whole of it opens, its round button plays.
+      function cardShell(kind, coverURL, title, sub, open, play) {
+        const c = el("div", "card " + kind);
+        c.tabIndex = 0;
+        c.setAttribute("role", "button");
+        c.title = sub ? `${title}, ${sub}` : title;
+        const art = cover(coverURL, 320);
+        if (play) {
+          const b = el("button", "c-play");
+          b.type = "button";
+          b.setAttribute("aria-label", `Play ${title}`);
+          b.append(icon(PLAY));
+          b.addEventListener("click", (e) => {
+            e.stopPropagation();
+            play(b);
+          });
+          art.append(b);
+        }
+        c.append(art, el("div", "c-title", title), el("div", "c-sub", sub || ""));
+        c.addEventListener("click", open);
+        c.addEventListener("keydown", (e) => {
+          if (e.key === "Enter" && e.target === c) {
+            e.stopPropagation();
+            open();
+          }
+        });
+        return c;
+      }
+
+      function songCard(t) {
+        const c = cardShell("song", t.cover_url, t.title, t.artist, () => playTrack(t), () => playTrack(t));
+        draggable(c, () => ({ kind: "result", index: -1, track: t }));
+        return c;
+      }
+
+      function card(k) {
+        if (k.kind === "song") return songCard(k.track);
+        if (k.kind === "artist")
+          return cardShell("artist", k.coverURL, k.title, k.subtitle, () => openPage("artist", () => fetchArtist(k.id), k.title));
+        const load = k.kind === "album" ? () => fetchAlbum(k.id) : () => fetchPlaylist(k.id);
+        const extra = k.kind === "playlist" ? { coverURL: k.coverURL, subtitle: k.subtitle } : {};
+        return cardShell(
+          k.kind,
+          k.coverURL,
+          k.title,
+          k.subtitle,
+          () => openPage(k.kind, load, k.title, extra),
+          async (b) => {
+            b.classList.add("spin");
+            try {
+              const p = await load();
+              playList(p.tracks || []);
+            } catch (err) {
+              const pr = problemOf(err);
+              say(`Couldn’t open “${k.title}”`, { error: true, full: pr.detail });
+            }
+            b.classList.remove("spin");
+          },
+        );
+      }
+
+      async function playTrack(t) {
+        begin(t);
+        setQueue(await PlayNow(t));
+        start();
+      }
+
+      // Search with nothing typed: the moods, to browse, as Spotify's
+      // search page has its genres. A mood opens Home filtered to it.
+      const MOOD_HUES = [262, 168, 330, 24, 205, 290, 140, 4, 222, 48];
+      function searchLanding() {
+        view = "search";
+        results = [];
+        selected = -1;
+        const moods = (homeCache[""] || Object.values(homeCache)[0])?.moods || [];
+        const box = el("div", "browse");
+        if (!moods.length) {
+          notice(pane, "Search YouTube Music", "Type a song, an artist or an album. A YouTube or Spotify playlist link opens the playlist.", null, null, false);
+          return;
+        }
+        box.append(el("h2", "", "Browse by mood"));
+        const grid = el("div", "grid");
+        moods.forEach((m, i) => {
+          const t = el("button", "mood-tile", m.title);
+          t.type = "button";
+          const h = MOOD_HUES[i % MOOD_HUES.length];
+          t.style.background = `linear-gradient(135deg, hsl(${h} 62% 46%), hsl(${(h + 40) % 360} 58% 32%))`;
+          t.addEventListener("click", () => {
+            homeMood = m.params;
+            homeFailed = null;
+            navTo("home", true);
+          });
+          grid.append(t);
+        });
+        box.append(grid);
+        pane.replaceChildren(box);
+      }
+
       // ── Library ──────────────────────────────────────────────────────
       // The download folder and the user's own folders, scanned by Go.
       // The page's own box filters it by title or artist, as the TUI's
@@ -4849,7 +5405,10 @@
         $("offline").hidden = navigator.onLine;
         if (!navigator.onLine) return;
         if (failedQuery && query.value.trim() === failedQuery) run(failedQuery);
-        if (recsFailed && view === "home") refreshRecs();
+        if (view === "home" && (recsFailed || homeFailed)) {
+          if (recsFailed) refreshRecs();
+          if (homeFailed) loadHome(homeMood);
+        }
         if (resumeAt != null && now) {
           const at = resumeAt;
           resumeAt = null;
@@ -4862,7 +5421,7 @@
       new ResizeObserver(apply).observe(app);
       apply();
       connection();
-      home();
+      navTo("home");
       Queue().then(setQueue);
       Favourites().then(setFavs);
     </script>

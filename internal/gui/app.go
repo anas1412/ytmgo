@@ -60,6 +60,8 @@ type App struct {
 	album    func(browseID string) (ytmusic.Album, error)
 	artist   func(browseID string) (ytmusic.ArtistPage, error)
 	playlist func(search.PlaylistRef) (title string, results []search.Result, missed int, err error)
+	// home is ytmusic.HomeFeed.
+	home func(params string) (ytmusic.Home, error)
 
 	discord  *discord
 	lfm      lastfmAPI
@@ -154,6 +156,7 @@ func New(d *db.DB) *App {
 		album:      ytmusic.AlbumTracks,
 		artist:     ytmusic.Artist,
 		playlist:   search.PlaylistTracks,
+		home:       ytmusic.HomeFeed,
 		scanLibrary: func(downloads string, extra []string) ([]queue.Track, error) {
 			cache, _ := d.LoadLibraryCache() // without it, every file is read again
 			tracks, updates, err := library.Scan(downloads, extra, cache)

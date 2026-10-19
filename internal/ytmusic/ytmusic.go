@@ -188,7 +188,12 @@ func postTo(base, endpoint string, body map[string]interface{}) (interface{}, er
 	if err != nil {
 		return nil, fmt.Errorf("ytmusic %s: marshal: %w", endpoint, err)
 	}
-	req, err := http.NewRequest("POST", base+"/"+endpoint+"?prettyPrint=false", bytes.NewReader(payload))
+	// A continuation brings its own query string; prettyPrint joins it.
+	sep := "?"
+	if strings.Contains(endpoint, "?") {
+		sep = "&"
+	}
+	req, err := http.NewRequest("POST", base+"/"+endpoint+sep+"prettyPrint=false", bytes.NewReader(payload))
 	if err != nil {
 		return nil, fmt.Errorf("ytmusic %s: request: %w", endpoint, err)
 	}
