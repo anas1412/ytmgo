@@ -383,7 +383,8 @@
       .head-row,
       .track {
         display: grid;
-        grid-template-columns: 44px minmax(0, 1.6fr) minmax(0, 1fr) 56px;
+        /* art, title and artist, album, length, add */
+        grid-template-columns: 44px minmax(0, 1.6fr) minmax(0, 1fr) 56px 32px;
         align-items: center;
         gap: 14px;
         padding: 0 12px;
@@ -888,6 +889,264 @@
         display: none;
       }
 
+      /* Shuffle and repeat: mint when on, as the TUI's mode labels are.
+         Repeat-one carries a small 1. */
+      .buttons .mode {
+        position: relative;
+        color: var(--dim);
+      }
+      .buttons .mode[aria-pressed="true"] {
+        color: var(--mint);
+      }
+      .mode .badge {
+        display: none;
+        position: absolute;
+        top: -5px;
+        right: -7px;
+        min-width: 13px;
+        height: 13px;
+        border-radius: 7px;
+        background: var(--mint);
+        color: var(--bg);
+        font-size: 9px;
+        font-weight: 800;
+        line-height: 13px;
+        text-align: center;
+      }
+      .mode.one .badge {
+        display: block;
+      }
+
+      /* Add to queue, on each result: it shows on hover or selection, and
+         turns into a tick for a moment once the song is in. */
+      .track .add {
+        display: grid;
+        place-items: center;
+        width: 28px;
+        height: 28px;
+        border-radius: 50%;
+        color: var(--mid);
+        opacity: 0;
+        transition: opacity var(--fast), background var(--fast), color var(--fast);
+      }
+      .track:hover .add,
+      .track.selected .add,
+      .track .add:focus-visible,
+      .track .add.done {
+        opacity: 1;
+      }
+      .track .add:hover {
+        color: var(--text);
+        background: var(--hover);
+      }
+      .track.selected .add {
+        color: #ede9fe;
+      }
+      .track.selected .add:hover {
+        background: rgb(255 255 255 / 14%);
+      }
+      .track .add.done {
+        color: var(--mint);
+      }
+      .track.selected .add.done {
+        color: #b9f8e5;
+      }
+      /* ✓: the song is on disk, as in the TUI. */
+      .dl {
+        color: var(--mint);
+        margin-right: 5px;
+      }
+
+      /* ── Queue panel ──────────────────────────────────────────────── */
+      .q-summary {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        padding: 2px 16px 8px;
+        color: var(--dim);
+        font-size: 13px;
+        font-variant-numeric: tabular-nums;
+      }
+      .q-clear {
+        padding: 4px 10px;
+        border-radius: 999px;
+        color: var(--mid);
+        font-size: 12px;
+        font-weight: 600;
+        white-space: nowrap;
+        transition: color var(--fast), background var(--fast);
+      }
+      .q-clear:hover {
+        color: var(--text);
+        background: var(--hover);
+      }
+      .q-clear.confirm {
+        color: var(--pink);
+      }
+      .q-list {
+        position: relative;
+        padding: 0 8px 12px;
+      }
+      .q-row {
+        display: grid;
+        grid-template-columns: 22px 40px minmax(0, 1fr) auto 26px;
+        align-items: center;
+        gap: 10px;
+        height: 52px;
+        padding: 0 6px;
+        border-radius: var(--radius-s);
+        outline-offset: -2px;
+        transition: background var(--fast), opacity var(--fast);
+      }
+      .q-row:hover {
+        background: var(--hover);
+      }
+      .q-num {
+        color: var(--dim);
+        font-size: 13px;
+        text-align: right;
+        font-variant-numeric: tabular-nums;
+      }
+      .q-row .art-wrap {
+        width: 40px;
+        height: 40px;
+      }
+      .q-who {
+        min-width: 0;
+      }
+      .q-title,
+      .q-artist {
+        overflow: hidden;
+        white-space: nowrap;
+        text-overflow: ellipsis;
+      }
+      .q-title {
+        font-weight: 600;
+      }
+      .q-artist {
+        color: var(--mid);
+        font-size: 13px;
+      }
+      .q-time {
+        color: var(--dim);
+        font-size: 12px;
+        font-variant-numeric: tabular-nums;
+      }
+      .q-row.current .q-title,
+      .q-row.current .q-num {
+        color: var(--mint);
+      }
+      .q-remove {
+        display: grid;
+        place-items: center;
+        width: 26px;
+        height: 26px;
+        border-radius: 50%;
+        color: var(--dim);
+        opacity: 0;
+        transition: opacity var(--fast), color var(--fast), background var(--fast);
+      }
+      .q-remove svg {
+        width: 16px;
+        height: 16px;
+      }
+      .q-row:hover .q-remove,
+      .q-row:focus-visible .q-remove,
+      .q-remove:focus-visible {
+        opacity: 1;
+      }
+      .q-remove:hover {
+        color: var(--text);
+        background: var(--raised);
+      }
+      @container side (max-width: 300px) {
+        .q-time {
+          display: none;
+        }
+      }
+      /* A row that just landed from a drag or an add. */
+      .q-row.landed {
+        animation: landed 900ms var(--ease);
+      }
+      @keyframes landed {
+        from {
+          background: rgb(124 58 237 / 32%);
+        }
+      }
+
+      /* ── Drag and drop ────────────────────────────────────────────── */
+      body.drag-song,
+      body.drag-song * {
+        cursor: grabbing !important;
+      }
+      .q-row.dragged-from,
+      .track.dragged-from {
+        opacity: 0.35;
+      }
+      .drop-line {
+        position: absolute;
+        left: 8px;
+        right: 8px;
+        height: 2px;
+        margin-top: -1px;
+        border-radius: 1px;
+        background: var(--violet-text);
+        pointer-events: none;
+        transition: top var(--fast) var(--ease);
+      }
+      .drop-line::before {
+        content: "";
+        position: absolute;
+        left: -4px;
+        top: -3px;
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        border: 2px solid var(--violet-text);
+        background: var(--surface);
+        box-sizing: border-box;
+      }
+      .panel-body.drop-target {
+        box-shadow: inset 0 0 0 2px rgb(167 139 250 / 35%);
+      }
+      #ghost {
+        position: fixed;
+        left: 0;
+        top: 0;
+        z-index: 50;
+        display: none;
+        align-items: center;
+        gap: 10px;
+        max-width: 260px;
+        padding: 6px 14px 6px 6px;
+        border-radius: var(--radius-m);
+        background: var(--raised);
+        box-shadow: 0 16px 34px -14px rgb(0 0 0 / 80%);
+        pointer-events: none;
+      }
+      #ghost.show {
+        display: flex;
+      }
+      #ghost .art-wrap {
+        width: 36px;
+        height: 36px;
+        flex: none;
+      }
+      #ghost .g-text {
+        min-width: 0;
+      }
+      #ghost .g-title {
+        overflow: hidden;
+        white-space: nowrap;
+        text-overflow: ellipsis;
+        font-weight: 600;
+      }
+      #ghost .g-sub {
+        color: var(--mid);
+        font-size: 12px;
+      }
+
       /* The row that is playing, in mint, as in the TUI's queue. */
       .track.playing .title {
         color: var(--mint);
@@ -940,7 +1199,7 @@
       @container view (max-width: 560px) {
         .head-row,
         .track {
-          grid-template-columns: 44px minmax(0, 1fr) 56px;
+          grid-template-columns: 44px minmax(0, 1fr) 56px 32px;
         }
         .album,
         .head-row .col-album {
@@ -1045,6 +1304,9 @@
         </div>
         <div class="controls">
           <div class="buttons">
+            <button class="mode" id="shuffle" aria-pressed="false" aria-label="Shuffle" title="Shuffle (s)">
+              <svg viewBox="0 0 24 24"><path d="m18 14 4 4-4 4" /><path d="m18 2 4 4-4 4" /><path d="M2 18h1.97a4 4 0 0 0 3.3-1.7l5.45-8.6a4 4 0 0 1 3.3-1.7H22" /><path d="M2 6h1.97a4 4 0 0 1 3.27 1.7" /><path d="M22 18h-5.92a4 4 0 0 1-3.3-1.7l-.36-.55" /></svg>
+            </button>
             <button class="skip" id="prev" disabled aria-label="Previous" title="Previous (p)">
               <svg viewBox="0 0 24 24"><path d="M6 5h2v14H6zM20 5v14L9 12z" /></svg>
             </button>
@@ -1055,6 +1317,10 @@
             </button>
             <button class="skip" id="next" disabled aria-label="Next" title="Next (n)">
               <svg viewBox="0 0 24 24"><path d="M16 5h2v14h-2zM4 5v14l11-7z" /></svg>
+            </button>
+            <button class="mode" id="repeat" aria-pressed="false" aria-label="Repeat: off" title="Repeat (r)">
+              <svg viewBox="0 0 24 24"><path d="m17 2 4 4-4 4" /><path d="M3 11v-1a4 4 0 0 1 4-4h14" /><path d="m7 22-4-4 4-4" /><path d="M21 13v1a4 4 0 0 1-4 4H3" /></svg>
+              <span class="badge" aria-hidden="true">1</span>
             </button>
           </div>
           <div class="progress">
@@ -1081,9 +1347,30 @@
       </footer>
     </div>
     <audio id="audio" preload="auto"></audio>
+    <div id="ghost" aria-hidden="true"></div>
 
     <script type="module">
-      import { Search, StreamURL, Version } from "./wailsjs/go/gui/App.js";
+      import {
+        Search,
+        StreamURL,
+        Version,
+        Queue,
+        PlayNow,
+        Add,
+        AddAll,
+        Jump,
+        Remove,
+        Clear,
+        Ended,
+        Skip,
+        Back,
+        Move,
+        Insert,
+        ToggleShuffle,
+        CycleRepeat,
+        Volume,
+        SetVolume,
+      } from "./wailsjs/go/gui/App.js";
 
       const $ = (id) => document.getElementById(id);
       const query = $("query");
@@ -1109,12 +1396,60 @@
         if (text != null) n.textContent = text;
         return n;
       };
+      const icon = (path) => {
+        const s = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+        s.setAttribute("viewBox", "0 0 24 24");
+        s.innerHTML = path;
+        return s;
+      };
+      const ICON_PLUS = '<path d="M12 5v14" /><path d="M5 12h14" />';
+      const ICON_CHECK = '<path d="M20 6 9 17l-5-5" />';
+      const ICON_X = '<path d="M18 6 6 18" /><path d="m6 6 12 12" />';
+
       // Covers come sized for the TUI's full-resolution art (544px).
       // Google's image server sizes on request, so a 44px thumbnail asks
       // for 120px (twice that, for sharp HiDPI) — 13KB instead of 170KB.
       const sized = (url, px) => url.replace(/=w\d+-h\d+/, `=w${px}-h${px}`);
       const duration = (secs) =>
         secs ? `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, "0")}` : "";
+      // A queue's total, as the TUI's header has it: H:MM:SS past an hour.
+      function total(secs) {
+        const h = Math.floor(secs / 3600);
+        const m = Math.floor((secs % 3600) / 60);
+        const s = String(secs % 60).padStart(2, "0");
+        return h ? `${h}:${String(m).padStart(2, "0")}:${s}` : `${m}:${s}`;
+      }
+      // Old rows stored a play count where the album goes; the TUI hides
+      // those, and so does this (tui/actions.go albumLabel).
+      const albumOf = (t) => (t.album && !/ (plays|views)$/.test(t.album) ? t.album : "");
+
+      // A cover image that retries once and falls back to a music note.
+      function cover(url, px) {
+        const wrap = el("div", "art-wrap");
+        if (!url) {
+          wrap.classList.add("missing");
+          return wrap;
+        }
+        const img = el("img", "art");
+        img.alt = "";
+        img.loading = "lazy";
+        img.addEventListener("load", () => img.classList.add("loaded"));
+        img.addEventListener("error", () => {
+          if (img.dataset.retried) {
+            wrap.classList.add("missing");
+            img.remove();
+            return;
+          }
+          img.dataset.retried = "1";
+          // Clearing src first, as the same src again may not refetch.
+          const src = img.src;
+          img.removeAttribute("src");
+          setTimeout(() => (img.src = src), 900);
+        });
+        img.src = sized(url, px);
+        wrap.append(img);
+        return wrap;
+      }
 
       // Playback says what happened in the player itself, on the line
       // under the title. A message that needs the user to act (offline,
@@ -1158,7 +1493,7 @@
         other: ["Search didn’t work", "Something went wrong talking to YouTube Music. Try again."],
       };
 
-      function notice(title, body, action, detail) {
+      function notice(target, title, body, action, detail) {
         const box = el("div", "notice" + (action ? " error" : ""));
         box.append(el("strong", "", title), el("p", "", body));
         if (action) {
@@ -1171,11 +1506,11 @@
           more.append(el("summary", "", "Show details"), el("code", "", detail));
           box.append(more);
         }
-        pane.replaceChildren(box);
+        target.replaceChildren(box);
       }
 
       function empty() {
-        notice("Find something to play", "Search for a song or an artist. Press / from anywhere to jump back here.");
+        notice(pane, "Find something to play", "Search for a song or an artist. Press / from anywhere to jump back here.");
       }
 
       function skeleton() {
@@ -1192,61 +1527,63 @@
           const c = el("div", "bar");
           c.style.width = `${30 + ((i * 41) % 40)}%`;
           al.append(c);
-          row.append(el("div", "art-wrap"), who, al, el("div"));
+          row.append(el("div", "art-wrap"), who, al, el("div"), el("div"));
           list.append(row);
         }
         pane.replaceChildren(list);
       }
 
+      // ── Results ──────────────────────────────────────────────────────
       function track(r, i) {
         const row = el("div", "track enter");
         row.style.animationDelay = `${Math.min(i, 10) * 24}ms`;
         row.setAttribute("role", "option");
 
-        const wrap = el("div", "art-wrap");
-        const img = el("img", "art");
-        img.alt = "";
-        img.loading = "lazy";
-        img.addEventListener("load", () => img.classList.add("loaded"));
-        // One retry, for a connection that drops a request.
-        img.addEventListener("error", () => {
-          if (img.dataset.retried) {
-            wrap.classList.add("missing");
-            img.remove();
-            return;
-          }
-          img.dataset.retried = "1";
-          // Clearing src first, as the same src again may not refetch.
-          const src = img.src;
-          img.removeAttribute("src");
-          setTimeout(() => (img.src = src), 900);
-        });
-        if (r.CoverURL) img.src = sized(r.CoverURL, 120);
-        else wrap.classList.add("missing");
+        const wrap = cover(r.cover_url, 120);
         const play = el("div", "play");
-        play.innerHTML = '<svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>';
-        wrap.append(img, play);
+        play.append(icon('<path d="M8 5v14l11-7z"/>'));
+        wrap.append(play);
 
         const who = el("div", "who");
-        who.append(el("div", "title", r.Title), el("div", "artist", r.Uploader));
-        who.title = `${r.Title}, ${r.Uploader}`;
-        const album = el("div", "album", r.Album || "");
-        album.title = r.Album || "";
+        const artist = el("div", "artist");
+        if (r.downloaded) {
+          const dl = el("span", "dl", "✓");
+          dl.title = "Downloaded";
+          artist.append(dl);
+        }
+        artist.append(r.artist || "");
+        who.append(el("div", "title", r.title), artist);
+        who.title = `${r.title}, ${r.artist}`;
+        const album = el("div", "album", albumOf(r));
+        album.title = albumOf(r);
 
-        row.append(wrap, who, album, el("div", "time", duration(r.Duration)));
-        if (now && r.ID === now.track.ID) row.classList.add("playing");
+        const add = el("button", "add");
+        add.type = "button";
+        add.setAttribute("aria-label", `Add ${r.title} to the queue`);
+        add.title = "Add to queue (Enter)";
+        add.append(icon(ICON_PLUS));
+        add.addEventListener("click", (e) => {
+          e.stopPropagation();
+          select(i);
+          enqueue(r, add);
+        });
+        add.addEventListener("dblclick", (e) => e.stopPropagation());
+
+        row.append(wrap, who, album, el("div", "time", duration(r.duration_sec)), add);
+        if (now && r.id === now.track.id) row.classList.add("playing");
         row.addEventListener("click", () => select(i));
-        row.addEventListener("dblclick", () => playAt(i));
+        row.addEventListener("dblclick", () => playNow(i));
+        draggable(row, () => ({ kind: "result", index: i, track: r }));
         return row;
       }
 
       function render() {
         if (!results.length) {
-          notice("No results", `Nothing matched “${lastQuery}”. Check the spelling, or try fewer words.`);
+          notice(pane, "No results", `Nothing matched “${lastQuery}”. Check the spelling, or try fewer words.`);
           return;
         }
         const head = el("div", "head-row");
-        head.append(el("span"), el("span", "", "Title"), el("span", "col-album", "Album"), el("span", "", "Length"));
+        head.append(el("span"), el("span", "", "Title"), el("span", "col-album", "Album"), el("span", "", "Length"), el("span"));
         const list = el("div", "list");
         list.setAttribute("role", "listbox");
         list.setAttribute("aria-label", "Songs");
@@ -1258,7 +1595,7 @@
 
       function moveCursor() {
         const list = pane.querySelector(".list");
-        if (!list) return;
+        if (!list || !list.querySelector(".cursor")) return;
         const rows = list.querySelectorAll(".track");
         rows.forEach((r, i) => {
           r.classList.toggle("selected", i === selected);
@@ -1273,11 +1610,6 @@
         if (!results.length) return;
         selected = Math.max(0, Math.min(results.length - 1, i));
         moveCursor();
-      }
-
-      function playAt(i) {
-        select(i);
-        play(results, i);
       }
 
       async function run(q) {
@@ -1312,13 +1644,15 @@
           const p = problemOf(err);
           const [title, body] = SEARCH_COPY[p.kind] || SEARCH_COPY.other;
           failedQuery = q;
-          notice(title, body, { label: "Try again", run: () => run(query.value) }, p.detail);
+          notice(pane, title, body, { label: "Try again", run: () => run(query.value) }, p.detail);
         } finally {
           if (mine === seq) field.classList.remove("busy");
         }
       }
 
-      // Search as you type, once typing pauses; Enter searches at once.
+      // Search as you type, once typing pauses. Enter searches at once,
+      // or, on a search already shown, queues the selected song as the
+      // TUI's Enter does.
       query.addEventListener("input", () => {
         field.classList.toggle("has-text", query.value.length > 0);
         clearTimeout(debounce);
@@ -1328,7 +1662,7 @@
         e.preventDefault();
         clearTimeout(debounce);
         if (results.length && query.value.trim() === lastQuery) {
-          playAt(selected);
+          enqueue(results[selected]);
           return;
         }
         run(query.value);
@@ -1338,34 +1672,6 @@
         field.classList.remove("has-text");
         run("");
         query.focus();
-      });
-
-      // Keyboard first, as in the terminal app: / to search, arrows or
-      // j/k to move, Enter to play, Escape back to the box.
-      document.addEventListener("keydown", (e) => {
-        const typing = document.activeElement === query;
-        if (e.key === "/" && !typing) {
-          e.preventDefault();
-          query.focus();
-          query.select();
-        } else if (e.key === "Escape") {
-          query.focus();
-          query.select();
-        } else if (e.key === "y" && !typing) {
-          openPanel("lyrics");
-        } else if (!typing && playerKey(e)) {
-          e.preventDefault();
-        } else if (!results.length) {
-          return;
-        } else if (e.key === "ArrowDown" || (!typing && e.key === "j")) {
-          e.preventDefault();
-          select(selected + 1);
-        } else if (e.key === "ArrowUp" || (!typing && e.key === "k")) {
-          e.preventDefault();
-          select(selected - 1);
-        } else if (e.key === "Enter" && !typing) {
-          playAt(selected);
-        }
       });
 
       // ── Layout: resizable sidebar and side panel ─────────────────────
@@ -1408,7 +1714,7 @@
         renderPanel();
       }
 
-      function drag(splitter, onMove) {
+      function dragSplitter(splitter, onMove) {
         splitter.addEventListener("pointerdown", (e) => {
           e.preventDefault();
           splitter.setPointerCapture(e.pointerId);
@@ -1432,8 +1738,8 @@
       }
       const left = document.querySelector(".split-left");
       const rightSplit = document.querySelector(".split-right");
-      drag(left, (x, box) => (layout.side = x - box.left - 8));
-      drag(rightSplit, (x, box) => (layout.right = box.right - x - 8));
+      dragSplitter(left, (x, box) => (layout.side = x - box.left - 8));
+      dragSplitter(rightSplit, (x, box) => (layout.right = box.right - x - 8));
 
       // Double-click puts a panel back to its default width; arrow keys
       // resize from the keyboard, Enter folds or unfolds the sidebar.
@@ -1465,9 +1771,9 @@
       rightSplit.addEventListener("keydown", (e) => keyResize(e, "right", -16));
 
       // The panel opens on the tab its button names; that tab's button
-      // again closes it.
-      function openPanel(tab) {
-        layout.rightOpen = !(layout.rightOpen && layout.tab === tab);
+      // again closes it. show opens it without toggling.
+      function openPanel(tab, show = false) {
+        layout.rightOpen = show || !(layout.rightOpen && layout.tab === tab);
         layout.tab = tab;
         apply();
         save();
@@ -1486,67 +1792,401 @@
       });
 
       function renderPanel() {
-        const body = $("panel-body");
-        const copy =
-          layout.tab === "queue"
-            ? ["Your queue is empty", "Songs you play or add show up here, with what comes next."]
-            : ["Nothing playing", "Lyrics follow along here while a song plays."];
-        if (body.dataset.tab === layout.tab) return;
-        body.dataset.tab = layout.tab;
-        const box = el("div", "notice");
-        box.append(el("strong", "", copy[0]), el("p", "", copy[1]));
-        body.replaceChildren(box);
+        if (layout.tab === "queue") renderQueue();
+        else notice($("panel-body"), "Nothing playing", "Lyrics follow along here while a song plays.");
       }
 
-      new ResizeObserver(apply).observe(app);
-      apply();
+      // ── Queue ────────────────────────────────────────────────────────
+      // Go owns the queue (internal/gui/queue.go). Every change answers
+      // with the whole of it; the page draws that and plays its current
+      // track, and keeps no list of its own.
+      let qs = { tracks: [], current: -1, shuffle: false, repeat: "off", next: null };
+      let landed = -1; // a row to flash once drawn: just dropped or added
+      let clearArmed = false;
+      const current = () => (qs.current >= 0 ? qs.tracks[qs.current] : null);
+
+      function setQueue(s) {
+        const moved = s.current !== qs.current;
+        qs = s;
+        renderQueue(moved);
+        modes();
+        markPlaying();
+        $("next").title = qs.next ? `Next: ${qs.next.title} (n)` : "Next (n)";
+      }
+
+      function renderQueue(follow = false) {
+        const body = $("panel-body");
+        if (layout.tab !== "queue") return;
+        if (!qs.tracks.length) {
+          notice(body, "Your queue is empty", "Songs you play or add show up here, with what comes next. Drag a song here to queue it.");
+          return;
+        }
+        const keep = body.scrollTop;
+        const secs = qs.tracks.reduce((n, t) => n + (t.duration_sec || 0), 0);
+        const head = el("div", "q-summary");
+        const count = `${qs.tracks.length} ${qs.tracks.length === 1 ? "song" : "songs"}`;
+        head.append(el("span", "", secs ? `${count} · ${total(secs)}` : count));
+        const clear = el("button", "q-clear" + (clearArmed ? " confirm" : ""), clearArmed ? "Clear all?" : "Clear");
+        clear.type = "button";
+        clear.title = clearArmed ? "Click again to clear the queue" : "Clear the queue";
+        clear.addEventListener("click", clearQueue);
+        head.append(clear);
+
+        const list = el("ol", "q-list");
+        list.setAttribute("aria-label", "Queue");
+        qs.tracks.forEach((t, i) => list.append(queueRow(t, i)));
+        body.replaceChildren(head, list);
+        body.scrollTop = keep;
+        const cur = list.children[qs.current];
+        if (follow && cur) cur.scrollIntoView({ block: "nearest" });
+        if (landed >= 0) {
+          list.children[landed]?.classList.add("landed");
+          list.children[landed]?.scrollIntoView({ block: "nearest" });
+          landed = -1;
+        }
+      }
+
+      function queueRow(t, i) {
+        const row = el("li", "q-row" + (i === qs.current ? " current" : ""));
+        row.tabIndex = 0;
+        row.dataset.index = i;
+        row.title = albumOf(t) ? `${t.title}, ${t.artist}, from ${albumOf(t)}` : `${t.title}, ${t.artist}`;
+        const num = el("span", "q-num", i === qs.current ? "▶" : String(i + 1));
+        const who = el("div", "q-who");
+        const artist = el("div", "q-artist");
+        if (t.downloaded) {
+          const dl = el("span", "dl", "✓");
+          dl.title = "Downloaded";
+          artist.append(dl);
+        }
+        artist.append(t.artist || "");
+        who.append(el("div", "q-title", t.title), artist);
+        row.append(num, cover(t.cover_url, 120), who, el("span", "q-time", t.duration || duration(t.duration_sec)));
+        // The playing song is not removable: the TUI lets it be removed
+        // and then keeps playing it while the marker moves on.
+        if (i !== qs.current) {
+          const rm = el("button", "q-remove");
+          rm.type = "button";
+          rm.setAttribute("aria-label", `Remove ${t.title} from the queue`);
+          rm.title = "Remove (Delete)";
+          rm.append(icon(ICON_X));
+          rm.addEventListener("click", async (e) => {
+            e.stopPropagation();
+            setQueue(await Remove(i));
+          });
+          rm.addEventListener("dblclick", (e) => e.stopPropagation());
+          row.append(rm);
+        } else row.append(el("span"));
+        row.addEventListener("dblclick", () => jump(i));
+        // The keys the TUI's queue pane has: Enter plays, d or Delete
+        // removes, ctrl+↑/↓ reorders; ↑/↓ move between rows.
+        row.addEventListener("keydown", async (e) => {
+          const n = qs.tracks.length;
+          if (e.key === "Enter") {
+            e.preventDefault();
+            e.stopPropagation();
+            jump(i);
+          } else if ((e.key === "Delete" || e.key === "d") && i !== qs.current) {
+            e.preventDefault();
+            e.stopPropagation();
+            setQueue(await Remove(i));
+            focusRow(Math.min(i, qs.tracks.length - 1));
+          } else if ((e.key === "ArrowUp" || e.key === "ArrowDown") && e.ctrlKey) {
+            e.preventDefault();
+            e.stopPropagation();
+            const to = i + (e.key === "ArrowUp" ? -1 : 1);
+            if (to < 0 || to >= n) return;
+            setQueue(await Move(i, to));
+            focusRow(to);
+          } else if (e.key === "ArrowUp" || e.key === "ArrowDown" || e.key === "j" || e.key === "k") {
+            e.preventDefault();
+            e.stopPropagation();
+            focusRow(i + (e.key === "ArrowUp" || e.key === "k" ? -1 : 1));
+          }
+        });
+        draggable(row, () => ({ kind: "queue", index: i, track: t }));
+        return row;
+      }
+      function focusRow(i) {
+        $("panel-body").querySelector(`.q-row[data-index="${Math.max(0, i)}"]`)?.focus();
+      }
+
+      async function jump(i) {
+        setQueue(await Jump(i));
+        start();
+      }
+
+      // Clearing asks first, as the TUI's D does, but in place: the
+      // button turns into the question for a few seconds.
+      let clearTimer;
+      async function clearQueue() {
+        if (!clearArmed) {
+          clearArmed = true;
+          renderQueue();
+          clearTimer = setTimeout(() => {
+            clearArmed = false;
+            renderQueue();
+          }, 3500);
+          return;
+        }
+        clearTimeout(clearTimer);
+        clearArmed = false;
+        stop();
+        now = null;
+        idle();
+        setQueue(await Clear());
+      }
+
+      // The TUI's Enter: to the end of the queue, and playing if nothing
+      // is. button, if given, turns into a tick for a moment.
+      async function enqueue(t, button) {
+        if (!t) return;
+        let s = await Add(t);
+        if (playState === "stopped") {
+          s = await Jump(s.tracks.length - 1);
+          setQueue(s);
+          start();
+        } else {
+          landed = s.tracks.length - 1;
+          setQueue(s);
+        }
+        tick(button || pane.querySelectorAll(".list .track")[results.indexOf(t)]?.querySelector(".add"));
+      }
+      function tick(button) {
+        if (!button) return;
+        button.classList.add("done");
+        button.replaceChildren(icon(ICON_CHECK));
+        setTimeout(() => {
+          button.classList.remove("done");
+          button.replaceChildren(icon(ICON_PLUS));
+        }, 1200);
+      }
+
+      // Double-click: now, straight after the song playing.
+      async function playNow(i) {
+        select(i);
+        setQueue(await PlayNow(results[i]));
+        start();
+      }
+
+      // The TUI's e: every song listed, and the first of them playing if
+      // nothing is.
+      async function queueAll() {
+        if (!results.length) return;
+        let s = await AddAll(results);
+        const first = s.tracks.length - results.length;
+        if (playState === "stopped") {
+          s = await Jump(first);
+          setQueue(s);
+          start();
+        } else {
+          landed = first;
+          setQueue(s);
+        }
+      }
+
+      // ── Drag and drop ────────────────────────────────────────────────
+      // Songs drag from the results, or from the queue itself, onto the
+      // queue. Pointer events rather than the browser's own drag and
+      // drop: it draws the card and the drop line as wanted, behaves the
+      // same in every WebView, and stays clear of Wails' file drop.
+      const ghost = $("ghost");
+      const DRAG_FROM = 6; // px before a press becomes a drag, so clicks stay clicks
+      let drag = null;
+
+      function draggable(node, what) {
+        node.addEventListener("pointerdown", (e) => {
+          if (e.button !== 0 || e.target.closest("button")) return;
+          drag = { ...what(), node, x: e.clientX, y: e.clientY, active: false, at: null };
+        });
+      }
+
+      document.addEventListener("pointermove", (e) => {
+        if (!drag) return;
+        if (!drag.active) {
+          if (Math.hypot(e.clientX - drag.x, e.clientY - drag.y) < DRAG_FROM) return;
+          beginDrag();
+        }
+        drag.px = e.clientX;
+        drag.py = e.clientY;
+        ghost.style.transform = `translate(${e.clientX + 14}px, ${e.clientY + 12}px)`;
+        locateDrop();
+      });
+      document.addEventListener("pointerup", () => {
+        if (drag?.active) endDrag(true);
+        drag = null;
+      });
+      window.addEventListener("blur", () => drag?.active && endDrag(false));
+
+      function beginDrag() {
+        drag.active = true;
+        document.body.classList.add("drag-song");
+        drag.node.classList.add("dragged-from");
+        const text = el("div", "g-text");
+        text.append(el("div", "g-title", drag.track.title), el("div", "g-sub", drag.track.artist || ""));
+        ghost.replaceChildren(cover(drag.track.cover_url, 120), text);
+        ghost.classList.add("show");
+        // A song dragged from the results needs somewhere to land.
+        if (drag.kind === "result" && (!layout.rightOpen || layout.tab !== "queue")) openPanel("queue", true);
+        scrollLoop();
+      }
+
+      // Where the song would land: before the first row whose middle is
+      // below the pointer, or at the end. Moving a queue row onto its own
+      // place changes nothing, so no line is drawn there.
+      function locateDrop() {
+        const body = $("panel-body");
+        const box = body.getBoundingClientRect();
+        const inside = drag.px >= box.left && drag.px <= box.right && drag.py >= box.top && drag.py <= box.bottom;
+        body.classList.toggle("drop-target", inside);
+        let line = body.querySelector(".drop-line");
+        if (!inside) {
+          drag.at = null;
+          line?.remove();
+          return;
+        }
+        const rows = [...body.querySelectorAll(".q-row")];
+        let at = rows.findIndex((r) => {
+          const b = r.getBoundingClientRect();
+          return drag.py < b.top + b.height / 2;
+        });
+        if (at < 0) at = rows.length;
+        drag.at = at;
+        const list = body.querySelector(".q-list");
+        const noop = drag.kind === "queue" && (at === drag.index || at === drag.index + 1);
+        if (!list || noop) {
+          line?.remove();
+          return;
+        }
+        if (!line) {
+          line = el("div", "drop-line");
+          list.append(line);
+        }
+        line.style.top = `${at < rows.length ? rows[at].offsetTop : rows[rows.length - 1].offsetTop + rows[rows.length - 1].offsetHeight}px`;
+      }
+
+      // Near the top or bottom edge of the queue, it scrolls, faster the
+      // closer the pointer is, so a song can be dropped anywhere in a
+      // long queue.
+      function scrollLoop() {
+        if (!drag?.active) return;
+        const body = $("panel-body");
+        const box = body.getBoundingClientRect();
+        const EDGE = 48;
+        let speed = 0;
+        if (drag.px >= box.left && drag.px <= box.right) {
+          if (drag.py < box.top + EDGE) speed = -Math.ceil((box.top + EDGE - drag.py) / 4);
+          else if (drag.py > box.bottom - EDGE) speed = Math.ceil((drag.py - (box.bottom - EDGE)) / 4);
+        }
+        if (speed) {
+          body.scrollTop += speed;
+          locateDrop();
+        }
+        requestAnimationFrame(scrollLoop);
+      }
+
+      async function endDrag(commit) {
+        const d = drag;
+        drag = null;
+        document.body.classList.remove("drag-song");
+        d.node.classList.remove("dragged-from");
+        ghost.classList.remove("show");
+        const body = $("panel-body");
+        body.classList.remove("drop-target");
+        body.querySelector(".drop-line")?.remove();
+        if (!commit || d.at == null) return;
+        if (d.kind === "queue") {
+          const to = d.at > d.index ? d.at - 1 : d.at;
+          if (to === d.index) return;
+          landed = to;
+          setQueue(await Move(d.index, to));
+        } else {
+          const s = await Insert(d.track, d.at);
+          landed = s.tracks.findIndex((t) => t.id === d.track.id);
+          setQueue(s);
+        }
+      }
 
       // ── Player ───────────────────────────────────────────────────────
-      // Plays through the list a track was started from, as the TUI
-      // plays through its queue. The audio is a direct stream yt-dlp
-      // resolves when a track starts; streams expire, so none is kept.
+      // Plays the queue's current track. The audio is a direct stream
+      // yt-dlp resolves when a track starts; streams expire, so none is
+      // kept.
       const audio = $("audio");
       const toggle = $("toggle");
       const seek = $("seek");
       const seekFill = $("seek-fill");
-      let now = null; // { list, pos, track }
+      let now = null; // { track, retried }
+      // stopped, playing or paused, as the TUI's player state: Enter
+      // starts a song only when stopped, not when paused.
+      let playState = "stopped";
       let playSeq = 0;
       let seeking = false;
 
       function markPlaying() {
         const rows = pane.querySelectorAll(".list .track");
-        rows.forEach((row, i) => row.classList.toggle("playing", !!now && results[i]?.ID === now.track.ID));
+        rows.forEach((row, i) => row.classList.toggle("playing", !!now && results[i]?.id === now.track.id));
+      }
+
+      function modes() {
+        $("shuffle").setAttribute("aria-pressed", qs.shuffle);
+        const rep = $("repeat");
+        rep.setAttribute("aria-pressed", qs.repeat !== "off");
+        rep.classList.toggle("one", qs.repeat === "one");
+        rep.setAttribute("aria-label", `Repeat: ${qs.repeat}`);
+        rep.title = { off: "Repeat: off (r)", one: "Repeat this song (r)", all: "Repeat the queue (r)" }[qs.repeat];
       }
 
       function showTrack(t) {
         const art = $("np-art");
         const wrap = art.parentElement;
         art.classList.remove("loaded");
-        wrap.classList.toggle("missing", !t.CoverURL);
+        wrap.classList.toggle("missing", !t.cover_url);
         art.onload = () => art.classList.add("loaded");
         art.onerror = () => {
           wrap.classList.add("missing");
           art.removeAttribute("src");
         };
-        if (t.CoverURL) art.src = sized(t.CoverURL, 120);
+        if (t.cover_url) art.src = sized(t.cover_url, 120);
         else art.removeAttribute("src");
         const text = $("np-text");
-        $("np-title").textContent = t.Title;
-        $("np-sub").textContent = t.Uploader;
-        text.title = t.Album ? `${t.Title}, ${t.Uploader}, from ${t.Album}` : `${t.Title}, ${t.Uploader}`;
+        $("np-title").textContent = t.title;
+        $("np-sub").textContent = t.artist;
+        text.title = albumOf(t) ? `${t.title}, ${t.artist}, from ${albumOf(t)}` : `${t.title}, ${t.artist}`;
         text.classList.remove("change");
         void text.offsetWidth; // restart the entrance for each new track
         text.classList.add("change");
-        $("t-end").textContent = duration(t.Duration) || "0:00";
+        $("t-end").textContent = duration(t.duration_sec) || "0:00";
         for (const id of ["prev", "toggle", "next"]) $(id).disabled = false;
         if ("mediaSession" in navigator) {
           navigator.mediaSession.metadata = new MediaMetadata({
-            title: t.Title,
-            artist: t.Uploader,
-            album: t.Album || "",
-            artwork: t.CoverURL ? [{ src: sized(t.CoverURL, 512), sizes: "512x512", type: "image/jpeg" }] : [],
+            title: t.title,
+            artist: t.artist,
+            album: albumOf(t),
+            artwork: t.cover_url ? [{ src: sized(t.cover_url, 512), sizes: "512x512", type: "image/jpeg" }] : [],
           });
         }
+      }
+
+      // Back to "Nothing playing yet", as after clearing the queue.
+      function idle() {
+        $("np-title").textContent = "";
+        $("np-sub").textContent = "Nothing playing yet";
+        $("np-text").removeAttribute("title");
+        $("np-art").removeAttribute("src");
+        $("np-art").parentElement.classList.remove("missing");
+        $("t-now").textContent = "0:00";
+        $("t-end").textContent = "0:00";
+        seekFill.style.width = "0";
+        for (const id of ["prev", "toggle", "next"]) $(id).disabled = true;
+        markPlaying();
+      }
+
+      function stop() {
+        playState = "stopped";
+        playSeq++;
+        audio.pause();
+        audio.removeAttribute("src");
+        setLoading(false);
       }
 
       // Songs that failed in a row. Skipping on is right for one song
@@ -1559,15 +2199,17 @@
         seek.classList.toggle("loading", on);
       }
 
-      async function play(list, pos, at = 0) {
-        const track = list[pos];
+      // Plays whatever the queue says is current, from at seconds.
+      async function start(at = 0) {
+        const track = current();
         if (!track) return;
-        const fresh = !now || now.track !== track;
+        const fresh = !now || now.track.id !== track.id;
         // retried stays with the song across restarts of it, so a stream
         // that keeps failing is given up on rather than retried forever.
-        now = { list, pos, track, retried: fresh ? false : now.retried };
+        now = { track, retried: fresh ? false : now.retried };
         const mine = ++playSeq;
         audio.pause();
+        playState = "playing";
         if (fresh) {
           showTrack(track);
           markPlaying();
@@ -1576,7 +2218,7 @@
         setLoading(true);
         let url;
         try {
-          url = await StreamURL(track.URL);
+          url = await StreamURL(track.url);
         } catch (err) {
           if (mine !== playSeq) return;
           setLoading(false);
@@ -1593,19 +2235,24 @@
       }
 
       // What to do when a song cannot start, by why.
-      function cannotPlay(track, p) {
+      async function cannotPlay(track, p) {
         audio.removeAttribute("src");
         console.error(p.detail);
         if (p.kind === "unavailable" || p.kind === "other") {
           if (++failures >= 3) {
             failures = 0;
+            playState = "stopped";
             say("Stopped after 3 songs failed", { error: true, sticky: true, full: "Stopped: three songs in a row couldn’t play." });
             return;
           }
-          say(`Skipped “${track.Title}”, unavailable`, { full: `Skipped “${track.Title}”: it can’t be played here.` });
-          if (now.pos + 1 < now.list.length) play(now.list, now.pos + 1);
+          say(`Skipped “${track.title}”, unavailable`, { full: `Skipped “${track.title}”: it can’t be played here.` });
+          const s = await Skip();
+          setQueue(s);
+          if (s.moved) start();
+          else playState = "stopped";
           return;
         }
+        playState = "stopped";
         const [why, full] = {
           offline: ["Offline. Press play to retry", "You’re offline. Press play once you’re back online."],
           timeout: ["Timed out. Press play to retry", "YouTube took too long to answer. Press play to try again."],
@@ -1614,27 +2261,56 @@
         say(why, { error: true, sticky: true, full });
       }
 
-      function next() {
-        if (!now) return;
-        if (now.pos + 1 < now.list.length) play(now.list, now.pos + 1);
-        else say("End of the list", { full: "That was the last song in the list." });
+      // Next and previous as the TUI's n and p: next moves on even under
+      // repeat-one; previous restarts a song more than 3s in.
+      async function next() {
+        if (!qs.tracks.length) return;
+        const s = await Skip();
+        setQueue(s);
+        if (s.moved) start();
+        else say("End of the queue", { full: "That was the last song in the queue." });
       }
-      // Previous restarts the song once it is more than 3s in, as the
-      // TUI's p does.
-      function prev() {
-        if (!now) return;
-        if (audio.currentTime > 3 || now.pos === 0) audio.currentTime = 0;
-        else play(now.list, now.pos - 1);
+      async function prev() {
+        if (now && audio.currentTime > 3) {
+          audio.currentTime = 0;
+          return;
+        }
+        if (!qs.tracks.length) return;
+        setQueue(await Back());
+        start();
       }
-      function togglePlay() {
+      // A song that finished by itself: repeat-one plays it again, the
+      // end of the queue stops.
+      async function ended() {
+        const before = qs.current;
+        const s = await Ended();
+        setQueue(s);
+        if (!s.moved) {
+          playState = "stopped";
+          say("End of the queue", { full: "That was the last song in the queue." });
+          return;
+        }
+        if (s.current === before && s.repeat === "one") {
+          audio.currentTime = 0;
+          audio.play().catch(() => {});
+          return;
+        }
+        start();
+      }
+
+      async function togglePlay() {
         if (!now) {
-          if (results.length) playAt(Math.max(selected, 0));
+          if (qs.current >= 0) start();
+          else if (qs.tracks.length) {
+            setQueue(await Jump(0));
+            start();
+          } else if (results.length) playNow(Math.max(selected, 0));
           return;
         }
         // A song that never started, or lost its stream: start it again,
         // from where it stopped.
         if (!audio.getAttribute("src")) {
-          play(now.list, now.pos, audio.currentTime || 0);
+          start(audio.currentTime || 0);
           return;
         }
         if (audio.paused) audio.play().catch(() => {});
@@ -1648,15 +2324,19 @@
       $("prev").addEventListener("click", prev);
       $("next").addEventListener("click", next);
       toggle.addEventListener("click", togglePlay);
+      $("shuffle").addEventListener("click", async () => setQueue(await ToggleShuffle()));
+      $("repeat").addEventListener("click", async () => setQueue(await CycleRepeat()));
 
       audio.addEventListener("playing", () => {
         failures = 0;
+        playState = "playing";
         if (sayingSticky) unsay();
         setLoading(false);
         toggle.classList.add("playing");
         toggle.setAttribute("aria-label", "Pause");
       });
       audio.addEventListener("pause", () => {
+        if (playState === "playing" && audio.getAttribute("src") && !audio.ended) playState = "paused";
         toggle.classList.remove("playing");
         toggle.setAttribute("aria-label", "Play");
       });
@@ -1668,7 +2348,7 @@
       audio.addEventListener("timeupdate", () => {
         if (!seeking && isFinite(audio.duration) && audio.duration > 0) updateSeek(audio.currentTime / audio.duration);
       });
-      audio.addEventListener("ended", next);
+      audio.addEventListener("ended", ended);
       // A stream that breaks mid-song has usually expired (they last
       // some hours) or lost the network. Offline, wait for it to come
       // back; otherwise fetch a new stream once and carry on from the
@@ -1681,6 +2361,7 @@
         audio.removeAttribute("src");
         if (!navigator.onLine) {
           resumeAt = at;
+          playState = "stopped";
           say("Connection lost, resumes online", { error: true, sticky: true, full: "Lost the connection. The song picks up again when you’re back online." });
           return;
         }
@@ -1690,15 +2371,15 @@
           return;
         }
         now.retried = true;
-        play(now.list, now.pos, at);
+        start(at);
       });
 
       function updateSeek(ratio) {
         seekFill.style.width = `${ratio * 100}%`;
-        const total = isFinite(audio.duration) ? audio.duration : now?.track.Duration || 0;
-        $("t-now").textContent = duration(Math.floor(ratio * total)) || "0:00";
-        seek.setAttribute("aria-valuemax", Math.round(total));
-        seek.setAttribute("aria-valuenow", Math.round(ratio * total));
+        const length = isFinite(audio.duration) ? audio.duration : now?.track.duration_sec || 0;
+        $("t-now").textContent = duration(Math.floor(ratio * length)) || "0:00";
+        seek.setAttribute("aria-valuemax", Math.round(length));
+        seek.setAttribute("aria-valuenow", Math.round(ratio * length));
       }
 
       // Click or drag anywhere on the bar; the song jumps on release.
@@ -1730,35 +2411,33 @@
         }
       });
 
-      // Volume, remembered between runs like the TUI's.
+      // Volume is the TUI's Default Volume, saved in the settings both
+      // apps share. Saving waits for the slider to settle.
       const volume = $("volume");
-      let lastVolume = 70;
-      function setVolume(v) {
+      let lastVolume = 80;
+      let volumeTimer;
+      function setVolume(v, persist = true) {
         v = Math.min(Math.max(Math.round(v), 0), 100);
         volume.value = v;
         volume.style.setProperty("--v", `${v}%`);
         audio.volume = v / 100;
         $("mute").classList.toggle("muted", v === 0);
         $("mute").setAttribute("aria-label", v === 0 ? "Unmute" : "Mute");
-        try {
-          localStorage.setItem("ytmgo:volume", String(v));
-        } catch {}
+        if (!persist) return;
+        clearTimeout(volumeTimer);
+        volumeTimer = setTimeout(() => SetVolume(v), 250);
       }
       volume.addEventListener("input", () => setVolume(+volume.value));
       $("mute").addEventListener("click", () => {
         if (+volume.value > 0) {
           lastVolume = +volume.value;
           setVolume(0);
-        } else setVolume(lastVolume || 70);
+        } else setVolume(lastVolume || 80);
       });
-      try {
-        const saved = localStorage.getItem("ytmgo:volume");
-        setVolume(saved == null ? 70 : +saved);
-      } catch {
-        setVolume(70);
-      }
+      Volume().then((v) => setVolume(v, false));
 
-      // The TUI's keys: Space, n / →, p / ←, l and h to seek 5s, + and −.
+      // The TUI's keys: Space, n / →, p / ←, l and h to seek 5s, + and −,
+      // s shuffle, r repeat, e queue everything listed.
       function playerKey(e) {
         // A focused button, slider or splitter keeps Space and the arrows
         // for itself: Space presses the button, arrows move the slider.
@@ -1790,9 +2469,51 @@
           case "_":
             setVolume(+volume.value - 5);
             return true;
+          case "s":
+            $("shuffle").click();
+            return true;
+          case "r":
+            $("repeat").click();
+            return true;
+          case "e":
+            queueAll();
+            return true;
         }
         return false;
       }
+
+      // Keyboard first, as in the terminal app: / to search, arrows or
+      // j/k to move, Enter to queue, Escape back to the box.
+      document.addEventListener("keydown", (e) => {
+        if (e.key === "Escape" && drag?.active) {
+          e.preventDefault();
+          endDrag(false);
+          return;
+        }
+        const typing = document.activeElement === query;
+        if (e.key === "/" && !typing) {
+          e.preventDefault();
+          query.focus();
+          query.select();
+        } else if (e.key === "Escape") {
+          query.focus();
+          query.select();
+        } else if (e.key === "y" && !typing) {
+          openPanel("lyrics");
+        } else if (!typing && playerKey(e)) {
+          e.preventDefault();
+        } else if (!results.length) {
+          return;
+        } else if (e.key === "ArrowDown" || (!typing && e.key === "j")) {
+          e.preventDefault();
+          select(selected + 1);
+        } else if (e.key === "ArrowUp" || (!typing && e.key === "k")) {
+          e.preventDefault();
+          select(selected - 1);
+        } else if (e.key === "Enter" && !typing && !document.activeElement?.matches("button")) {
+          enqueue(results[selected]);
+        }
+      });
 
       // Media keys and the system's now-playing controls.
       if ("mediaSession" in navigator) {
@@ -1813,14 +2534,17 @@
         if (resumeAt != null && now) {
           const at = resumeAt;
           resumeAt = null;
-          play(now.list, now.pos, at);
+          start(at);
         }
       }
       window.addEventListener("online", connection);
       window.addEventListener("offline", connection);
-      connection();
 
+      new ResizeObserver(apply).observe(app);
+      apply();
+      connection();
       empty();
+      Queue().then(setQueue);
     </script>
   </body>
 </html>
