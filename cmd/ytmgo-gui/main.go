@@ -10,6 +10,7 @@
 package main
 
 import (
+	"context"
 	"embed"
 	"io/fs"
 	"log"
@@ -18,6 +19,7 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
 
+	"ytmgo/internal/db"
 	"ytmgo/internal/gui"
 )
 
@@ -29,7 +31,11 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	app := gui.New()
+	d, err := db.Open()
+	if err != nil {
+		log.Fatal(err)
+	}
+	app := gui.New(d)
 	err = wails.Run(&options.App{
 		Title:     "ytmgo",
 		Width:     1200,
@@ -41,6 +47,9 @@ func main() {
 		BackgroundColour: &options.RGBA{R: 0x11, G: 0x11, B: 0x18, A: 255},
 		AssetServer:      &assetserver.Options{Assets: assets},
 		Bind:             []interface{}{app},
+		// The database is opened here rather than in gui.New so that
+		// closing it is not a method on App, which the page could call.
+		OnShutdown: func(context.Context) { d.Close() },
 	})
 	if err != nil {
 		log.Fatal(err)

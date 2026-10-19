@@ -254,7 +254,32 @@ WebKitGTK, which is a development-machine dependency only.
    chose: WebView2 `<audio>` reporting `timeupdate`, `ended`, and `error` to
    Go, or mpv through `internal/player`.
 3. The missing-tool screen, driven by `internal/deps`.
-4. A minimal UI: search, results, play, a player bar.
+4. A minimal UI: search, results, play, a player bar. **Search and results
+   done; play waits for S2.**
+   - `gui.App.Search` wraps `search.Search` with the user's search limit;
+     tested without network (trimming, a blank query asks nobody, an unset
+     limit falls back to the default). `cmd/ytmgo-gui` opens and closes the
+     database, so no lifecycle method is exposed to the page.
+   - Design, as asked: modern and Spotify-like, in ytmgo's palette (violet
+     for focus and the cursor, mint for active and playing, pink for
+     errors), with Windows' own Segoe UI Variable. Sidebar, a main view,
+     and a now-playing bar along the bottom. Library, Favourites, History,
+     and Downloads are shown but inert until Phase 3 builds them.
+   - Feedback: search as you type after a pause (Enter searches at once),
+     placeholder rows on the first search, a working line in the field when
+     refining, one entrance for each new set of results, cover art fading
+     in, and failures that say what happened with **Try again**. All of it
+     honours reduced motion.
+   - The signature: one violet cursor bar that glides between rows, as the
+     TUI's highlight moves. `/`, arrows, `j`/`k`, Enter, and Escape work as
+     they do in the terminal app.
+   - Checked in `wails dev` in a browser: states, layout, keys, and the
+     toast. Not checked: how the motion feels in the real window. The
+     preview pane only advances animations when it takes a screenshot.
+   - Building the Windows exe from Linux needs `-tags webkit2_41` too:
+     Wails generates the JS bindings by building for the host first.
+     `wails build -platform windows/amd64 -tags webkit2_41` from
+     `cmd/ytmgo-gui`. On a Windows runner no tag is needed.
    → verify: Go tests for `internal/gui` (plain Go, testable without a
    window); search and play work in `wails dev` on Linux and in a built exe on
    Windows; the TUI binary is the same size as before, give or take noise.

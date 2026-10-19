@@ -5,48 +5,907 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>ytmgo</title>
     <style>
-      /* ytmgo's own dark palette (internal/tui/theme.go, adaptive()). */
+      /* ytmgo's own dark palette (internal/tui/theme.go, adaptive()).
+         Each accent has one meaning: violet is focus and the cursor,
+         mint is playing and active, pink is an error. */
       :root {
-        --bg: #111118;
+        --bg: #0d0d12;
+        --surface: #16161f;
+        --raised: #1d1d2b;
+        --hover: #1a1a2e;
         --border: #2a2a3e;
-        --accent: #a78bfa;
+        --violet: #7c3aed;
+        --violet-text: #a78bfa;
         --mint: #06d6a0;
-        --text: #e0e0e0;
-        --mid: #9999aa;
+        --pink: #f72585;
+        --text: #ececf1;
+        --mid: #a3a3b5;
+        --dim: #6e6e82;
+
+        --row: 60px;
+        --radius-s: 6px;
+        --radius-m: 10px;
+        --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+        --fast: 140ms;
+        --slow: 320ms;
+        font-family: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+      }
+      @media (prefers-reduced-motion: reduce) {
+        :root {
+          --fast: 0ms;
+          --slow: 0ms;
+        }
+      }
+      * {
+        box-sizing: border-box;
       }
       html,
       body {
         margin: 0;
         height: 100%;
+        overflow: hidden;
         background: var(--bg);
         color: var(--text);
-        font: 15px/1.5 system-ui, "Segoe UI", sans-serif;
+        font-size: 14px;
+        line-height: 1.4;
+        user-select: none;
+        -webkit-font-smoothing: antialiased;
       }
-      main {
+      button {
+        font: inherit;
+        color: inherit;
+        background: none;
+        border: 0;
+        cursor: pointer;
+      }
+      :focus-visible {
+        outline: 2px solid var(--violet-text);
+        outline-offset: 2px;
+      }
+      svg {
+        width: 20px;
+        height: 20px;
+        fill: none;
+        stroke: currentColor;
+        stroke-width: 2;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+        flex: none;
+      }
+
+      /* ── Shell: sidebar, main view, now-playing bar ───────────────── */
+      .app {
         height: 100%;
         display: grid;
-        place-content: center;
+        grid-template-columns: 232px 1fr;
+        grid-template-rows: 1fr auto;
+        gap: 8px;
+        padding: 8px;
+      }
+
+      nav {
+        grid-row: 1;
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        padding: 18px 10px;
+        background: var(--surface);
+        border-radius: var(--radius-m);
+      }
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 0 10px 18px;
+        font-family: "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif;
+        font-size: 20px;
+        font-weight: 700;
+        letter-spacing: -0.01em;
+      }
+      .brand svg {
+        width: 26px;
+        height: 26px;
+        stroke: none;
+      }
+      .nav-item {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        width: 100%;
+        padding: 10px;
+        border-radius: var(--radius-s);
+        color: var(--mid);
+        font-weight: 600;
+        text-align: left;
+        transition: color var(--fast), background var(--fast);
+      }
+      .nav-item:hover:not([aria-disabled="true"]) {
+        color: var(--text);
+        background: var(--hover);
+      }
+      .nav-item[aria-current="page"] {
+        color: var(--text);
+      }
+      .nav-item[aria-current="page"] svg {
+        color: var(--mint);
+      }
+      .nav-item[aria-disabled="true"] {
+        color: var(--dim);
+        cursor: default;
+      }
+      .nav-gap {
+        height: 14px;
+      }
+
+      .view {
+        grid-row: 1;
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+        background: var(--surface);
+        border-radius: var(--radius-m);
+        overflow: hidden;
+      }
+
+      /* ── Search field ─────────────────────────────────────────────── */
+      .search-head {
+        padding: 18px 24px 14px;
+      }
+      .field {
+        position: relative;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        max-width: 560px;
+        height: 46px;
+        padding: 0 14px 0 16px;
+        background: var(--raised);
+        border: 1px solid transparent;
+        border-radius: 999px;
+        transition: border-color var(--fast), background var(--fast);
+      }
+      .field:hover {
+        background: #222233;
+      }
+      .field:focus-within {
+        border-color: var(--violet);
+        background: #222233;
+      }
+      .field .prompt {
+        color: var(--mint);
+        font-weight: 700;
+      }
+      #query {
+        flex: 1;
+        min-width: 0;
+        height: 100%;
+        background: none;
+        border: 0;
+        outline: 0;
+        color: var(--text);
+        font: inherit;
+        font-size: 15px;
+        user-select: text;
+      }
+      #query::placeholder {
+        color: var(--dim);
+      }
+      #query::-webkit-search-cancel-button {
+        display: none;
+      }
+      #clear {
+        display: grid;
+        place-items: center;
+        width: 28px;
+        height: 28px;
+        border-radius: 50%;
+        color: var(--mid);
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity var(--fast), background var(--fast);
+      }
+      .field.has-text #clear {
+        opacity: 1;
+        pointer-events: auto;
+      }
+      #clear:hover {
+        background: var(--hover);
+        color: var(--text);
+      }
+      kbd {
+        min-width: 22px;
+        padding: 1px 6px;
+        border: 1px solid var(--border);
+        border-radius: 5px;
+        color: var(--dim);
+        font: 12px "Cascadia Mono", ui-monospace, monospace;
         text-align: center;
+      }
+      /* The field's working line: shows a search is in flight without
+         taking the results away. */
+      .field::after {
+        content: "";
+        position: absolute;
+        left: 24px;
+        right: 24px;
+        bottom: -1px;
+        height: 2px;
+        border-radius: 2px;
+        background: linear-gradient(90deg, transparent, var(--violet-text), transparent);
+        background-size: 40% 100%;
+        background-repeat: no-repeat;
+        opacity: 0;
+        transition: opacity var(--fast);
+      }
+      .field.busy::after {
+        opacity: 1;
+        animation: sweep 1.1s linear infinite;
+      }
+      @keyframes sweep {
+        from {
+          background-position: -40% 0;
+        }
+        to {
+          background-position: 140% 0;
+        }
+      }
+
+      /* ── Results ──────────────────────────────────────────────────── */
+      .results {
+        flex: 1;
+        min-height: 0;
+        overflow-y: auto;
+        padding: 0 16px 16px;
+        scrollbar-width: thin;
+        scrollbar-color: var(--border) transparent;
+      }
+      .results h2 {
+        margin: 6px 8px 10px;
+        font-family: "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif;
+        font-size: 22px;
+        font-weight: 700;
+        letter-spacing: -0.01em;
+      }
+      .head-row,
+      .track {
+        display: grid;
+        grid-template-columns: 44px minmax(0, 1.6fr) minmax(0, 1fr) 56px;
+        align-items: center;
+        gap: 14px;
+        padding: 0 12px;
+      }
+      .head-row {
+        height: 34px;
+        margin-bottom: 6px;
+        border-bottom: 1px solid var(--border);
+        color: var(--dim);
+        font-size: 13px;
+      }
+      .head-row span:last-child,
+      .time {
+        text-align: right;
+      }
+      .list {
+        position: relative;
+      }
+      /* The cursor: one bar that glides to the selected row, as the TUI's
+         highlight moves, rather than rows lighting up on their own. */
+      .cursor {
+        position: absolute;
+        left: 0;
+        right: 0;
+        top: 0;
+        height: var(--row);
+        border-radius: var(--radius-s);
+        background: var(--violet);
+        opacity: 0;
+        transform: translateY(0);
+        transition: transform var(--fast) var(--ease), opacity var(--fast);
+        pointer-events: none;
+      }
+      .list.has-cursor .cursor {
+        opacity: 1;
+      }
+      .track {
+        position: relative;
+        height: var(--row);
+        border-radius: var(--radius-s);
+        transition: background var(--fast);
+      }
+      .track:hover:not(.selected) {
+        background: var(--hover);
+      }
+      .art-wrap {
+        position: relative;
+        width: 44px;
+        height: 44px;
+        border-radius: 4px;
+        overflow: hidden;
+        background: var(--raised);
+      }
+      .art {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        opacity: 0;
+        transition: opacity var(--slow);
+      }
+      .art.loaded {
+        opacity: 1;
+      }
+      .art-wrap .play {
+        position: absolute;
+        inset: 0;
+        display: grid;
+        place-items: center;
+        background: rgb(13 13 18 / 55%);
+        color: #fff;
+        opacity: 0;
+        transition: opacity var(--fast);
+      }
+      .track:hover .play,
+      .track.selected .play {
+        opacity: 1;
+      }
+      .play svg {
+        fill: currentColor;
+        stroke: none;
+      }
+      .who {
+        min-width: 0;
+      }
+      .title,
+      .artist,
+      .album {
+        overflow: hidden;
+        white-space: nowrap;
+        text-overflow: ellipsis;
+      }
+      .title {
+        font-size: 15px;
+        font-weight: 600;
+        color: var(--text);
+      }
+      .artist,
+      .album,
+      .time {
+        color: var(--mid);
+        transition: color var(--fast);
+      }
+      .time {
+        font-variant-numeric: tabular-nums;
+      }
+      .track.selected .title {
+        color: #fff;
+      }
+      .track.selected .artist,
+      .track.selected .album,
+      .track.selected .time {
+        color: #ede9fe;
+      }
+
+      /* One entrance per search: the rows arrive together, a beat apart. */
+      .track.enter {
+        animation: arrive var(--slow) var(--ease) both;
+      }
+      @keyframes arrive {
+        from {
+          opacity: 0;
+          transform: translateY(6px);
+        }
+      }
+
+      /* Placeholder rows while the first results are on their way. */
+      .skeleton .bar {
+        height: 10px;
+        border-radius: 5px;
+        background: linear-gradient(90deg, var(--raised) 0%, #26263a 50%, var(--raised) 100%);
+        background-size: 200% 100%;
+        animation: shimmer 1.2s ease-in-out infinite;
+      }
+      .skeleton .art-wrap {
+        animation: shimmer 1.2s ease-in-out infinite;
+        background: linear-gradient(90deg, var(--raised) 0%, #26263a 50%, var(--raised) 100%);
+        background-size: 200% 100%;
+      }
+      .skeleton .bar + .bar {
+        margin-top: 8px;
+      }
+      @keyframes shimmer {
+        from {
+          background-position: 100% 0;
+        }
+        to {
+          background-position: -100% 0;
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .skeleton .bar,
+        .skeleton .art-wrap,
+        .field.busy::after {
+          animation: none;
+        }
+      }
+
+      .notice {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 10px;
+        padding: 72px 24px;
+        text-align: center;
+        animation: arrive var(--slow) var(--ease) both;
+      }
+      .notice strong {
+        font-family: "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif;
+        font-size: 20px;
+      }
+      .notice p {
+        max-width: 42ch;
+        margin: 0;
+        color: var(--mid);
+      }
+      .notice.error strong {
+        color: var(--pink);
+      }
+      .pill {
+        margin-top: 8px;
+        padding: 9px 22px;
+        border-radius: 999px;
+        background: var(--text);
+        color: var(--bg);
+        font-weight: 700;
+        transition: transform var(--fast) var(--ease), background var(--fast);
+      }
+      .pill:hover {
+        transform: scale(1.04);
+        background: #fff;
+      }
+      .pill:active {
+        transform: scale(0.98);
+      }
+
+      /* ── Now playing ──────────────────────────────────────────────── */
+      .player {
+        grid-column: 1 / -1;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) minmax(0, 1fr);
+        align-items: center;
+        gap: 16px;
+        height: 76px;
+        padding: 0 16px;
+      }
+      .np {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        min-width: 0;
+      }
+      .np .art-wrap {
+        width: 52px;
+        height: 52px;
+      }
+      .np-text {
+        min-width: 0;
+        color: var(--dim);
+      }
+      .controls {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
         gap: 6px;
       }
-      h1 {
-        margin: 0;
-        color: var(--accent);
-        font-size: 40px;
+      .buttons {
+        display: flex;
+        align-items: center;
+        gap: 18px;
       }
-      #version {
+      .buttons button {
+        display: grid;
+        place-items: center;
         color: var(--mid);
+        transition: color var(--fast), transform var(--fast) var(--ease);
+      }
+      .buttons button:disabled {
+        color: var(--border);
+        cursor: default;
+      }
+      .buttons .main {
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+        background: var(--text);
+        color: var(--bg);
+      }
+      .buttons .main:disabled {
+        background: var(--raised);
+        color: var(--dim);
+      }
+      .buttons .main svg,
+      .buttons .skip svg {
+        fill: currentColor;
+        stroke: none;
+      }
+      .progress {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        width: 100%;
+        max-width: 560px;
+        color: var(--dim);
+        font-size: 12px;
+        font-variant-numeric: tabular-nums;
+      }
+      .track-bar {
+        flex: 1;
+        height: 4px;
+        border-radius: 2px;
+        background: var(--raised);
+      }
+      .extras {
+        display: flex;
+        justify-content: flex-end;
+        align-items: center;
+        gap: 10px;
+        color: var(--dim);
+      }
+      .extras .track-bar {
+        flex: 0 0 96px;
+      }
+
+      /* ── Toast: confirms what a key or click did ──────────────────── */
+      #toast {
+        position: fixed;
+        left: 50%;
+        bottom: 104px;
+        padding: 10px 18px;
+        border-radius: var(--radius-s);
+        background: var(--text);
+        color: var(--bg);
+        font-weight: 600;
+        opacity: 0;
+        transform: translate(-50%, 8px);
+        transition: opacity var(--fast), transform var(--fast) var(--ease);
+        pointer-events: none;
+      }
+      #toast.show {
+        opacity: 1;
+        transform: translate(-50%, 0);
+      }
+
+      /* Narrower than the window allows, but a smaller preview should not
+         break: the sidebar folds to icons, then the album column goes. */
+      @media (max-width: 860px) {
+        .app {
+          grid-template-columns: 64px 1fr;
+        }
+        .nav-item span,
+        .brand span {
+          display: none;
+        }
+        .brand,
+        .nav-item {
+          justify-content: center;
+          padding-left: 0;
+          padding-right: 0;
+        }
+      }
+      @media (max-width: 680px) {
+        .head-row,
+        .track {
+          grid-template-columns: 44px minmax(0, 1fr) 56px;
+        }
+        .album,
+        .head-row .col-album {
+          display: none;
+        }
       }
     </style>
   </head>
   <body>
-    <main>
-      <h1>ytmgo</h1>
-      <div id="version">…</div>
-    </main>
+    <div class="app">
+      <nav aria-label="Main">
+        <div class="brand">
+          <svg viewBox="0 0 512 512" aria-hidden="true">
+            <polyline points="45,300 135,357 45,414" fill="none" stroke="#06d6a0" stroke-width="44" />
+            <rect x="172" y="392" width="148" height="34" fill="#06d6a0" />
+            <path d="M245 62 V230 Q245 308 325 308 H400 M432 62 V340 Q432 430 345 432" fill="none" stroke="#7c3aed" stroke-width="78" />
+          </svg>
+          <span>ytmgo</span>
+        </div>
+        <button class="nav-item" aria-current="page" title="Search">
+          <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" /></svg>
+          <span>Search</span>
+        </button>
+        <div class="nav-gap"></div>
+        <!-- Not built yet: shown so the layout reads as it will, but inert. -->
+        <button class="nav-item" aria-disabled="true" title="Library is on its way">
+          <svg viewBox="0 0 24 24"><path d="m16 6 4 14" /><path d="M12 6v14" /><path d="M8 8v12" /><path d="M4 4v16" /></svg>
+          <span>Library</span>
+        </button>
+        <button class="nav-item" aria-disabled="true" title="Favourites are on their way">
+          <svg viewBox="0 0 24 24"><path d="M2 9.5a5.5 5.5 0 0 1 9.6-3.7.6.6 0 0 0 .8 0A5.5 5.5 0 0 1 22 9.5c0 2.3-1.5 4-3 5.5l-5.5 5.3a2 2 0 0 1-3 0L5 15c-1.5-1.5-3-3.2-3-5.5" /></svg>
+          <span>Favourites</span>
+        </button>
+        <button class="nav-item" aria-disabled="true" title="History is on its way">
+          <svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.8 9.8 0 0 0-6.7 2.7L3 8" /><path d="M3 3v5h5" /><path d="M12 7v5l4 2" /></svg>
+          <span>History</span>
+        </button>
+        <button class="nav-item" aria-disabled="true" title="Downloads are on their way">
+          <svg viewBox="0 0 24 24"><path d="M12 15V3" /><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><path d="m7 10 5 5 5-5" /></svg>
+          <span>Downloads</span>
+        </button>
+      </nav>
+
+      <section class="view" aria-label="Search">
+        <div class="search-head">
+          <form class="field" id="search" autocomplete="off" role="search">
+            <span class="prompt" aria-hidden="true">&gt;</span>
+            <input id="query" type="search" placeholder="What do you want to hear?" aria-label="Search YouTube Music" autofocus />
+            <button type="button" id="clear" aria-label="Clear search">
+              <svg viewBox="0 0 24 24"><path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg>
+            </button>
+            <kbd aria-hidden="true">/</kbd>
+          </form>
+        </div>
+        <div class="results" id="results"></div>
+      </section>
+
+      <footer class="player" aria-label="Now playing">
+        <div class="np">
+          <div class="art-wrap"></div>
+          <div class="np-text">Nothing playing yet</div>
+        </div>
+        <div class="controls">
+          <div class="buttons">
+            <button class="skip" disabled aria-label="Previous">
+              <svg viewBox="0 0 24 24"><path d="M6 5h2v14H6zM20 5v14L9 12z" /></svg>
+            </button>
+            <button class="main" disabled aria-label="Play">
+              <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
+            </button>
+            <button class="skip" disabled aria-label="Next">
+              <svg viewBox="0 0 24 24"><path d="M16 5h2v14h-2zM4 5v14l11-7z" /></svg>
+            </button>
+          </div>
+          <div class="progress"><span>0:00</span><div class="track-bar"></div><span>0:00</span></div>
+        </div>
+        <div class="extras">
+          <svg viewBox="0 0 24 24"><path d="M11 5 6 9H2v6h4l5 4z" /><path d="M15.5 8.5a5 5 0 0 1 0 7" /></svg>
+          <div class="track-bar"></div>
+          <span id="version"></span>
+        </div>
+      </footer>
+    </div>
+    <div id="toast" role="status" aria-live="polite"></div>
+
     <script type="module">
-      import { Version } from "./wailsjs/go/gui/App.js";
-      Version().then((v) => (document.getElementById("version").textContent = v));
+      import { Search, Version } from "./wailsjs/go/gui/App.js";
+
+      const $ = (id) => document.getElementById(id);
+      const query = $("query");
+      const field = $("search");
+      const pane = $("results");
+      const ROW = 60;
+
+      let results = [];
+      let selected = -1;
+      let lastQuery = "";
+      // Each search gets a number, so a slow answer to an old query
+      // cannot overwrite the results of a newer one.
+      let seq = 0;
+      let debounce;
+
+      Version().then((v) => ($("version").textContent = v));
+
+      const el = (tag, cls, text) => {
+        const n = document.createElement(tag);
+        if (cls) n.className = cls;
+        if (text != null) n.textContent = text;
+        return n;
+      };
+      const duration = (secs) =>
+        secs ? `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, "0")}` : "";
+
+      let toastTimer;
+      function toast(text) {
+        const t = $("toast");
+        t.textContent = text;
+        t.classList.add("show");
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => t.classList.remove("show"), 1800);
+      }
+
+      function notice(title, body, action) {
+        const box = el("div", "notice" + (action ? " error" : ""));
+        box.append(el("strong", "", title), el("p", "", body));
+        if (action) {
+          const b = el("button", "pill", action.label);
+          b.addEventListener("click", action.run);
+          box.append(b);
+        }
+        pane.replaceChildren(box);
+      }
+
+      function empty() {
+        notice("Find something to play", "Search for a song or an artist. Press / from anywhere to jump back here.");
+      }
+
+      function skeleton() {
+        const list = el("div", "list");
+        for (let i = 0; i < 8; i++) {
+          const row = el("div", "track skeleton");
+          const who = el("div", "who");
+          const a = el("div", "bar");
+          a.style.width = `${40 + ((i * 37) % 45)}%`;
+          const b = el("div", "bar");
+          b.style.width = `${25 + ((i * 23) % 30)}%`;
+          who.append(a, b);
+          const al = el("div", "album");
+          const c = el("div", "bar");
+          c.style.width = `${30 + ((i * 41) % 40)}%`;
+          al.append(c);
+          row.append(el("div", "art-wrap"), who, al, el("div"));
+          list.append(row);
+        }
+        pane.replaceChildren(list);
+      }
+
+      function track(r, i) {
+        const row = el("div", "track enter");
+        row.style.animationDelay = `${Math.min(i, 10) * 24}ms`;
+        row.setAttribute("role", "option");
+
+        const wrap = el("div", "art-wrap");
+        const img = el("img", "art");
+        img.alt = "";
+        img.loading = "lazy";
+        img.addEventListener("load", () => img.classList.add("loaded"));
+        if (r.CoverURL) img.src = r.CoverURL;
+        const play = el("div", "play");
+        play.innerHTML = '<svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>';
+        wrap.append(img, play);
+
+        const who = el("div", "who");
+        who.append(el("div", "title", r.Title), el("div", "artist", r.Uploader));
+        who.title = `${r.Title}, ${r.Uploader}`;
+        const album = el("div", "album", r.Album || "");
+        album.title = r.Album || "";
+
+        row.append(wrap, who, album, el("div", "time", duration(r.Duration)));
+        row.addEventListener("click", () => select(i));
+        row.addEventListener("dblclick", () => playAt(i));
+        return row;
+      }
+
+      function render() {
+        if (!results.length) {
+          notice("No results", `Nothing matched “${lastQuery}”. Check the spelling, or try fewer words.`);
+          return;
+        }
+        const head = el("div", "head-row");
+        head.append(el("span"), el("span", "", "Title"), el("span", "col-album", "Album"), el("span", "", "Length"));
+        const list = el("div", "list");
+        list.setAttribute("role", "listbox");
+        list.setAttribute("aria-label", "Songs");
+        list.append(el("div", "cursor"), ...results.map(track));
+        pane.replaceChildren(el("h2", "", "Songs"), head, list);
+        pane.scrollTop = 0;
+        moveCursor();
+      }
+
+      function moveCursor() {
+        const list = pane.querySelector(".list");
+        if (!list) return;
+        const rows = list.querySelectorAll(".track");
+        rows.forEach((r, i) => {
+          r.classList.toggle("selected", i === selected);
+          r.setAttribute("aria-selected", i === selected);
+        });
+        list.classList.toggle("has-cursor", selected >= 0);
+        list.querySelector(".cursor").style.transform = `translateY(${selected * ROW}px)`;
+        rows[selected]?.scrollIntoView({ block: "nearest" });
+      }
+
+      function select(i) {
+        if (!results.length) return;
+        selected = Math.max(0, Math.min(results.length - 1, i));
+        moveCursor();
+      }
+
+      function playAt(i) {
+        select(i);
+        toast("Playback is the next thing being built");
+      }
+
+      async function run(q) {
+        q = q.trim();
+        if (!q) {
+          seq++;
+          results = [];
+          selected = -1;
+          lastQuery = "";
+          field.classList.remove("busy");
+          empty();
+          return;
+        }
+        if (q === lastQuery && results.length) return;
+        const mine = ++seq;
+        // First search, or after an empty or error state: placeholder
+        // rows. Refining a list keeps it on screen, with the working line.
+        if (!pane.querySelector(".list") || pane.querySelector(".skeleton")) skeleton();
+        field.classList.add("busy");
+        try {
+          const found = await Search(q);
+          if (mine !== seq) return;
+          results = found || [];
+          lastQuery = q;
+          selected = results.length ? 0 : -1;
+          render();
+        } catch (err) {
+          if (mine !== seq) return;
+          lastQuery = "";
+          results = [];
+          const detail = String(err);
+          const offline = /timeout|deadline|no such host|connection|network/i.test(detail);
+          notice(
+            offline ? "Couldn’t reach YouTube Music" : "Search didn’t work",
+            offline ? "Check your internet connection, then try again." : detail,
+            { label: "Try again", run: () => run(query.value) },
+          );
+          pane.querySelector(".notice").title = detail;
+        } finally {
+          if (mine === seq) field.classList.remove("busy");
+        }
+      }
+
+      // Search as you type, once typing pauses; Enter searches at once.
+      query.addEventListener("input", () => {
+        field.classList.toggle("has-text", query.value.length > 0);
+        clearTimeout(debounce);
+        debounce = setTimeout(() => run(query.value), 320);
+      });
+      field.addEventListener("submit", (e) => {
+        e.preventDefault();
+        clearTimeout(debounce);
+        if (results.length && query.value.trim() === lastQuery) {
+          playAt(selected);
+          return;
+        }
+        run(query.value);
+      });
+      $("clear").addEventListener("click", () => {
+        query.value = "";
+        field.classList.remove("has-text");
+        run("");
+        query.focus();
+      });
+
+      // Keyboard first, as in the terminal app: / to search, arrows or
+      // j/k to move, Enter to play, Escape back to the box.
+      document.addEventListener("keydown", (e) => {
+        const typing = document.activeElement === query;
+        if (e.key === "/" && !typing) {
+          e.preventDefault();
+          query.focus();
+          query.select();
+        } else if (e.key === "Escape") {
+          query.focus();
+          query.select();
+        } else if (!results.length) {
+          return;
+        } else if (e.key === "ArrowDown" || (!typing && e.key === "j")) {
+          e.preventDefault();
+          select(selected + 1);
+        } else if (e.key === "ArrowUp" || (!typing && e.key === "k")) {
+          e.preventDefault();
+          select(selected - 1);
+        } else if (e.key === "Enter" && !typing) {
+          playAt(selected);
+        }
+      });
+
+      empty();
     </script>
   </body>
 </html>
