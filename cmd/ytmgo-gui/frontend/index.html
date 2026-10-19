@@ -88,19 +88,32 @@
         display: flex;
         flex-direction: column;
       }
+      /* Logo, search centred on the window, then the window buttons:
+         the outer columns share what is left, so the search stays in
+         the middle whatever is beside it. */
       .titlebar {
         flex: none;
-        display: flex;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 480px) minmax(0, 1fr);
         align-items: center;
-        height: 40px;
+        gap: 12px;
+        height: 48px;
         --wails-draggable: drag;
+      }
+      .titlebar .field {
+        --wails-draggable: none;
+      }
+      .win-buttons {
+        display: flex;
+        justify-self: end;
+        height: 100%;
       }
       .tb-logo {
         height: 22px;
         width: auto;
         /* Centred over the sidebar's icons: the app's 8px edge, the
            sidebar's and the item's 10px padding, half a 20px icon. */
-        margin: 0 auto 0 27px;
+        margin-left: 27px;
         transition: margin-left var(--slow) var(--ease);
         /* Part of the bar: dragging the logo drags the window. */
         pointer-events: none;
@@ -387,16 +400,12 @@
       }
 
       /* ── Search field ─────────────────────────────────────────────── */
-      .search-head {
-        padding: 18px 24px 14px;
-      }
       .field {
         position: relative;
         display: flex;
         align-items: center;
         gap: 10px;
-        max-width: 560px;
-        height: 46px;
+        height: 36px;
         padding: 0 14px 0 16px;
         background: var(--raised);
         border: 1px solid transparent;
@@ -494,7 +503,7 @@
         flex: 1;
         min-height: 0;
         overflow-y: auto;
-        padding: 0 16px 16px;
+        padding: 16px 16px;
       }
       .results h2,
       .list-head h2 {
@@ -714,7 +723,7 @@
         display: flex;
         align-items: center;
         gap: 10px;
-        margin: 0 24px 10px;
+        margin: 16px 24px 0;
         padding: 9px 14px;
         border-radius: var(--radius-s);
         background: var(--raised);
@@ -1864,11 +1873,7 @@
           display: none;
         }
       }
-      @container view (max-width: 420px) {
-        .search-head {
-          padding-left: 14px;
-          padding-right: 14px;
-        }
+      @media (max-width: 760px) {
         .field kbd {
           display: none;
         }
@@ -1888,6 +1893,15 @@
   <body>
     <header class="titlebar" id="titlebar">
       <img class="tb-logo" src="ytmgo-icon.png" alt="ytmgo" />
+      <form class="field" id="search" autocomplete="off" role="search">
+        <span class="prompt" aria-hidden="true">&gt;</span>
+        <input id="query" type="search" placeholder="What do you want to hear?" aria-label="Search YouTube Music" autofocus />
+        <button type="button" id="clear" aria-label="Clear search">
+          <svg viewBox="0 0 24 24"><path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg>
+        </button>
+        <kbd aria-hidden="true">/</kbd>
+      </form>
+      <div class="win-buttons">
       <button type="button" id="win-min" aria-label="Minimise" title="Minimise">
         <svg viewBox="0 0 12 12"><path d="M1 6h10" /></svg>
       </button>
@@ -1898,6 +1912,7 @@
       <button type="button" id="win-close" aria-label="Close" title="Close">
         <svg viewBox="0 0 12 12"><path d="m1.5 1.5 9 9" /><path d="m10.5 1.5-9 9" /></svg>
       </button>
+      </div>
     </header>
     <div class="app" id="app">
       <nav aria-label="Main">
@@ -1934,16 +1949,6 @@
       <div class="splitter split-left" role="separator" aria-orientation="vertical" aria-label="Resize sidebar" tabindex="0" title="Drag to resize, double-click to reset"></div>
 
       <section class="view" aria-label="Search">
-        <div class="search-head">
-          <form class="field" id="search" autocomplete="off" role="search">
-            <span class="prompt" aria-hidden="true">&gt;</span>
-            <input id="query" type="search" placeholder="What do you want to hear?" aria-label="Search YouTube Music" autofocus />
-            <button type="button" id="clear" aria-label="Clear search">
-              <svg viewBox="0 0 24 24"><path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg>
-            </button>
-            <kbd aria-hidden="true">/</kbd>
-          </form>
-        </div>
         <div class="offline" id="offline" role="status" hidden>
           <span class="dot" aria-hidden="true"></span>
           You’re offline. Search and playback come back with the connection.
