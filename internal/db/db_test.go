@@ -88,6 +88,39 @@ func TestFavoritesKeepURL(t *testing.T) {
 	}
 }
 
+func TestFavoritesOrderRoundTrips(t *testing.T) {
+	d := openTestDB(t)
+	favs := []queue.Track{{ID: "c", Title: "C"}, {ID: "b", Title: "B"}, {ID: "a", Title: "A"}}
+	for i := 0; i < 2; i++ {
+		if err := d.SaveFavorites(favs); err != nil {
+			t.Fatalf("SaveFavorites #%d: %v", i, err)
+		}
+		got, err := d.LoadFavorites()
+		if err != nil {
+			t.Fatalf("LoadFavorites #%d: %v", i, err)
+		}
+		if len(got) != 3 || got[0].ID != "c" || got[1].ID != "b" || got[2].ID != "a" {
+			t.Fatalf("round trip #%d: order = %+v, want c, b, a", i, got)
+		}
+		favs = got
+	}
+}
+
+func TestFavoritesKeepAlbumAndBrowseIDs(t *testing.T) {
+	d := openTestDB(t)
+	favs := []queue.Track{{ID: "abcdefghijk", Title: "T", Album: "Al", AlbumBrowseID: "MPREb_x", ArtistBrowseID: "UCx"}}
+	if err := d.SaveFavorites(favs); err != nil {
+		t.Fatalf("SaveFavorites: %v", err)
+	}
+	got, err := d.LoadFavorites()
+	if err != nil {
+		t.Fatalf("LoadFavorites: %v", err)
+	}
+	if len(got) != 1 || got[0].Album != "Al" || got[0].AlbumBrowseID != "MPREb_x" || got[0].ArtistBrowseID != "UCx" {
+		t.Fatalf("favorites lost album/browse ids: %+v", got)
+	}
+}
+
 func TestRecordPlayDedupsConsecutive(t *testing.T) {
 	d := openTestDB(t)
 	tr := queue.Track{ID: "aaaaaaaaaaa", Title: "T", Artist: "A"}

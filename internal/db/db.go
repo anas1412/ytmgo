@@ -110,7 +110,10 @@ CREATE TABLE IF NOT EXISTS queue_state (
 	    duration     TEXT NOT NULL DEFAULT '',
 	    duration_sec INTEGER NOT NULL DEFAULT 0,
 	    cover_url    TEXT NOT NULL DEFAULT '',
-	    url          TEXT NOT NULL DEFAULT ''
+	    url          TEXT NOT NULL DEFAULT '',
+	    album            TEXT NOT NULL DEFAULT '',
+	    album_browse_id  TEXT NOT NULL DEFAULT '',
+	    artist_browse_id TEXT NOT NULL DEFAULT ''
 	);
 
 	CREATE TABLE IF NOT EXISTS play_history (
@@ -208,6 +211,9 @@ func openAt(path string) (*DB, error) {
 	db.Exec(`ALTER TABLE library_cache ADD COLUMN album TEXT NOT NULL DEFAULT ''`)
 	db.Exec(`ALTER TABLE favorites ADD COLUMN cover_url TEXT NOT NULL DEFAULT ''`)
 	db.Exec(`ALTER TABLE favorites ADD COLUMN url TEXT NOT NULL DEFAULT ''`)
+	db.Exec(`ALTER TABLE favorites ADD COLUMN album TEXT NOT NULL DEFAULT ''`)
+	db.Exec(`ALTER TABLE favorites ADD COLUMN album_browse_id TEXT NOT NULL DEFAULT ''`)
+	db.Exec(`ALTER TABLE favorites ADD COLUMN artist_browse_id TEXT NOT NULL DEFAULT ''`)
 	db.Exec(`ALTER TABLE play_history ADD COLUMN cover_url TEXT NOT NULL DEFAULT ''`)
 
 	if _, err := db.Exec(insertDefaultQueueState); err != nil {
@@ -271,7 +277,7 @@ func (d *DB) SaveQueue(tracks []queue.Track, currentIndex int, shuffle, repeat, 
 // LoadFavorites reads all favorited tracks from the database, ordered
 // most-recent-first (descending by id).
 func (d *DB) LoadFavorites() ([]queue.Track, error) {
-	rows, err := d.Query(`SELECT track_id, title, artist, duration, duration_sec, cover_url, url FROM favorites ORDER BY id DESC`)
+	rows, err := d.Query(`SELECT track_id, title, artist, duration, duration_sec, cover_url, url, album, album_browse_id, artist_browse_id FROM favorites ORDER BY id DESC`)
 	if err != nil {
 		return nil, fmt.Errorf("load favorites: %w", err)
 	}
@@ -280,7 +286,7 @@ func (d *DB) LoadFavorites() ([]queue.Track, error) {
 	var favs []queue.Track
 	for rows.Next() {
 		var t queue.Track
-		if err := rows.Scan(&t.ID, &t.Title, &t.Artist, &t.Duration, &t.DurationSec, &t.CoverURL, &t.URL); err != nil {
+		if err := rows.Scan(&t.ID, &t.Title, &t.Artist, &t.Duration, &t.DurationSec, &t.CoverURL, &t.URL, &t.Album, &t.AlbumBrowseID, &t.ArtistBrowseID); err != nil {
 			return nil, fmt.Errorf("load favorites: scan: %w", err)
 		}
 		favs = append(favs, t)
@@ -294,7 +300,8 @@ func (d *DB) LoadFavorites() ([]queue.Track, error) {
 	return favs, nil
 }
 
-// SaveFavorites replaces the entire favorites list with the provided tracks.
+// SaveFavorites replaces the entire favorites list with the provided
+// tracks, which are newest first, as LoadFavorites returns them.
 func (d *DB) SaveFavorites(tracks []queue.Track) error {
 	tx, err := d.Begin()
 	if err != nil {
@@ -306,14 +313,17 @@ func (d *DB) SaveFavorites(tracks []queue.Track) error {
 		return fmt.Errorf("save favorites: delete: %w", err)
 	}
 
-	stmt, err := tx.Prepare(`INSERT INTO favorites (track_id, title, artist, duration, duration_sec, cover_url, url) VALUES (?, ?, ?, ?, ?, ?, ?)`)
+	stmt, err := tx.Prepare(`INSERT INTO favorites (track_id, title, artist, duration, duration_sec, cover_url, url, album, album_browse_id, artist_browse_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
 	if err != nil {
 		return fmt.Errorf("save favorites: prepare: %w", err)
 	}
 	defer stmt.Close()
 
-	for _, t := range tracks {
-		if _, err := stmt.Exec(t.ID, t.Title, t.Artist, t.Duration, t.DurationSec, t.CoverURL, t.URL); err != nil {
+	// Insert oldest first so the newest gets the highest id and
+	// LoadFavorites' ORDER BY id DESC gives back the same order.
+	for i := len(tracks) - 1; i >= 0; i-- {
+		t := tracks[i]
+		if _, err := stmt.Exec(t.ID, t.Title, t.Artist, t.Duration, t.DurationSec, t.CoverURL, t.URL, t.Album, t.AlbumBrowseID, t.ArtistBrowseID); err != nil {
 			return fmt.Errorf("save favorites: insert %q: %w", t.ID, err)
 		}
 	}
