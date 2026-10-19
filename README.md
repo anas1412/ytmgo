@@ -4,14 +4,29 @@
 
 # ytmgo — YT Music from Terminal
 
-A terminal-based YouTube Music client written in Go. Search music, download audio, manage a play queue, bookmark favorites, and play music — all from the keyboard, inside your terminal.
+A YouTube Music client written in Go. Search music, download audio, manage a play queue, bookmark favorites, and play music — all from the keyboard: inside your terminal on Linux, or as a desktop app on Windows.
 
 ![Go Version](https://img.shields.io/badge/go-1.25+-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
-![Version](https://img.shields.io/github/v/tag/anas1412/ytmgo?label=version&color=purple)
+![Version](https://img.shields.io/github/v/release/anas1412/ytmgo?label=version&color=purple)
 ![Downloads](https://img.shields.io/github/downloads/anas1412/ytmgo/total?label=downloads&color=orange)
 ![Stars](https://img.shields.io/github/stars/anas1412/ytmgo?style=flat&color=yellow)
 [![AUR](https://img.shields.io/aur/version/ytmgo-bin?label=AUR&color=1793d1)](https://aur.archlinux.org/packages/ytmgo-bin)
+
+<table>
+  <tr>
+    <td width="50%"><a href="docs/public/tui-app.jpg"><img src="docs/public/tui-app.jpg" alt="ytmgo in a terminal: an album, the queue, the visualizer, lyrics and the player"></a></td>
+    <td width="50%"><a href="docs/public/windows-app.jpg"><img src="docs/public/windows-app.jpg" alt="ytmgo for Windows: search and the queue, an album, an artist's releases, and downloads"></a></td>
+  </tr>
+  <tr>
+    <td align="center"><b>Linux: the terminal app</b><br>
+      <a href="https://github.com/anas1412/ytmgo/releases/latest/download/ytmgo_Linux_x86_64.tar.gz">x86_64</a> ·
+      <a href="https://github.com/anas1412/ytmgo/releases/latest/download/ytmgo_Linux_arm64.tar.gz">arm64</a> ·
+      <a href="#install">one-line install</a></td>
+    <td align="center"><b>Windows: the desktop app</b><br>
+      <a href="https://github.com/anas1412/ytmgo/releases/download/gui-v0.1.0/ytmgo-gui-setup.exe">Download ytmgo-gui-setup.exe</a> (0.1.0, pre-release)</td>
+  </tr>
+</table>
 
 ---
 
