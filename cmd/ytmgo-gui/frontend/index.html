@@ -2472,6 +2472,8 @@
         ChooseDownloadFolder,
         Lyrics as fetchLyrics,
         Home as fetchHome,
+        PlayedFrom,
+        Recent,
         Playlist as fetchPlaylist,
         History,
         ClearHistory,
@@ -3197,6 +3199,8 @@
       // Double-click: now, straight after the song playing.
       async function playNow(i) {
         select(i);
+        const from = pageSource();
+        if (from) PlayedFrom(from);
         begin(results[i]);
         setQueue(await PlayNow(results[i]));
         start();
@@ -4076,7 +4080,7 @@
         if (p.year) meta.push(el("span", "", p.year));
         const n = p.tracks.length;
         meta.push(el("span", "", `${n} ${n === 1 ? "song" : "songs"}${p.seconds ? `, ${long(p.seconds)}` : ""}`));
-        const play = pill("Play", () => playList(p.tracks), true);
+        const play = pill("Play", () => playList(p.tracks, pageSource()), true);
         const add = pill("Add to queue", () => queueAll());
         add.title = "Add every song to the queue (a)";
         const get = pill("Download", () => downloadAlbum(p, get));
@@ -4103,7 +4107,7 @@
         const meta = [];
         if (p.subtitle) meta.push(el("span", "strong", p.subtitle));
         meta.push(el("span", "", `${n} ${n === 1 ? "song" : "songs"}${p.seconds ? `, ${long(p.seconds)}` : ""}`));
-        const play = pill("Play", () => playList(p.tracks), true);
+        const play = pill("Play", () => playList(p.tracks, pageSource()), true);
         const add = pill("Add to queue", () => queueAll());
         add.title = "Add every song to the queue (e)";
         const head = header("playlist", p.coverURL, p.title || p.name || "Playlist", meta, n ? [play, add] : []);
@@ -4171,8 +4175,10 @@
 
       // Play: every song of the page into the queue, starting with the
       // first, whatever was playing.
-      async function playList(tracks) {
+      // from is the album or playlist played, for the quick tiles on Home.
+      async function playList(tracks, from) {
         if (!tracks.length) return;
+        if (from) PlayedFrom(from);
         begin(tracks[0]);
         let s = await AddAll(tracks);
         s = await Jump(s.tracks.length - tracks.length);
@@ -4803,7 +4809,16 @@
       let homeMood = "";
       let homeSeq = 0;
       let homeFailed = null; // the problem, while the feed will not load
-      let recent = []; // the newest plays, for the quick tiles
+      let recent = []; // the albums and playlists played lately, for the quick tiles
+
+      // The album or playlist page open, as a source for the quick tiles;
+      // null on any other page.
+      function pageSource() {
+        if (!page) return null;
+        if (view === "album") return { kind: "album", id: page.browseID, title: page.title, subtitle: page.artist, coverURL: page.coverURL };
+        if (view === "playlist") return { kind: "playlist", id: page.id, title: page.title, subtitle: page.subtitle || "", coverURL: page.coverURL || "" };
+        return null;
+      }
       const PLAY = '<path d="M8 5v14l11-7z" />';
       const CHEVRON_L = '<path d="m15 18-6-6 6-6" />';
       const CHEVRON_R = '<path d="m9 18 6-6-6-6" />';
@@ -4826,10 +4841,9 @@
         selected = -1;
         if (recs === null && !recsSeq) refreshRecs();
         if (!homeCache[homeMood] && !homeFailed) loadHome(homeMood);
-        History()
-          .then((h) => {
-            const seen = new Set();
-            recent = (h || []).filter((t) => !seen.has(t.id) && seen.add(t.id)).slice(0, 7);
+        Recent()
+          .then((r) => {
+            recent = r || [];
             const tiles = pane.querySelector(".tiles");
             if (tiles && view === "home") tiles.replaceWith(quickTiles());
           })
@@ -4907,9 +4921,25 @@
         const fav = tileOf(heart, "Favourites", `${favs.length} ${favs.length === 1 ? "song" : "songs"}`, () => navTo("favs"), () => playList(favs));
         fav.classList.add("fav");
         grid.append(fav);
-        for (const t of recent) {
-          const tile = tileOf(cover(artOf(t), 120), t.title, `${t.title}, ${t.artist}`, () => playTrack(t), () => playTrack(t));
-          draggable(tile, () => ({ kind: "result", index: -1, track: t }));
+        // Then the albums and playlists played lately, newest first, as
+        // Spotify's: the tile opens the page, its button plays it.
+        for (const src of recent) {
+          const load = src.kind === "album" ? () => fetchAlbum(src.id) : () => fetchPlaylist(src.id);
+          const extra = src.kind === "playlist" ? { coverURL: src.coverURL, subtitle: src.subtitle } : {};
+          const tile = tileOf(
+            cover(src.coverURL, 120),
+            src.title,
+            src.subtitle ? `${src.title}, ${src.subtitle}` : src.title,
+            () => openPage(src.kind, load, src.title, extra),
+            async () => {
+              try {
+                const p = await load();
+                playList(p.tracks || [], src);
+              } catch (err) {
+                say(`Couldn’t open “${src.title}”`, { error: true, full: problemOf(err).detail });
+              }
+            },
+          );
           grid.append(tile);
         }
         return grid;
@@ -5009,7 +5039,7 @@
             b.classList.add("spin");
             try {
               const p = await load();
-              playList(p.tracks || []);
+              playList(p.tracks || [], { kind: k.kind, id: k.id, title: k.title, subtitle: k.subtitle, coverURL: k.coverURL });
             } catch (err) {
               const pr = problemOf(err);
               say(`Couldn’t open “${k.title}”`, { error: true, full: pr.detail });

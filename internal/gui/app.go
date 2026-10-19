@@ -62,6 +62,10 @@ type App struct {
 	playlist func(search.PlaylistRef) (title string, results []search.Result, missed int, err error)
 	// home is ytmusic.HomeFeed.
 	home func(params string) (ytmusic.Home, error)
+	// recordSource and sources are the database's recent albums and
+	// playlists, for the quick tiles.
+	recordSource func(db.Source) error
+	sources      func(limit int) ([]db.Source, error)
 
 	discord  *discord
 	lfm      lastfmAPI
@@ -150,17 +154,19 @@ func New(d *db.DB) *App {
 			}
 			return ids, err
 		},
-		recommend:  search.FetchRecommendations,
-		recordPlay: d.RecordPlay,
-		plays:      d.LoadPlayHistory,
-		clearPlays: d.ClearPlayHistory,
-		saveFavs:   d.SaveFavorites,
-		lfm:        realLastFM,
-		discord:    realDiscord,
-		album:      ytmusic.AlbumTracks,
-		artist:     ytmusic.Artist,
-		playlist:   search.PlaylistTracks,
-		home:       ytmusic.HomeFeed,
+		recommend:    search.FetchRecommendations,
+		recordPlay:   d.RecordPlay,
+		plays:        d.LoadPlayHistory,
+		clearPlays:   d.ClearPlayHistory,
+		saveFavs:     d.SaveFavorites,
+		lfm:          realLastFM,
+		discord:      realDiscord,
+		album:        ytmusic.AlbumTracks,
+		artist:       ytmusic.Artist,
+		playlist:     search.PlaylistTracks,
+		home:         ytmusic.HomeFeed,
+		recordSource: d.RecordSource,
+		sources:      d.LoadSources,
 		scanLibrary: func(downloads string, extra []string) ([]queue.Track, error) {
 			cache, _ := d.LoadLibraryCache() // without it, every file is read again
 			tracks, updates, err := library.Scan(downloads, extra, cache)
