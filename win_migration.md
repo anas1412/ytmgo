@@ -405,6 +405,15 @@ Not done: updates (3), signing (4), winget and Scoop (6).
 
 ---
 
+## Backlog: GUI features requested after 1.5.0
+
+- **Home:** a Home button and a home screen, with recommendations on it.
+- **Clickable links everywhere:** song names, artists and albums are clickable in every view.
+- **Follow and like:** follow artists, and like albums.
+- **Favourites tabs:** Songs, Artists and Albums.
+- **Playlists:** the logic and the UI.
+- **Right panel:** song and artist details after the Lyrics tab. Opened by clicking the cover in the player bar.
+
 ## Open decisions
 
 - **Audio engine** (S2): WebView2 `<audio>`, a Go asset handler in front of
