@@ -274,7 +274,9 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 					m.clampHistoryOffset()
 				}
 			case PageFavorites:
-				if m.favCursor > 0 {
+				if m.favTab != favSongs {
+					m.moveSavedCursor(-1)
+				} else if m.favCursor > 0 {
 					m.favCursor--
 					m.clampFavoritesOffset()
 				}
@@ -318,7 +320,9 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				}
 			case PageFavorites:
 				maxIdx := len(m.favorites) - 1
-				if m.favCursor < maxIdx {
+				if m.favTab != favSongs {
+					m.moveSavedCursor(1)
+				} else if m.favCursor < maxIdx {
 					m.favCursor++
 					m.clampFavoritesOffset()
 				}
@@ -540,7 +544,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		// Toggle favorite on the highlighted track.
 		switch {
 		case m.activePage == PageFavorites && m.activePanel == PanelSearch:
-			if len(m.favorites) > 0 && m.favCursor >= 0 && m.favCursor < len(m.favorites) {
+			if m.favTab == favSongs && len(m.favorites) > 0 && m.favCursor >= 0 && m.favCursor < len(m.favorites) {
 				return m, m.toggleFavorite(m.favorites[m.favCursor])
 			}
 		case m.activePage == PageLibrary && m.activePanel == PanelSearch:
@@ -686,7 +690,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, downloadCmd(m.downloader)
 
 		case m.activePage == PageFavorites && m.activePanel == PanelSearch:
-			if len(m.favorites) == 0 || m.favCursor < 0 || m.favCursor >= len(m.favorites) {
+			if m.favTab != favSongs || len(m.favorites) == 0 || m.favCursor < 0 || m.favCursor >= len(m.favorites) {
 				return m, nil
 			}
 			t := m.favorites[m.favCursor]
@@ -864,6 +868,19 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// among the songs to come, never moving over the one playing. Under
 	// shuffle the list is the shuffled order, which a move in the queue
 	// would not change, so it does nothing there.
+	case "F":
+		return m, m.toggleSavedAction()
+
+	case "[", "]":
+		if m.activePage == PageFavorites {
+			if msg.String() == "[" {
+				m.switchFavTab(-1)
+			} else {
+				m.switchFavTab(1)
+			}
+		}
+		return m, nil
+
 	case "ctrl+up", "ctrl+down":
 		idx := m.selectedQueueIndex()
 		cur := m.queue.CurrentIndex()

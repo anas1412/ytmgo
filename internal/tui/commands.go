@@ -593,12 +593,17 @@ func initQueueFavoritesCmd(database *db.DB) tea.Cmd {
 		if err != nil {
 			return DbReadyMsg{Error: err}
 		}
+		// A failure here costs only the Artists and Albums tabs.
+		artists, _ := database.LoadSaved("artist")
+		albums, _ := database.LoadSaved("album")
 		return DbReadyMsg{
 			QueueTracks: tracks,
 			Shuffle:     shuffle,
 			Repeat:      repeat,
 			RepeatAll:   repeatAll,
 			Favorites:   favs,
+			Artists:     artists,
+			Albums:      albums,
 		}
 	}
 }

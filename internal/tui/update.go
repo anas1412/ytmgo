@@ -195,6 +195,7 @@ func (m Model) dispatch(msg tea.Msg) (tea.Model, tea.Cmd) {
 		for _, ft := range msg.Favorites {
 			m.favoriteSet[ft.ID] = true
 		}
+		m.savedArtists, m.savedAlbums = msg.Artists, msg.Albums
 		m.setStatus(fmt.Sprintf("Loaded %d tracks and %d favorites",
 			len(msg.QueueTracks), len(msg.Favorites)))
 		return m, nil

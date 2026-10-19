@@ -57,7 +57,9 @@ func (m Model) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 						m.clampHistoryOffset()
 					}
 				case PageFavorites:
-					if m.favCursor > 0 {
+					if m.favTab != favSongs {
+						m.moveSavedCursor(-1)
+					} else if m.favCursor > 0 {
 						m.favCursor--
 						m.clampFavoritesOffset()
 					}
@@ -106,7 +108,9 @@ func (m Model) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 					}
 				case PageFavorites:
 					maxIdx := len(m.favorites) - 1
-					if m.favCursor < maxIdx {
+					if m.favTab != favSongs {
+						m.moveSavedCursor(1)
+					} else if m.favCursor < maxIdx {
 						m.favCursor++
 						m.clampFavoritesOffset()
 					}
@@ -327,6 +331,13 @@ func (m Model) handleClick(x, y int) (Model, tea.Cmd) {
 				}
 				m.historyCursor = idx
 			case PageFavorites:
+				// The tab row sits above the list: one line lower.
+				idx = (y - clickItemOffsetY - 1) / clickLinesPerItem
+				if m.favTab != favSongs {
+					m.savedCursor = idx + m.savedOffset
+					m.clampSavedOffset()
+					break
+				}
 				idx += m.favOffset
 				switch {
 				case idx < 0:

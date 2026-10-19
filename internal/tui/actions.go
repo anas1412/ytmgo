@@ -73,6 +73,9 @@ func (m *Model) activateSelection() tea.Cmd {
 
 	switch m.activePage {
 	case PageFavorites:
+		if m.favTab != favSongs {
+			return m.openSavedSelected()
+		}
 		if len(m.favorites) > 0 && m.favCursor >= 0 && m.favCursor < len(m.favorites) {
 			return m.enqueueAndMaybePlay(m.favorites[m.favCursor])
 		}
@@ -335,7 +338,7 @@ func (m *Model) selectedTrack() (queue.Track, bool) {
 			return m.queue.Tracks()[idx], true
 		}
 
-	case m.activePage == PageFavorites:
+	case m.activePage == PageFavorites && m.favTab == favSongs:
 		if m.favCursor >= 0 && m.favCursor < len(m.favorites) {
 			return m.favorites[m.favCursor], true
 		}

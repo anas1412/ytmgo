@@ -197,7 +197,10 @@ type (
 		Repeat      bool
 		RepeatAll   bool
 		Favorites   []queue.Track
-		Error       error
+		// Artists followed and albums liked (db.Saved), shared with the GUI.
+		Artists []db.Saved
+		Albums  []db.Saved
+		Error   error
 	}
 
 	// PlayRecordedMsg is sent after a play history entry is recorded.
@@ -357,6 +360,14 @@ type Model struct {
 	favCursor   int
 	favOffset   int
 	favoriteSet map[string]bool // track ID → true, for O(1) lookup
+	// favTab is the Favs page's tab: songs, artists followed or albums
+	// liked ([ and ] switch). The last two list savedArtists and
+	// savedAlbums, with their own cursor.
+	favTab       int
+	savedArtists []db.Saved
+	savedAlbums  []db.Saved
+	savedCursor  int
+	savedOffset  int
 
 	// ── History (listening history) ──
 	history       []db.PlayHistoryEntry

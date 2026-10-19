@@ -1143,6 +1143,9 @@ func (m Model) browseStrip(rowW int, tracks []search.Result) []string {
 			third += "  ·  [a] queue all songs · [esc] back"
 		}
 	}
+	if hint := m.savedHint(); hint != "" {
+		third += " · " + hint
+	}
 
 	strip := []string{
 		styleNowTitle.Render(truncate(heading, textW)),
@@ -1501,6 +1504,19 @@ func (m Model) renderLibrary(width, height int) string {
 }
 
 func (m Model) renderFavorites(width, height int) string {
+	// The tab row on top; the tab's list under it.
+	tabs := m.favTabsLine(max(1, width-2))
+	height = max(1, height-1)
+	var body string
+	if m.favTab != favSongs {
+		body = m.renderSaved(width, height)
+	} else {
+		body = m.renderFavoriteSongs(width, height)
+	}
+	return padToWidth(tabs, max(1, width-2)) + "\n" + body
+}
+
+func (m Model) renderFavoriteSongs(width, height int) string {
 	tracks := m.favorites
 	if len(tracks) == 0 {
 		return styleEmpty.Width(width - 2).Height(height).Render(
