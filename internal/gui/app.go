@@ -63,7 +63,10 @@ type App struct {
 	// home is ytmusic.HomeFeed.
 	home func(params string) (ytmusic.Home, error)
 
-	discord  *discord
+	discord *discord
+	// covers is the public cover found for each library song, by
+	// library.MatchKey, for Discord (publicCover).
+	covers   map[string]string
 	lfm      lastfmAPI
 	lfmToken string // while the user is approving ytmgo on last.fm
 
