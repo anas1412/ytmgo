@@ -660,6 +660,7 @@
         height: 52px;
       }
       .np-text {
+        flex: 1;
         min-width: 0;
         color: var(--dim);
       }
@@ -677,8 +678,43 @@
         color: var(--mid);
         font-size: 13px;
       }
-      .np-text.change {
+      .np-text.change .np-title,
+      .np-text.change .np-sub {
         animation: arrive var(--slow) var(--ease) both;
+      }
+      /* The line under the title says who the artist is, or, for a
+         moment, what just happened. Problems in pink, the rest in grey;
+         no box around either. */
+      .np-line {
+        position: relative;
+        height: 18px;
+        overflow: hidden;
+      }
+      .np-line > * {
+        position: absolute;
+        inset: 0;
+        line-height: 18px;
+        transition: opacity var(--fast), transform var(--slow) var(--ease);
+      }
+      .np-status {
+        overflow: hidden;
+        white-space: nowrap;
+        text-overflow: ellipsis;
+        color: var(--mid);
+        font-size: 13px;
+        opacity: 0;
+        transform: translateY(100%);
+      }
+      .np-status.error {
+        color: var(--pink);
+      }
+      .np-text.has-status .np-sub {
+        opacity: 0;
+        transform: translateY(-100%);
+      }
+      .np-text.has-status .np-status {
+        opacity: 1;
+        transform: none;
       }
       .controls {
         display: flex;
@@ -881,31 +917,6 @@
         color: var(--mint);
       }
 
-      /* ── Toast: confirms what a key or click did ──────────────────── */
-      #toast {
-        position: fixed;
-        left: 50%;
-        bottom: 104px;
-        padding: 10px 18px;
-        border-radius: var(--radius-s);
-        background: var(--text);
-        color: var(--bg);
-        font-weight: 600;
-        opacity: 0;
-        transform: translate(-50%, 8px);
-        transition: opacity var(--fast), transform var(--fast) var(--ease);
-        pointer-events: none;
-      }
-      #toast.error {
-        background: var(--raised);
-        color: var(--text);
-        border-left: 3px solid var(--pink);
-      }
-      #toast.show {
-        opacity: 1;
-        transform: translate(-50%, 0);
-      }
-
       /* A sidebar dragged narrow folds to icons, as Spotify's does. */
       .app.side-collapsed .nav-item span,
       .app.side-collapsed .brand .wordmark {
@@ -1025,7 +1036,11 @@
         <div class="np">
           <div class="art-wrap"><img class="art" id="np-art" alt="" /></div>
           <div class="np-text" id="np-text">
-            <div class="np-empty">Nothing playing yet</div>
+            <div class="np-title" id="np-title"></div>
+            <div class="np-line">
+              <div class="np-sub" id="np-sub">Nothing playing yet</div>
+              <div class="np-status" id="np-status" role="status" aria-live="polite"></div>
+            </div>
           </div>
         </div>
         <div class="controls">
@@ -1065,7 +1080,6 @@
         </div>
       </footer>
     </div>
-    <div id="toast" role="status" aria-live="polite"></div>
     <audio id="audio" preload="auto"></audio>
 
     <script type="module">
@@ -1102,15 +1116,29 @@
       const duration = (secs) =>
         secs ? `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, "0")}` : "";
 
-      let toastTimer;
-      function toast(text, isError = false) {
-        const t = $("toast");
-        t.textContent = text;
-        t.classList.toggle("error", isError);
-        t.classList.add("show");
-        clearTimeout(toastTimer);
-        // Errors stay long enough to read.
-        toastTimer = setTimeout(() => t.classList.remove("show"), isError ? 4200 : 1800);
+      // Playback says what happened in the player itself, on the line
+      // under the title. A message that needs the user to act (offline,
+      // stopped) stays until a song starts; one that only reports (a
+      // skip) gives the line back to the artist after a few seconds.
+      let sayTimer;
+      let sayingSticky = false;
+      // full is the whole sentence, on hover and for screen readers; the
+      // line itself has room for a few words.
+      function say(text, { error = false, sticky = false, full = text } = {}) {
+        const st = $("np-status");
+        st.textContent = text;
+        st.title = full;
+        st.setAttribute("aria-label", full);
+        st.classList.toggle("error", error);
+        $("np-text").classList.add("has-status");
+        sayingSticky = sticky;
+        clearTimeout(sayTimer);
+        if (!sticky) sayTimer = setTimeout(unsay, 4500);
+      }
+      function unsay() {
+        clearTimeout(sayTimer);
+        sayingSticky = false;
+        $("np-text").classList.remove("has-status");
       }
 
       // Go sends failures as a Problem (internal/gui/problem.go): a kind
@@ -1503,10 +1531,9 @@
         if (t.CoverURL) art.src = sized(t.CoverURL, 120);
         else art.removeAttribute("src");
         const text = $("np-text");
-        const title = el("div", "np-title", t.Title);
-        const sub = el("div", "np-sub", t.Uploader);
+        $("np-title").textContent = t.Title;
+        $("np-sub").textContent = t.Uploader;
         text.title = t.Album ? `${t.Title}, ${t.Uploader}, from ${t.Album}` : `${t.Title}, ${t.Uploader}`;
-        text.replaceChildren(title, sub);
         text.classList.remove("change");
         void text.offsetWidth; // restart the entrance for each new track
         text.classList.add("change");
@@ -1572,25 +1599,25 @@
         if (p.kind === "unavailable" || p.kind === "other") {
           if (++failures >= 3) {
             failures = 0;
-            toast("Stopped: three songs in a row couldn’t play", true);
+            say("Stopped after 3 songs failed", { error: true, sticky: true, full: "Stopped: three songs in a row couldn’t play." });
             return;
           }
-          toast(`Skipped “${track.Title}”: it can’t be played here`, true);
+          say(`Skipped “${track.Title}”, unavailable`, { full: `Skipped “${track.Title}”: it can’t be played here.` });
           if (now.pos + 1 < now.list.length) play(now.list, now.pos + 1);
           return;
         }
-        const why = {
-          offline: "You’re offline. Press play once you’re back online",
-          timeout: "YouTube took too long to answer. Press play to try again",
-          "missing-tool": "yt-dlp isn’t installed, so nothing can play",
+        const [why, full] = {
+          offline: ["Offline. Press play to retry", "You’re offline. Press play once you’re back online."],
+          timeout: ["Timed out. Press play to retry", "YouTube took too long to answer. Press play to try again."],
+          "missing-tool": ["yt-dlp isn’t installed", "yt-dlp isn’t installed, so nothing can play."],
         }[p.kind];
-        toast(why, true);
+        say(why, { error: true, sticky: true, full });
       }
 
       function next() {
         if (!now) return;
         if (now.pos + 1 < now.list.length) play(now.list, now.pos + 1);
-        else toast("That was the last song in the list");
+        else say("End of the list", { full: "That was the last song in the list." });
       }
       // Previous restarts the song once it is more than 3s in, as the
       // TUI's p does.
@@ -1624,6 +1651,7 @@
 
       audio.addEventListener("playing", () => {
         failures = 0;
+        if (sayingSticky) unsay();
         setLoading(false);
         toggle.classList.add("playing");
         toggle.setAttribute("aria-label", "Pause");
@@ -1653,7 +1681,7 @@
         audio.removeAttribute("src");
         if (!navigator.onLine) {
           resumeAt = at;
-          toast("Lost the connection. The song picks up again when you’re back online", true);
+          say("Connection lost, resumes online", { error: true, sticky: true, full: "Lost the connection. The song picks up again when you’re back online." });
           return;
         }
         if (now.retried) {
