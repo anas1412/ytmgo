@@ -261,6 +261,60 @@
         font-size: 17px;
       }
 
+      /* ── Lyrics ───────────────────────────────────────────────────── */
+      .lyrics {
+        padding: 28px 20px 45%;
+      }
+      .lyrics p {
+        margin: 0 0 14px;
+        font-size: 19px;
+        font-weight: 700;
+        line-height: 1.35;
+        color: var(--dim);
+        overflow-wrap: anywhere;
+        transition: color var(--slow) var(--ease);
+      }
+      .lyrics.synced p {
+        cursor: pointer;
+      }
+      .lyrics.synced p:hover {
+        color: var(--mid);
+      }
+      .lyrics p.past {
+        color: var(--mid);
+      }
+      .lyrics p.current {
+        color: var(--text);
+      }
+      /* Unsynced lyrics have no current line: all of it reads at once. */
+      .lyrics.plain p {
+        color: var(--text);
+        font-size: 16px;
+        font-weight: 600;
+      }
+      .lyrics .src {
+        margin-top: 28px;
+        color: var(--dim);
+        font-size: 12px;
+      }
+      .lyrics-skel {
+        padding: 28px 20px;
+      }
+      .lyrics-skel .bar {
+        height: 18px;
+        margin-bottom: 16px;
+      }
+      .follow {
+        position: absolute;
+        left: 50%;
+        bottom: 16px;
+        transform: translateX(-50%);
+        box-shadow: 0 6px 20px rgb(0 0 0 / 0.4);
+      }
+      .side-panel {
+        position: relative;
+      }
+
       /* ── Search field ─────────────────────────────────────────────── */
       .search-head {
         padding: 18px 24px 14px;
@@ -645,7 +699,10 @@
       .player {
         grid-column: 1 / -1;
         display: grid;
-        grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) minmax(0, 1fr);
+        /* The buttons never shrink under their own width, or the side
+           ones would spill over the controls; the song's title gives way
+           instead, and truncates. */
+        grid-template-columns: minmax(0, 1fr) minmax(max-content, 1.4fr) minmax(max-content, 1fr);
         align-items: center;
         gap: 16px;
         height: 76px;
@@ -1958,6 +2015,7 @@
         OpenDownloads,
         SetDownloadFormat,
         ChooseDownloadFolder,
+        Lyrics as fetchLyrics,
         Library,
         Rescan,
         DeleteFile,
@@ -2514,7 +2572,7 @@
 
       function renderPanel() {
         if (layout.tab === "queue") renderQueue();
-        else notice($("panel-body"), "Nothing playing", "Lyrics follow along here while a song plays.");
+        else renderLyrics();
       }
 
       // ── Queue ────────────────────────────────────────────────────────
@@ -2538,6 +2596,10 @@
       function renderQueue(follow = false) {
         const body = $("panel-body");
         if (layout.tab !== "queue") return;
+        if (body.dataset.shows !== "queue") {
+          body.dataset.shows = "queue";
+          $("follow")?.remove();
+        }
         // The same songs in the same order, only another one playing (a
         // song starting, next, previous): swap the two rows that changed
         // rather than rebuild the list and every cover in it, which is
@@ -2933,6 +2995,9 @@
       // Back to "Nothing playing yet", as after clearing the queue.
       function idle() {
         shownId = null;
+        // The TUI keeps the last song's lyrics after the queue is cleared.
+        lyr = null;
+        renderPanel();
         $("np-heart").hidden = true;
         $("np-title").textContent = "";
         $("np-sub").textContent = "Nothing playing yet";
@@ -2978,6 +3043,7 @@
           recorded: fresh ? false : now.recorded,
         };
         if (fresh) autoplayTried = false;
+        if (fresh) loadLyrics(track);
         const mine = ++playSeq;
         audio.pause();
         playState = "playing";
@@ -3941,6 +4007,136 @@
         lfmNote = null;
         renderSettings();
       }
+
+      // ── Lyrics ───────────────────────────────────────────────────────
+      // Asked of Go when a song starts (cached there, so a song heard
+      // before needs no network). Synced lines follow the song, the one
+      // being sung a third of the way down; scrolling by hand stops that
+      // until the next song or "Back to the current line".
+      let lyr = null; // { id, state: "loading" | "ok" | "none" | "error", view, problem }
+      let lyrSeq = 0;
+      let lyrShown = ""; // what the panel shows, so a resize does not redraw it
+      let lyrFollow = true;
+      let lyrAt = -1;
+
+      async function loadLyrics(t) {
+        const mine = ++lyrSeq;
+        lyr = { id: t.id, track: t, state: "loading" };
+        lyrFollow = true;
+        lyrAt = -1;
+        renderPanel();
+        try {
+          const view = await fetchLyrics(t);
+          if (mine !== lyrSeq) return;
+          lyr = { ...lyr, state: view.found ? "ok" : "none", view };
+        } catch (err) {
+          if (mine !== lyrSeq) return;
+          lyr = { ...lyr, state: "error", problem: problemOf(err) };
+        }
+        renderPanel();
+      }
+
+      function renderLyrics() {
+        const body = $("panel-body");
+        const key = lyr ? `${lyr.id}:${lyr.state}` : "none";
+        if (key === lyrShown && body.dataset.shows === "lyrics") return;
+        lyrShown = key;
+        body.dataset.shows = "lyrics";
+        $("follow")?.remove();
+        if (!lyr) {
+          notice(body, "Nothing playing", "Play a song to see its lyrics.", null, null, false);
+          return;
+        }
+        if (lyr.state === "loading") {
+          const sk = el("div", "lyrics-skel skeleton");
+          sk.setAttribute("aria-label", "Loading lyrics…");
+          for (let i = 0; i < 9; i++) {
+            const b = el("div", "bar");
+            b.style.width = `${45 + ((i * 37) % 45)}%`;
+            sk.append(b);
+          }
+          body.replaceChildren(sk);
+          return;
+        }
+        if (lyr.state === "none") {
+          notice(body, "No lyrics found", `Nobody has added lyrics for “${lyr.track.title}” yet.`, null, null, false);
+          return;
+        }
+        if (lyr.state === "error") {
+          const offline = lyr.problem.kind === "offline";
+          notice(
+            body,
+            "Lyrics didn’t load",
+            offline ? "You’re offline. Lyrics you’ve seen before still show; these load once you’re back." : "The lyrics sites didn’t answer. Try again in a moment.",
+            { label: "Try again", run: () => loadLyrics(lyr.track) },
+            lyr.problem.detail,
+          );
+          return;
+        }
+        const v = lyr.view;
+        const box = el("div", "lyrics " + (v.synced ? "synced" : "plain"));
+        v.lines.forEach((l, i) => {
+          const p = el("p", "", l.text || "♪");
+          if (v.synced) {
+            p.title = "Play from here";
+            p.addEventListener("click", () => {
+              if (!now || now.track.id !== lyr.id) return;
+              audio.currentTime = l.time;
+              lyrFollow = true;
+              followLyrics(true);
+            });
+          }
+          box.append(p);
+        });
+        if (!v.synced) box.append(el("div", "src", "These lyrics aren’t timed to the song."));
+        body.replaceChildren(box);
+        body.scrollTop = 0;
+        lyrAt = -1;
+        followLyrics(true);
+      }
+
+      // Marks the line being sung and keeps it in view.
+      function followLyrics(jump = false) {
+        if (layout.tab !== "lyrics" || lyr?.state !== "ok" || !lyr.view.synced || !now || now.track.id !== lyr.id) return;
+        const lines = lyr.view.lines;
+        const t = audio.currentTime;
+        let at = -1;
+        for (let i = 0; i < lines.length && lines[i].time <= t; i++) at = i;
+        if (at === lyrAt && !jump) return;
+        lyrAt = at;
+        const ps = $("panel-body").querySelectorAll(".lyrics p");
+        ps.forEach((p, i) => {
+          p.classList.toggle("current", i === at);
+          p.classList.toggle("past", i < at);
+        });
+        if (!lyrFollow) return;
+        const body = $("panel-body");
+        const p = ps[Math.max(at, 0)];
+        if (p) body.scrollTo({ top: p.offsetTop - body.clientHeight / 3, behavior: jump ? "auto" : "smooth" });
+      }
+
+      // A hand on the wheel, or on the scrollbar, means reading ahead.
+      function stopFollowing() {
+        if (layout.tab !== "lyrics" || lyr?.state !== "ok" || !lyr.view.synced || !lyrFollow) return;
+        lyrFollow = false;
+        const b = el("button", "soft primary follow", "Back to the current line");
+        b.id = "follow";
+        b.type = "button";
+        b.addEventListener("click", () => {
+          b.remove();
+          lyrFollow = true;
+          followLyrics(true);
+        });
+        $("panel-body").parentElement.append(b);
+      }
+      $("panel-body").addEventListener("wheel", stopFollowing, { passive: true });
+      $("panel-body").addEventListener("touchmove", stopFollowing, { passive: true });
+      $("panel-body").addEventListener("pointerdown", (e) => {
+        // The scrollbar, not a line.
+        if (e.target === $("panel-body")) stopFollowing();
+      });
+      audio.addEventListener("timeupdate", () => followLyrics());
+      audio.addEventListener("seeked", () => followLyrics(true));
 
       // ── Library ──────────────────────────────────────────────────────
       // The download folder and the user's own folders, scanned by Go.

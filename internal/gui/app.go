@@ -17,6 +17,7 @@ import (
 	"ytmgo/internal/deps"
 	"ytmgo/internal/downloader"
 	"ytmgo/internal/library"
+	"ytmgo/internal/lyrics"
 	"ytmgo/internal/proc"
 	"ytmgo/internal/queue"
 	"ytmgo/internal/search"
@@ -57,6 +58,12 @@ type App struct {
 
 	lfm      lastfmAPI
 	lfmToken string // while the user is approving ytmgo on last.fm
+
+	// cachedLyrics and cacheLyrics are the database's lyrics cache, shared
+	// with the TUI; fetchLyrics is lyrics.Fetch.
+	cachedLyrics func(trackID string) (text string, synced, found bool, err error)
+	cacheLyrics  func(trackID, text string, synced bool) error
+	fetchLyrics  func(trackID, title, artist string, durationSec int) (*lyrics.Lyrics, error)
 
 	// streamURL is ytresolve.StreamURL; open is proc.Open.
 	streamURL func(watchURL string) (string, error)
@@ -144,8 +151,11 @@ func New(d *db.DB) *App {
 			}
 			return tracks, err
 		},
-		streamURL: ytresolve.StreamURL,
-		open:      proc.Open,
+		cachedLyrics: d.LoadCachedLyrics,
+		cacheLyrics:  d.SaveCachedLyrics,
+		fetchLyrics:  lyrics.Fetch,
+		streamURL:    ytresolve.StreamURL,
+		open:         proc.Open,
 		newDownloader: func(dir, format string) downloads {
 			return downloader.New(dir, format)
 		},

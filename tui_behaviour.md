@@ -241,6 +241,12 @@ cache, with the current line followed smoothly; clicking a synced line seeks
 there. The visualizer needs an audio source in the page (a Web Audio analyser
 on the `<audio>` element) and comes last, if at all.
 
+Lyrics are built (`gui/lyrics.go`, the TUI's sources and cache): asked for
+when a song starts, a skeleton while loading, then the line being sung kept a
+third of the way down. Scrolling by hand stops following and shows "Back to
+the current line"; clicking a synced line plays from it. Unsynced lyrics read
+as plain text. Clearing the queue clears them (TUI bug 20).
+
 ## 10. Settings and the rest of the interface
 
 Settings rows, in order (`tui/settingsdef.go:44-235`): Playback Mode;
