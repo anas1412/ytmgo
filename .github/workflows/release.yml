@@ -1,7 +1,9 @@
 name: release
 
-# Build static binaries for 2 OS/arch combos and attach them to a
-# GitHub Release whenever you push a tag like `v0.2.0`.
+# Build static binaries for 2 OS/arch combos, and the Windows installer
+# (windows-installer.yml), and attach them all to one GitHub Release
+# whenever you push a tag like `v0.2.0`. One release for both apps, so
+# the release GitHub marks "Latest" always carries both.
 # Also publishes the updated PKGBUILD to the Arch User Repository (AUR).
 #
 # Asset naming follows the convention expected by install.sh:
@@ -100,13 +102,19 @@ jobs:
           if-no-files-found: error
           retention-days: 1
 
+  windows:
+    name: build the Windows installer
+    uses: ./.github/workflows/windows-installer.yml
+    with:
+      tag: ${{ github.ref_name }}
+
   # ───────────────────────────────────────────────────────────────────
   # Publish the release — one job, so one release
   # ───────────────────────────────────────────────────────────────────
   release:
     name: publish the release
     runs-on: ubuntu-latest
-    needs: [build]
+    needs: [build, windows]
     permissions:
       contents: write   # creates the release and uploads its assets
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
@@ -122,16 +130,17 @@ jobs:
         run: |
           set -euo pipefail
           ls -la dist
-          # Four files: two tarballs and their checksums. Publishing a
-          # partial set would ship a release the installer cannot use on
-          # some architectures.
+          # Six files: two tarballs, the Windows installer, and their
+          # checksums. Publishing a partial set would ship a release the
+          # installers cannot use on some systems.
           n=$(find dist -type f | wc -l)
-          [ "$n" -eq 4 ] || { echo "expected 4 files, found $n"; exit 1; }
+          [ "$n" -eq 6 ] || { echo "expected 6 files, found $n"; exit 1; }
 
       - name: Publish
         uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ github.ref_name }}
+          body_path: .github/release-notes.md
           generate_release_notes: true
           files: dist/*
 

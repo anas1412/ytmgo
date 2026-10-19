@@ -378,10 +378,12 @@ One Windows artefact per release, with a `.sha256` like the existing assets:
 **Status (0.1.0):** the installer is `cmd/ytmgo-gui/build/windows/installer/
 project.nsi`, Wails' template in its per-user mode, plus `yt-dlp.exe`
 (`cmd/fetchdep`, from the pins in `internal/deps`). Uninstalling removes
-`%LOCALAPPDATA%\ytmgo\bin` too. `gui-release.yml` builds it on
-`windows-latest` on a `gui-v*` tag, its own pattern so that `release.yml`
-and `install.sh` (which installs "latest") never see it, and publishes a
-pre-release never marked latest; run by hand it only builds an artifact.
+`%LOCALAPPDATA%\ytmgo\bin` too. `windows-installer.yml` builds it on
+`windows-latest`; `release.yml` calls it for every `v*` tag and publishes
+the installer in the same release as the Linux binaries, one version for
+both apps, so the "Latest" release always carries both. Run by hand it
+only builds an artifact. (0.1.0 went out alone as `gui-v0.1.0`, a
+pre-release, before this.)
 Not done: updates (3), signing (4), winget and Scoop (6).
 
 → verify, on a clean Windows VM:
