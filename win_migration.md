@@ -419,9 +419,9 @@ Not done: updates (3), signing (4), winget and Scoop (6).
   on YouTube Music first (`Locate`, once per song).
 - ~~**Follow and like:**~~ Done in both apps, kept in `saved_items`
   (`db.Saved`): the GUI's Follow and ♥ on artist and album pages, the
-  TUI's `F` there.
+  TUI's `b` (bookmark) there.
 - ~~**Favourites tabs:**~~ Done in both: Songs, Artists and Albums (the
-  TUI switches them with `[` and `]`; Enter opens, `F` lets go).
+  TUI steps through them by pressing `2` again; Enter opens, `b` lets go).
 - **Playlists:** the logic and the UI. A pasted YouTube or Spotify playlist link, once its songs
   show in Search, gets a **Save as playlist** button that saves them under
   the playlist's own name.

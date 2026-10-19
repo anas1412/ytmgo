@@ -868,18 +868,8 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// among the songs to come, never moving over the one playing. Under
 	// shuffle the list is the shuffled order, which a move in the queue
 	// would not change, so it does nothing there.
-	case "F":
+	case "b":
 		return m, m.toggleSavedAction()
-
-	case "[", "]":
-		if m.activePage == PageFavorites {
-			if msg.String() == "[" {
-				m.switchFavTab(-1)
-			} else {
-				m.switchFavTab(1)
-			}
-		}
-		return m, nil
 
 	case "ctrl+up", "ctrl+down":
 		idx := m.selectedQueueIndex()
@@ -931,11 +921,14 @@ func (m *Model) handleGlobalKey(msg tea.KeyMsg) (handled bool, cmd tea.Cmd) {
 			if m.activePage != PageFavorites {
 				m.switchPage(PageFavorites)
 				count := len(m.favorites)
-				statusMsg := fmt.Sprintf("Favorites: %d tracks  (F to toggle)", count)
+				statusMsg := fmt.Sprintf("Favorites: %d tracks  (f to toggle, 2 for artists and albums)", count)
 				if count == 0 {
-					statusMsg = "No favorites yet — press F on any track"
+					statusMsg = "No favorites yet — press f on any track"
 				}
 				m.setStatus(statusMsg)
+			} else {
+				// Already here: 2 again steps Songs → Artists → Albums.
+				m.switchFavTab(1)
 			}
 			return true, nil
 		case "3": // Keys.PageLibrary

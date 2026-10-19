@@ -11,9 +11,9 @@ import (
 	"ytmgo/internal/ytmusic"
 )
 
-// Artists followed and albums liked: F on an artist's page or an
-// album's, kept in saved_items with the GUI, and listed on the Favs
-// page's Artists and Albums tabs ([ and ] switch them).
+// Artists followed and albums liked: b (bookmark) on an artist's page
+// or an album's, kept in saved_items with the GUI, and listed on the
+// Favs page's Artists and Albums tabs (2 again steps through them).
 
 const (
 	favSongs = iota
@@ -61,7 +61,7 @@ func (m *Model) reloadSaved() {
 	m.clampSavedOffset()
 }
 
-// toggleSavedAction is F: on an album's page it likes or unlikes the
+// toggleSavedAction is b: on an album's page it likes or unlikes the
 // album, on an artist's it follows or unfollows them; on the Favs
 // page's Artists or Albums tab it lets go of the one selected.
 func (m *Model) toggleSavedAction() tea.Cmd {
@@ -80,7 +80,7 @@ func (m *Model) toggleSavedAction() tea.Cmd {
 		a := m.openArtist
 		s = db.Saved{Kind: "artist", ID: a.BrowseID, Title: a.Name, CoverURL: a.ThumbURL}
 	default:
-		m.setStatus("F follows an artist, or likes an album, on its page")
+		m.setStatus("b follows an artist, or likes an album, on its page")
 		return nil
 	}
 	if m.db == nil || s.ID == "" {
@@ -111,7 +111,7 @@ func (m *Model) toggleSavedAction() tea.Cmd {
 	return nil
 }
 
-// switchFavTab is [ and ] on the Favs page.
+// switchFavTab is 2 pressed again on the Favs page.
 func (m *Model) switchFavTab(step int) {
 	m.favTab = (m.favTab + step + len(favTabNames)) % len(favTabNames)
 	m.savedCursor, m.savedOffset = 0, 0
@@ -170,18 +170,18 @@ func (m Model) favTabsLine(width int) string {
 			parts = append(parts, styleTextDim.Render(label))
 		}
 	}
-	return truncate(strings.Join(parts, styleTextDim.Render("  ·  "))+styleTextDim.Render("   [ ] switch"), width)
+	return truncate(strings.Join(parts, styleTextDim.Render("  ·  "))+styleTextDim.Render("   2 switch"), width)
 }
 
-// renderSaved lists the Artists or Albums tab: a name, and what F and
-// Enter do.
+// renderSaved lists the Artists or Albums tab: Enter opens one, b
+// lets it go.
 func (m Model) renderSaved(width, height int) string {
 	list := m.savedList()
 	rowW := max(1, width-2)
 	if len(list) == 0 {
-		hint := "No artists followed yet — press F on an artist's page"
+		hint := "No artists followed yet — press b on an artist's page"
 		if m.favTab == favAlbums {
-			hint = "No albums liked yet — press F on an album's page"
+			hint = "No albums liked yet — press b on an album's page"
 		}
 		return styleEmpty.Width(width - 2).Height(height).Render(hint)
 	}
@@ -211,17 +211,17 @@ func (m Model) renderSaved(width, height int) string {
 	return result
 }
 
-// savedHint is what the album or artist page header says about F.
+// savedHint is what the album or artist page header says about b.
 func (m Model) savedHint() string {
 	switch {
 	case m.openAlbum != nil && m.isSaved("album", m.openAlbum.BrowseID):
-		return "♥ liked · [F] unlike"
+		return "♥ liked · [b] unlike"
 	case m.openAlbum != nil:
-		return "[F] like"
+		return "[b] like"
 	case m.openArtist != nil && m.isSaved("artist", m.openArtist.BrowseID):
-		return "♥ following · [F] unfollow"
+		return "♥ following · [b] unfollow"
 	case m.openArtist != nil:
-		return "[F] follow"
+		return "[b] follow"
 	}
 	return ""
 }

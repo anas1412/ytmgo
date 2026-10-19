@@ -21,8 +21,8 @@ type KeyMap struct {
 	VolumeDown    key.Binding
 	Delete        key.Binding
 	Favorite      key.Binding
-	Save          key.Binding // F: follow an artist, like an album
-	FavTabs       key.Binding // [ ]: the Favs page's tabs
+	Save          key.Binding // b: follow an artist, like an album
+	FavTabs       key.Binding // 2 again: the Favs page's tabs
 	Autoplay      key.Binding
 	CopyLink      key.Binding
 	Shuffle       key.Binding
@@ -122,12 +122,12 @@ var Keys = KeyMap{
 		key.WithHelp("f", "toggle favorite"),
 	),
 	Save: key.NewBinding(
-		key.WithKeys("F"),
-		key.WithHelp("F", "follow artist / like album"),
+		key.WithKeys("b"),
+		key.WithHelp("b", "follow artist / like album"),
 	),
 	FavTabs: key.NewBinding(
-		key.WithKeys("[", "]"),
-		key.WithHelp("[ ]", "favs: songs, artists, albums"),
+		key.WithKeys("2"),
+		key.WithHelp("2 again", "favs: songs, artists, albums"),
 	),
 	Autoplay: key.NewBinding(
 		key.WithKeys("c"),
