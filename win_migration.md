@@ -139,6 +139,15 @@ its work is needed whatever they decide.
 
 S1 gates the GUI. S2 decides whether mpv exists on Windows at all.
 
+**S2, on Linux: passed.** `<audio>` plays the stream yt-dlp gives
+(`yt-dlp -f bestaudio --get-url`: Opus in WebM, itag 251, valid about six
+hours, byte ranges served) in WebKitGTK, played in the real window. Two
+findings: resolving takes about 4.5s, so the next track should be
+resolved ahead of time; and Google's image servers reset the connection
+when the referer is the app's origin, so the page sends none (the audio
+servers did not mind). Still to confirm in WebView2 on Windows, the
+engine that ships.
+
 **S4, first half: passed.** `wails build -platform windows/amd64` builds a
 Windows GUI exe (PE32+, 11.8 MB) on Linux with no cgo. Still open: the NSIS
 installer (needs `makensis`), and the exe on a machine without WebView2.
