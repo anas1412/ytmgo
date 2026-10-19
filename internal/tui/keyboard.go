@@ -114,32 +114,31 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 	}
 
-	// ── Global keys (only fire when no text input is focused) ──
-	if handled, cmd := m.handleGlobalKey(msg); handled {
-		return m, cmd
-	}
-
 	// When confirming a destructive action, route the key press.
+	// Checked before global keys: a page switch that left the prompt
+	// armed would let a later Enter on another page run it.
 	// All confirmations follow the same pattern: Enter to confirm,
-	// Esc to cancel. Page-nav keys (1/2/3) cancel the confirmation
-	// and fall through to their usual page-switch handler. Every
-	// other key is ignored so the prompt stays visible.
+	// Esc to cancel. Global keys (pages, R, o) cancel the confirmation
+	// without acting. Every other key is ignored so the prompt stays
+	// visible.
 	if m.isConfirming() {
 		key := msg.String()
 		confirmed := key == "enter"
 		switch {
 		case confirmed:
 			return m.executeConfirmedAction()
-		case key == "esc":
+		case key == "esc" || isGlobalKey(msg):
 			m.clearConfirm()
 			m.setStatus("Cancelled")
 			return m, nil
-		case key == "1" || key == "2" || key == "3":
-			m.clearConfirm()
-			// fall through — let the global page-nav handler run
 		default:
 			return m, nil // keep prompt visible
 		}
+	}
+
+	// ── Global keys (only fire when no text input is focused) ──
+	if handled, cmd := m.handleGlobalKey(msg); handled {
+		return m, cmd
 	}
 
 	// ── Global keybindings ───────────────────────────────
@@ -876,6 +875,16 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 
 	return m, nil
+}
+
+// isGlobalKey reports whether msg is one of Keys.Globals().
+func isGlobalKey(msg tea.KeyMsg) bool {
+	for _, b := range Keys.Globals() {
+		if key.Matches(msg, b) {
+			return true
+		}
+	}
+	return false
 }
 
 // handleGlobalKey dispatches the key against the keymap's global

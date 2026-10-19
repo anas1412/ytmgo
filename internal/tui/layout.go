@@ -423,6 +423,9 @@ func (m *Model) moveCursorToEdge(bottom bool) {
 
 // switchPage transitions to a new page and resets page-local state.
 func (m *Model) switchPage(page Page) {
+	// A confirmation belongs to the page it was asked on; carried to
+	// another page, a later Enter there would still run it.
+	m.clearConfirm()
 	m.activePage = page
 	m.searchFocused = false
 
