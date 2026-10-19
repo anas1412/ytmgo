@@ -73,7 +73,7 @@ released version.
 
 ## From source
 
-Go 1.22 or newer:
+Go 1.25 or newer:
 
 ```bash
 git clone https://github.com/anas1412/ytmgo

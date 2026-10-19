@@ -44,3 +44,7 @@ docs/public/uninstall.sh
 
 # HyperFrames render output (the site ships its own encode in docs/public).
 videos/*/renders/
+
+# Wails output: the built app, and the JS bindings it generates on every build.
+cmd/ytmgo-gui/build/bin/
+cmd/ytmgo-gui/frontend/wailsjs/

@@ -6,7 +6,7 @@
 
 A terminal-based YouTube Music client written in Go. Search music, download audio, manage a play queue, bookmark favorites, and play music — all from the keyboard, inside your terminal.
 
-![Go Version](https://img.shields.io/badge/go-1.22+-blue)
+![Go Version](https://img.shields.io/badge/go-1.25+-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Version](https://img.shields.io/github/v/tag/anas1412/ytmgo?label=version&color=purple)
 ![Downloads](https://img.shields.io/github/downloads/anas1412/ytmgo/total?label=downloads&color=orange)
@@ -167,7 +167,7 @@ on PipeWire and PulseAudio, a hand-configured loopback on bare ALSA.
 
 ## Prerequisites
 
-- **Go** 1.22+ (only to build from source)
+- **Go** 1.25+ (only to build from source)
 - **mpv** — audio playback
 - **yt-dlp** — downloads, and the stream resolution mpv performs when playing.
   Installed by the one-liner from [yt-dlp's own releases](https://github.com/yt-dlp/yt-dlp/releases)

@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ytmgo</title>
+    <style>
+      /* ytmgo's own dark palette (internal/tui/theme.go, adaptive()). */
+      :root {
+        --bg: #111118;
+        --border: #2a2a3e;
+        --accent: #a78bfa;
+        --mint: #06d6a0;
+        --text: #e0e0e0;
+        --mid: #9999aa;
+      }
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        background: var(--bg);
+        color: var(--text);
+        font: 15px/1.5 system-ui, "Segoe UI", sans-serif;
+      }
+      main {
+        height: 100%;
+        display: grid;
+        place-content: center;
+        text-align: center;
+        gap: 6px;
+      }
+      h1 {
+        margin: 0;
+        color: var(--accent);
+        font-size: 40px;
+      }
+      #version {
+        color: var(--mid);
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>ytmgo</h1>
+      <div id="version">…</div>
+    </main>
+    <script type="module">
+      import { Version } from "./wailsjs/go/gui/App.js";
+      Version().then((v) => (document.getElementById("version").textContent = v));
+    </script>
+  </body>
+</html>

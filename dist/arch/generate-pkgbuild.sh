@@ -38,7 +38,7 @@ done
 # the PKGBUILD said cava was needed and the .SRCINFO did not, which is
 # the list helpers actually read.
 DEPENDS=(mpv yt-dlp ffmpeg cava)
-MAKEDEPENDS=("go>=1.22")
+MAKEDEPENDS=("go>=1.25")
 
 TARBALL="https://github.com/anas1412/ytmgo/archive/$TAG.tar.gz"
 

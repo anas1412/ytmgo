@@ -139,6 +139,10 @@ its work is needed whatever they decide.
 
 S1 gates the GUI. S2 decides whether mpv exists on Windows at all.
 
+**S4, first half: passed.** `wails build -platform windows/amd64` builds a
+Windows GUI exe (PE32+, 11.8 MB) on Linux with no cgo. Still open: the NSIS
+installer (needs `makensis`), and the exe on a machine without WebView2.
+
 **If S2 falls back to mpv:** `internal/player/player.go:85` builds a Unix
 socket path and `:313` dials `"unix"`. mpv on Windows takes a named pipe
 (`\\.\pipe\ytmgo-mpv-<pid>`) for `--input-ipc-server`. Split both into
@@ -226,7 +230,24 @@ also open it in a normal browser for inspection. Wails on Linux needs
 WebKitGTK, which is a development-machine dependency only.
 
 1. `wails init` into `cmd/ytmgo-gui`, then strip it to vanilla HTML/JS. Set
-   the app name, icon (`ytmgo-icon.png`), and window size.
+   the app name, icon (`ytmgo-icon.png`), and window size. **Done**, by hand
+   rather than `wails init`, which would have made a separate module:
+   - `cmd/ytmgo-gui` (Wails entry, `wails.json`, `frontend/index.html`) and
+     `internal/gui` (the bound `App`; it does not import Wails, so it builds
+     and tests anywhere).
+   - The GUI builds on Windows, and on Linux only with `-tags webkit2_41`
+     (WebKitGTK 4.1). The default Linux build, vet and tests never see it,
+     so CI needs neither cgo nor WebKit headers.
+   - Wails v2.17.0, the latest release (v3 is not out). It raised the
+     module to **Go 1.25**; CI now reads the version from `go.mod`, and the
+     README, install guide, and AUR `makedepends` say 1.25.
+   - The TUI binary grew 19.7 KB (0.09%), from the newer `x/sys`, `x/text`,
+     and `termenv` that Wails needs, with no Wails code in it.
+   - Verified: `wails dev -tags webkit2_41` runs and the page gets `"dev"`
+     back from Go through the binding. Wails' own `ipc.js` logs a
+     `reading 'nodes'` error in the browser view; check whether it also
+     shows in the real window.
+   - Develop with `wails dev -tags webkit2_41` from `cmd/ytmgo-gui`.
 2. `internal/gui`: an `App` struct holding the leaf packages, with the
    playback methods (play, pause, seek, volume, next, previous, queue) bound
    to the frontend, and state pushed as events. Back it with the engine S2
