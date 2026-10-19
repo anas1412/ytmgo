@@ -1379,6 +1379,35 @@
         justify-content: flex-end;
         gap: 8px;
       }
+      dialog.keys {
+        width: min(560px, calc(100vw - 32px));
+        max-height: calc(100vh - 64px);
+      }
+      dialog.keys h3 {
+        margin: 18px 0 6px;
+        color: var(--mid);
+        font-size: 13px;
+        font-weight: 600;
+      }
+      dialog.keys dl {
+        display: grid;
+        /* One key column for every section, so the descriptions line up. */
+        grid-template-columns: 130px 1fr;
+        gap: 5px 16px;
+        margin: 0;
+        font-size: 13px;
+      }
+      dialog.keys dt {
+        display: flex;
+        gap: 4px;
+      }
+      dialog.keys dd {
+        margin: 0;
+        color: var(--mid);
+      }
+      dialog.keys .buttons-row {
+        margin-top: 20px;
+      }
       .soft.danger {
         border-color: transparent;
         background: var(--pink);
@@ -2035,6 +2064,46 @@
     </div>
     <audio id="audio" preload="auto"></audio>
     <div id="ghost" aria-hidden="true"></div>
+    <dialog class="ask keys" id="keys" aria-label="Keyboard shortcuts">
+      <form method="dialog">
+        <strong>Keyboard shortcuts</strong>
+        <h3>Playback</h3>
+        <dl>
+          <dt><kbd>Space</kbd></dt><dd>Play or pause</dd>
+          <dt><kbd>n</kbd><kbd>→</kbd></dt><dd>Next</dd>
+          <dt><kbd>p</kbd><kbd>←</kbd></dt><dd>Previous</dd>
+          <dt><kbd>l</kbd><kbd>h</kbd></dt><dd>Forward or back 5 seconds</dd>
+          <dt><kbd>+</kbd><kbd>−</kbd></dt><dd>Volume</dd>
+          <dt><kbd>s</kbd></dt><dd>Shuffle</dd>
+          <dt><kbd>r</kbd></dt><dd>Repeat: off, one, all</dd>
+          <dt><kbd>c</kbd></dt><dd>Autoplay</dd>
+        </dl>
+        <h3>Songs</h3>
+        <dl>
+          <dt><kbd>Enter</kbd></dt><dd>Add to the queue, or play if nothing is</dd>
+          <dt><kbd>Double-click</kbd></dt><dd>Play now</dd>
+          <dt><kbd>e</kbd></dt><dd>Add the whole list</dd>
+          <dt><kbd>f</kbd></dt><dd>Favourite</dd>
+          <dt><kbd>x</kbd></dt><dd>Download</dd>
+          <dt><kbd>u</kbd></dt><dd>Copy its link</dd>
+          <dt><kbd>a</kbd></dt><dd>Open its album; on an album, add it all</dd>
+          <dt><kbd>A</kbd></dt><dd>Open its artist; on an artist, switch tabs</dd>
+          <dt><kbd>d</kbd></dt><dd>Delete the file (Library)</dd>
+          <dt><kbd>C</kbd></dt><dd>Clear history (History)</dd>
+        </dl>
+        <h3>Moving around</h3>
+        <dl>
+          <dt><kbd>/</kbd></dt><dd>Search</dd>
+          <dt><kbd>↑ ↓</kbd><kbd>j k</kbd></dt><dd>Move in a list</dd>
+          <dt><kbd>1 – 6</kbd></dt><dd>Search, Favourites, Library, History, Downloads, Settings</dd>
+          <dt><kbd>y</kbd></dt><dd>Lyrics</dd>
+          <dt><kbd>R</kbd></dt><dd>Refresh recommendations</dd>
+          <dt><kbd>Esc</kbd></dt><dd>Back</dd>
+          <dt><kbd>?</kbd></dt><dd>These keys</dd>
+        </dl>
+        <div class="buttons-row"><button class="soft" type="submit">Close</button></div>
+      </form>
+    </dialog>
     <dialog class="ask" id="ask">
       <form method="dialog">
         <strong id="ask-title"></strong>
@@ -2092,6 +2161,10 @@
         OpenDownloads,
         SetDownloadFormat,
         SetPlaybackMode,
+        ShareLink,
+        SetCopyMusicLinks,
+        Presence,
+        SetDiscord,
         ChooseDownloadFolder,
         Lyrics as fetchLyrics,
         History,
@@ -3083,6 +3156,7 @@
         // The TUI keeps the last song's lyrics after the queue is cleared.
         lyr = null;
         renderPanel();
+        Presence(null, false, 0);
         $("np-heart").hidden = true;
         $("np-title").textContent = "";
         $("np-sub").textContent = "Nothing playing yet";
@@ -3282,11 +3356,13 @@
         }
         if (sayingSticky) unsay();
         setLoading(false);
+        if (now) Presence(now.track, true, audio.currentTime);
         toggle.classList.add("playing");
         toggle.setAttribute("aria-label", "Pause");
       });
       audio.addEventListener("pause", () => {
         if (playState === "playing" && audio.getAttribute("src") && !audio.ended) playState = "paused";
+        if (now && playState === "paused") Presence(now.track, false, audio.currentTime);
         toggle.classList.remove("playing");
         toggle.setAttribute("aria-label", "Play");
       });
@@ -3476,6 +3552,15 @@
           case "6":
             navTo("settings");
             return true;
+          case "u": {
+            const row = document.activeElement?.closest?.(".q-row");
+            const t = row ? qs.tracks[+row.dataset.index] : results[selected] || now?.track;
+            if (t) copyLink(t);
+            return true;
+          }
+          case "?":
+            $("keys").showModal();
+            return true;
           case "x": {
             const row = document.activeElement?.closest?.(".q-row");
             const t = row ? qs.tracks[+row.dataset.index] : results[selected] || now?.track;
@@ -3528,7 +3613,7 @@
         }
         // The Library's filter is typed into as the search box is.
         const typing = document.activeElement === query || document.activeElement?.classList.contains("lib-filter");
-        if ($("ask").open) return;
+        if (document.querySelector("dialog[open]")) return;
         if (e.key === "/" && !typing) {
           e.preventDefault();
           query.focus();
@@ -4075,6 +4160,33 @@
           note = noteFor(lfmNote);
           control = button("Connect", connectLastFM, true);
         }
+        // Copy Link As and Discord RPC, the TUI's rows.
+        const host = el("div", "seg");
+        for (const [key, label] of [
+          [false, "youtube.com"],
+          [true, "music.youtube.com"],
+        ]) {
+          const t = el("button", "tab", label);
+          t.type = "button";
+          t.setAttribute("aria-pressed", s.copyMusicLinks === key);
+          t.addEventListener("click", async () => {
+            await SetCopyMusicLinks(key);
+            renderSettings();
+          });
+          host.append(t);
+        }
+        box.append(setting("Copied links", "Where links copied with u open.", host));
+        const dsw = el("button", "switch");
+        dsw.type = "button";
+        dsw.setAttribute("role", "switch");
+        dsw.setAttribute("aria-checked", s.discord);
+        dsw.setAttribute("aria-label", "Show on Discord");
+        dsw.addEventListener("click", async () => {
+          const on = await SetDiscord(!s.discord);
+          if (on && now) Presence(now.track, !audio.paused, audio.currentTime);
+          renderSettings();
+        });
+        box.append(setting("Show on Discord", "Your Discord status shows the song you’re listening to, while Discord is open.", dsw));
         box.append(setting("Last.fm scrobbling", "Send the songs you hear to your Last.fm profile. You approve ytmgo on last.fm; no password is typed here.", control, note));
         pane.replaceChildren(box);
       }
@@ -4261,7 +4373,11 @@
         if (e.target === $("panel-body")) stopFollowing();
       });
       audio.addEventListener("timeupdate", () => followLyrics());
-      audio.addEventListener("seeked", () => followLyrics(true));
+      audio.addEventListener("seeked", () => {
+        followLyrics(true);
+        // Discord counts the elapsed time from where the song is.
+        if (now && !audio.paused) Presence(now.track, true, audio.currentTime);
+      });
 
       // ── Window ───────────────────────────────────────────────────────
       // The title bar's buttons, through Wails' runtime. Double-clicking
@@ -4282,6 +4398,22 @@
       });
       window.addEventListener("resize", paintMax);
       paintMax();
+
+      // ── Links and keys ───────────────────────────────────────────────
+      async function copyLink(t) {
+        const link = await ShareLink(t);
+        if (!link) {
+          say(`No link for “${t.title}”`, { full: `“${t.title}” is a file on this computer, with no link to share.` });
+          return;
+        }
+        // Wails' clipboard first: WebView2 asks permission for the web one.
+        const ok = window.runtime?.ClipboardSetText ? await window.runtime.ClipboardSetText(link) : await navigator.clipboard.writeText(link).then(() => true, () => false);
+        if (ok) say("Copied link", { full: `Copied ${link}` });
+        else say("Couldn’t copy the link", { error: true, full: link });
+      }
+      $("keys").addEventListener("click", (e) => {
+        if (e.target === $("keys")) $("keys").close(); // the backdrop
+      });
 
       // ── History ──────────────────────────────────────────────────────
       // The newest 100 plays, read again on every visit, as in the TUI.

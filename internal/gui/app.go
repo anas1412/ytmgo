@@ -61,6 +61,7 @@ type App struct {
 	artist   func(browseID string) (ytmusic.ArtistPage, error)
 	playlist func(search.PlaylistRef) (title string, results []search.Result, missed int, err error)
 
+	discord  *discord
 	lfm      lastfmAPI
 	lfmToken string // while the user is approving ytmgo on last.fm
 
@@ -149,6 +150,7 @@ func New(d *db.DB) *App {
 		clearPlays: d.ClearPlayHistory,
 		saveFavs:   d.SaveFavorites,
 		lfm:        realLastFM,
+		discord:    realDiscord,
 		album:      ytmusic.AlbumTracks,
 		artist:     ytmusic.Artist,
 		playlist:   search.PlaylistTracks,
@@ -282,6 +284,8 @@ func (a *App) Played(t queue.Track) error {
 type SettingsView struct {
 	SearchLimit    int    `json:"searchLimit"`
 	PlaybackMode   int    `json:"playbackMode"` // settings.PlaybackStream, Hybrid or Offline
+	CopyMusicLinks bool   `json:"copyMusicLinks"`
+	Discord        bool   `json:"discord"`
 	Autoplay       bool   `json:"autoplay"`
 	DownloadFormat string `json:"downloadFormat"` // "m4a" or "mp3"
 	DownloadDir    string `json:"downloadDir"`    // where downloads go, resolved
@@ -296,6 +300,7 @@ func (a *App) Settings() SettingsView {
 	defer a.mu.Unlock()
 	return SettingsView{
 		SearchLimit: a.settings.SearchLimit, Autoplay: a.settings.AutoplayEnabled, PlaybackMode: a.settings.PlaybackMode,
+		CopyMusicLinks: a.settings.CopyMusicLinks, Discord: a.settings.DiscordRPCEnabled,
 		DownloadFormat: a.settings.DownloadFormat, DownloadDir: a.settings.ResolveDownloadDir(),
 		LibraryFolders: append([]string{}, a.settings.ResolveLibraryDirs()...),
 	}

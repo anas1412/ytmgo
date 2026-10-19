@@ -14,6 +14,9 @@ import (
 	"embed"
 	"io/fs"
 	"log"
+	"os"
+	goruntime "runtime"
+	"strings"
 
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
@@ -45,6 +48,14 @@ func main() {
 		log.Fatal(err)
 	}
 	app := gui.New(d)
+	if goruntime.GOOS == "windows" {
+		// WebView2 hands the page's Media Session to Windows only with
+		// this feature on: the media keys, and the overlay with the song
+		// and its buttons. Kept with anything the user set there.
+		args := os.Getenv("WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS")
+		os.Setenv("WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS", strings.TrimSpace(args+" --enable-features=HardwareMediaKeyHandling"))
+	}
+	var ctx context.Context // the window's, from OnStartup
 	err = wails.Run(&options.App{
 		Title:     "ytmgo",
 		Width:     1200,
@@ -61,7 +72,17 @@ func main() {
 		// Handler serves downloaded files for playback, under /local/.
 		AssetServer: &assetserver.Options{Assets: assets, Handler: gui.Media(app)},
 		Bind:        []interface{}{app},
-		OnStartup: func(ctx context.Context) {
+		// One ytmgo at a time, as one player: a second launch brings the
+		// open window forward instead of playing over it.
+		SingleInstanceLock: &options.SingleInstanceLock{
+			UniqueId: "ytmgo-6f1c2a8e-gui",
+			OnSecondInstanceLaunch: func(options.SecondInstanceData) {
+				runtime.WindowUnminimise(ctx)
+				runtime.Show(ctx)
+			},
+		},
+		OnStartup: func(c context.Context) {
+			ctx = c
 			gui.Attach(app, gui.Host{
 				Emit: func(event string, data any) { runtime.EventsEmit(ctx, event, data) },
 				PickFolder: func(title string) (string, error) {

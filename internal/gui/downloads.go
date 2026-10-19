@@ -39,10 +39,13 @@ func Attach(a *App, h Host) {
 }
 
 // Close stops the downloads, killing a yt-dlp that is running, so quitting
-// does not leave a half-written file behind.
+// does not leave a half-written file behind, and leaves Discord.
 func Close(a *App) {
 	if a.quit != nil {
 		a.quit()
+	}
+	if a.discord != nil {
+		a.discord.close()
 	}
 	a.dlMu.Lock()
 	defer a.dlMu.Unlock()
