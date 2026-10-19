@@ -65,10 +65,18 @@ type Track struct {
 // counts once it has played for half its length or four minutes,
 // whichever comes first.
 func ShouldScrobble(position, duration float64) bool {
+	after, ok := ScrobbleAfter(duration)
+	return ok && position >= after
+}
+
+// ScrobbleAfter is the same rule as a point in the track: how many
+// seconds in it counts, so a player that tracks its own position can
+// wait for that moment. ok is false for a track too short to count.
+func ScrobbleAfter(duration float64) (seconds float64, ok bool) {
 	if duration <= 30 {
-		return false
+		return 0, false
 	}
-	return position >= duration/2 || position >= 240
+	return min(duration/2, 240), true
 }
 
 // GetToken starts the authorisation: a token the user must approve.

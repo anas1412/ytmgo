@@ -60,3 +60,25 @@ func TestNotAuthorizedIsDistinct(t *testing.T) {
 		t.Fatalf("got %v, want ErrNotAuthorized", err)
 	}
 }
+
+// ScrobbleAfter is ShouldScrobble's rule as a point in the track: half
+// the length, four minutes at most, and never for 30 seconds or less.
+func TestScrobbleAfter(t *testing.T) {
+	for _, c := range []struct {
+		duration, want float64
+		ok             bool
+	}{
+		{180, 90, true},
+		{600, 240, true},
+		{30, 0, false},
+		{0, 0, false},
+	} {
+		got, ok := ScrobbleAfter(c.duration)
+		if got != c.want || ok != c.ok {
+			t.Errorf("ScrobbleAfter(%v) = %v, %v; want %v, %v", c.duration, got, ok, c.want, c.ok)
+		}
+		if ok && (ShouldScrobble(got-1, c.duration) || !ShouldScrobble(got, c.duration)) {
+			t.Errorf("ShouldScrobble disagrees with ScrobbleAfter at %v", c.duration)
+		}
+	}
+}
