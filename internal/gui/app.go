@@ -70,8 +70,9 @@ type App struct {
 	pl *playlistStore
 	// located is the page ids Locate found, by library.MatchKey.
 	located map[string]queue.Track
-	// home is ytmusic.HomeFeed.
-	home func() (ytmusic.Home, error)
+	// pageCache is the artist pages Home fetched lately (artistPage).
+	pagesMu   sync.Mutex
+	pageCache map[string]cachedPage
 	// recordSource and sources are the database's recent albums and
 	// playlists, for the quick tiles.
 	recordSource func(db.Source) error
@@ -181,7 +182,6 @@ func New(d *db.DB) *App {
 		latest:         update.Latest,
 		fetchInstaller: update.FetchInstaller,
 		playlist:       search.PlaylistTracks,
-		home:           ytmusic.HomeFeed,
 		pl: &playlistStore{list: d.LoadPlaylists, load: d.LoadPlaylist, create: d.CreatePlaylist,
 			set: d.SetPlaylistTracks, rename: d.RenamePlaylist, remove: d.DeletePlaylist},
 		save:         d.Save,

@@ -35,14 +35,17 @@ func TestHomeItemKinds(t *testing.T) {
 	}
 }
 
-// Live: the home has more shelves than its first page holds.
-func TestHomeFeedLive(t *testing.T) {
-	if testing.Short() {
-		t.Skip("calls YouTube Music")
+// A release's year, whether its subtitle is "2023" or "Single • 2023".
+func TestReleaseYear(t *testing.T) {
+	for sub, want := range map[string]string{
+		`[{"text":"2023"}]`: "2023",
+		`[{"text":"Single"},{"text":" • "},{"text":"2021"}]`:          "2021",
+		`[{"text":"Daft Punk"},{"text":" • "},{"text":"905M views"}]`: "",
+	} {
+		var v interface{}
+		json.Unmarshal([]byte(`{"subtitle":{"runs":`+sub+`}}`), &v)
+		if got := releaseYear(v); got != want {
+			t.Errorf("%s: %q, want %q", sub, got, want)
+		}
 	}
-	h, err := HomeFeed()
-	if err != nil || len(h.Shelves) < 3 {
-		t.Fatalf("%d shelves, %v", len(h.Shelves), err)
-	}
-	t.Logf("%d shelves", len(h.Shelves))
 }

@@ -409,8 +409,11 @@ Not done: updates (3), signing (4), winget and Scoop (6).
 
 - ~~**Home:** a Home button and a home screen, with recommendations on it.~~ Done:
   Home is first in the sidebar (`1`), YouTube Music's signed-out home
-  (`ytmusic.HomeFeed`, its shelves), quick tiles and your
-  recommendations. Mood filters were dropped in 1.6.1. Playlists of
+  quick tiles and your recommendations, then shelves made of your own
+  listening (`gui.Home`): new releases from the artists you follow,
+  your top artists, more from them, fans also like, jump back in, liked
+  albums. YouTube Music's signed-out home is regional and is not used
+  any more (moods went in 1.6.1, its shelves after). Playlists of
   your own have a placeholder in the sidebar.
 - ~~**Clickable links everywhere:**~~ Done in the GUI: a song's title opens
   its album, its artist the artist's page, its album name the album, in

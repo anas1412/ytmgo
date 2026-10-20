@@ -26,6 +26,9 @@ func TestLiveArtist(t *testing.T) {
 	if a.ThumbURL == "" {
 		t.Error("no artist image")
 	}
+	if len(a.Related) == 0 || a.Related[0].ID == "" {
+		t.Errorf("no related artists: %+v", a.Related)
+	}
 	if a.About == "" || a.Audience == "" {
 		t.Errorf("no bio or audience: %q, %q", a.About, a.Audience)
 	}

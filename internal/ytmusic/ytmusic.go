@@ -535,8 +535,11 @@ type Album struct {
 	// track that opened it carries no artist id of its own.
 	ArtistBrowseID string
 	Year           string
-	CoverURL       string
-	Tracks         []Track // populated by AlbumTracks
+	// Released is the year it came out, "2023": Year holds "Single" for
+	// singles, whose subtitle reads "Single • 2023". Artist pages only.
+	Released string
+	CoverURL string
+	Tracks   []Track // populated by AlbumTracks
 }
 
 // SearchAlbums runs an albums-filtered YouTube Music search.
@@ -776,6 +779,9 @@ type ArtistPage struct {
 	About       string  // the bio, from Wikipedia mostly; may be empty
 	TopSongs    []Track // up to 100, most played first
 	Albums      []Album // Albums, then Singles & EPs, in that order
+	// Related is the page's "Fans might also like": artists like this
+	// one, each a HomeItem of Kind "artist".
+	Related []HomeItem
 }
 
 // Artist fetches an artist's page: their discography and their
@@ -804,6 +810,15 @@ func Artist(browseID string) (ArtistPage, error) {
 	// into one list rather than two views that would behave the same.
 	for _, shelf := range findAll(root, "musicCarouselShelfRenderer") {
 		title := digString(shelf, "header", "musicCarouselShelfBasicHeaderRenderer", "title", "runs", 0, "text")
+		if title == "Fans might also like" {
+			contents, _ := dig(shelf, "contents").([]interface{})
+			for _, c := range contents {
+				if it, ok := homeItem(dig(c, "musicTwoRowItemRenderer")); ok && it.Kind == "artist" {
+					a.Related = append(a.Related, it)
+				}
+			}
+			continue
+		}
 		if title != "Albums" && title != "Singles & EPs" && title != "Singles" {
 			continue
 		}
@@ -824,6 +839,7 @@ func Artist(browseID string) (ArtistPage, error) {
 				Title:    digString(item, "title", "runs", 0, "text"),
 				Artist:   a.Name,
 				Year:     digString(item, "subtitle", "runs", 0, "text"),
+				Released: releaseYear(item),
 				CoverURL: largestThumbnail(dig(item, "thumbnailRenderer", "musicThumbnailRenderer", "thumbnail", "thumbnails")),
 			})
 		}
@@ -951,4 +967,16 @@ func PlaylistTracks(playlistID string) (Playlist, error) {
 		return p, fmt.Errorf("ytmusic playlist: no playable tracks found")
 	}
 	return p, nil
+}
+
+// releaseYear is the year in a release card's subtitle, "2023" or
+// "Single • 2023"; "" when it has none.
+func releaseYear(item interface{}) string {
+	runs, _ := dig(item, "subtitle", "runs").([]interface{})
+	for _, r := range runs {
+		if s := strings.TrimSpace(digString(r, "text")); len(s) == 4 && strings.Trim(s, "0123456789") == "" {
+			return s
+		}
+	}
+	return ""
 }

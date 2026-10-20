@@ -5118,6 +5118,9 @@
             pane.scrollTo({ top: 0, behavior: "smooth" });
             return;
           }
+          // Shelves shown before stay up while they are read again: a
+          // follow or a play since then changes them.
+          if (home) loadHome();
           view = "home";
           results = [];
           selected = -1;
@@ -5778,10 +5781,11 @@
       }
 
       // ── Home ─────────────────────────────────────────────────────────
-      // YouTube Music's home, as its web app shows it signed out: shelves
-      // of albums and playlists. Above them, as on Spotify, quick tiles
-      // (Favourites and what was played lately) and the recommendations
-      // from your own history.
+      // Home is made of your own listening (Go's Home): new releases from
+      // the artists you follow, your top artists, their songs, artists
+      // like them, what you played lately and the albums you liked. Above
+      // them, as on Spotify, quick tiles and the recommendations from your
+      // history. Nothing regional: YouTube Music's own home is not used.
       let home = null; // the feed, once loaded
       let homeSeq = 0;
       let homeFailed = null; // the problem, while the feed will not load
@@ -5831,14 +5835,19 @@
         if (recs?.length) {
           box.append(shelfOf("Recommended for you", "From what you’ve played lately", recs.map(songCard)));
         }
-        if (home) for (const s of home.shelves) box.append(shelfOf(s.title, s.strapline, s.cards.map(card)));
-        else if (homeFailed) {
+        if (home?.shelves.length) for (const s of home.shelves) box.append(shelfOf(s.title, s.strapline, s.cards.map(card)));
+        else if (home) {
+          // Nothing followed, liked or played yet: Home is made of those.
+          const n = el("div", "shelf");
+          notice(n, "Home fills up as you listen", "Follow artists and like albums from their pages, and play some music: their new releases, similar artists and your favourites show up here.", null, null, false);
+          box.append(n);
+        } else if (homeFailed) {
           const n = el("div", "shelf");
           const offline = homeFailed.kind === "offline";
           notice(
             n,
-            offline ? "You’re offline" : "YouTube Music’s home didn’t load",
-            offline ? "The home loads once you’re back online." : "Try again in a moment.",
+            offline ? "You’re offline" : "Your home didn’t load",
+            offline ? "New releases and your artists load once you’re back online." : "YouTube Music didn’t answer. Try again in a moment.",
             { label: "Try again", run: () => loadHome() },
             homeFailed.detail,
           );
@@ -5991,7 +6000,7 @@
         if (k.kind === "song") return songCard(k.track);
         if (k.kind === "artist")
           return cardShell("artist", k.coverURL, k.title, k.subtitle, () => openPage("artist", () => fetchArtist(k.id), k.title));
-        const load = k.kind === "album" ? () => fetchAlbum(k.id) : () => fetchPlaylist(k.id);
+        const load = { album: () => fetchAlbum(k.id), myplaylist: () => MyPlaylist(+k.id) }[k.kind] || (() => fetchPlaylist(k.id));
         const extra = k.kind === "playlist" ? { coverURL: k.coverURL, subtitle: k.subtitle } : {};
         return cardShell(
           k.kind,
