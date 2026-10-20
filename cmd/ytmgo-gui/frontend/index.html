@@ -32,12 +32,16 @@
         --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
         --fast: 140ms;
         --slow: 320ms;
+        /* Hover on a row and what shows on it: the same even fade in and
+           out, not a snap. */
+        --hover-fade: 180ms ease-in-out;
         font-family: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
       }
       @media (prefers-reduced-motion: reduce) {
         :root {
           --fast: 0ms;
           --slow: 0ms;
+          --hover-fade: 0ms;
         }
       }
       * {
@@ -733,7 +737,7 @@
         position: relative;
         height: var(--row);
         border-radius: var(--radius-s);
-        transition: background var(--fast);
+        transition: background var(--hover-fade);
       }
       .track:hover:not(.selected) {
         background: var(--hover);
@@ -745,6 +749,10 @@
         border-radius: 4px;
         overflow: hidden;
         background: var(--raised);
+        /* Keeps what fades inside it (the play overlay) clipped to the
+           rounded corners while it fades: WebView2 can draw a fading
+           layer unclipped, a square flash over the cover. */
+        isolation: isolate;
       }
       .art {
         width: 100%;
@@ -767,7 +775,7 @@
         background: rgb(13 13 18 / 55%);
         color: #fff;
         opacity: 0;
-        transition: opacity var(--fast);
+        transition: opacity var(--hover-fade);
       }
       .track:hover .play,
       .track.selected .play {
@@ -1249,7 +1257,7 @@
         border-radius: 50%;
         color: var(--mid);
         opacity: 0;
-        transition: opacity var(--fast), background var(--fast), color var(--fast);
+        transition: opacity var(--hover-fade), background var(--fast), color var(--fast);
       }
       .track:hover .add,
       .track.selected .add,
@@ -1287,7 +1295,7 @@
         height: 28px;
         border-radius: 50%;
         color: var(--mid);
-        transition: opacity var(--fast), color var(--fast), background var(--fast), transform var(--fast) var(--ease);
+        transition: opacity var(--hover-fade), color var(--fast), background var(--fast), transform var(--fast) var(--ease);
       }
       .heart svg {
         width: 18px;
@@ -2300,7 +2308,7 @@
         padding: 0 6px;
         border-radius: var(--radius-s);
         outline-offset: -2px;
-        transition: background var(--fast), opacity var(--fast);
+        transition: background var(--hover-fade), opacity var(--fast);
       }
       .q-row:hover {
         background: var(--hover);
@@ -2348,7 +2356,7 @@
         border-radius: 50%;
         color: var(--dim);
         opacity: 0;
-        transition: opacity var(--fast), color var(--fast), background var(--fast);
+        transition: opacity var(--hover-fade), color var(--fast), background var(--fast);
       }
       .q-remove svg {
         width: 16px;
