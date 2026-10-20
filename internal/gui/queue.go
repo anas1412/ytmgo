@@ -27,6 +27,11 @@ type QueueState struct {
 	// Landed is where the song just added went, or the first of several;
 	// -1 when nothing was added.
 	Landed int `json:"landed"`
+	// Version counts changes. A state reaches the page two ways, as a
+	// call's answer and as a "queue" event, and an event sent just
+	// before a change can arrive after that change's answer; the page
+	// keeps the newest and drops what is older.
+	Version int `json:"version"`
 }
 
 // Step is the queue after moving to another track. Moved is false when
@@ -45,7 +50,7 @@ func (a *App) state() QueueState {
 	case a.q.IsRepeatAll():
 		repeat = "all"
 	}
-	s := QueueState{Tracks: a.q.Tracks(), Current: a.q.CurrentIndex(), Shuffle: a.q.IsShuffle(), Repeat: repeat, Landed: -1}
+	s := QueueState{Tracks: a.q.Tracks(), Current: a.q.CurrentIndex(), Shuffle: a.q.IsShuffle(), Repeat: repeat, Landed: -1, Version: a.qver}
 	_, s.Upcoming, s.Played = a.q.Order()
 	if next, ok := a.q.PeekNext(); ok {
 		s.Next = &next
@@ -57,6 +62,7 @@ func (a *App) state() QueueState {
 // returns it for the page. Callers hold a.mu. A save that fails leaves
 // the queue as it is in memory; the next change tries again.
 func (a *App) changed() QueueState {
+	a.qver++
 	s := a.state()
 	a.saveQueue(s.Tracks, s.Current, a.q.IsShuffle(), a.q.IsRepeat(), a.q.IsRepeatAll())
 	return s

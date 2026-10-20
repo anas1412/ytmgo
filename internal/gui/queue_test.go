@@ -344,3 +344,15 @@ func TestPlayAll(t *testing.T) {
 		t.Errorf("nothing playing: playing %q", idsAt(s, []int{s.Current}))
 	}
 }
+
+// Every change counts the version up, so the page can tell a late event
+// from the answer it already has.
+func TestQueueVersion(t *testing.T) {
+	a, _, _ := dlApp(t)
+	v0 := a.Queue().Version
+	s1 := a.Add(queue.Track{ID: "a", Title: "A"})
+	s2 := a.PlayNow(queue.Track{ID: "b", Title: "B"})
+	if !(v0 < s1.Version && s1.Version < s2.Version) || a.Queue().Version != s2.Version {
+		t.Errorf("versions %d, %d, %d, now %d", v0, s1.Version, s2.Version, a.Queue().Version)
+	}
+}

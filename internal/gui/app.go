@@ -76,6 +76,8 @@ type App struct {
 	// playlists, for the quick tiles.
 	recordSource func(db.Source) error
 	sources      func(limit int) ([]db.Source, error)
+	// qver is QueueState.Version: changed counts it up. Under mu.
+	qver int
 	// latest and fetchInstaller are internal/update's; tests swap them.
 	latest         func() (string, error)
 	fetchInstaller func(tag, dir string, progress func(float64)) (string, error)

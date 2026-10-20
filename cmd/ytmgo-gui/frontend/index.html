@@ -726,6 +726,9 @@
       .list.has-cursor .cursor {
         opacity: 1;
       }
+      .cursor.jump {
+        transition: opacity var(--fast);
+      }
       .track {
         position: relative;
         height: var(--row);
@@ -3201,9 +3204,10 @@
         moveCursor();
       }
 
-      function moveCursor() {
+      function moveCursor(glide = false) {
         const list = pane.querySelector(".list");
         if (!list || !list.querySelector(".cursor")) return;
+        list.querySelector(".cursor").classList.toggle("jump", !glide);
         const rows = list.querySelectorAll(".track");
         rows.forEach((r, i) => {
           r.classList.toggle("selected", i === selected);
@@ -3214,10 +3218,14 @@
         rows[selected]?.scrollIntoView({ block: "nearest" });
       }
 
-      function select(i) {
+      // A click puts the bar on the row at once; only the arrow keys
+      // glide it, a row at a time. Gliding to a clicked row swept the bar
+      // across the rows between while the clicked one, its hover gone,
+      // showed nothing.
+      function select(i, glide = false) {
         if (!results.length) return;
         selected = Math.max(0, Math.min(results.length - 1, i));
-        moveCursor();
+        moveCursor(glide);
       }
 
       async function run(q) {
@@ -3419,6 +3427,9 @@
       const current = () => (qs.current >= 0 ? qs.tracks[qs.current] : null);
 
       function setQueue(s) {
+        // An older state arriving late (Go's QueueState.Version): what is
+        // shown is already newer, so it is dropped rather than undoing it.
+        if (s.version < (qs.version ?? 0)) return;
         const moved = s.current !== qs.current;
         qs = s;
         renderQueue(moved);
@@ -4390,10 +4401,10 @@
           return;
         } else if (e.key === "ArrowDown" || (!typing && e.key === "j")) {
           e.preventDefault();
-          select(selected + 1);
+          select(selected + 1, true);
         } else if (e.key === "ArrowUp" || (!typing && e.key === "k")) {
           e.preventDefault();
-          select(selected - 1);
+          select(selected - 1, true);
         } else if (e.key === "Enter" && !typing && !document.activeElement?.matches("button")) {
           enqueue(results[selected]);
         }
