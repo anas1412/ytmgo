@@ -401,6 +401,9 @@ func (m *Model) moveCursorToEdge(bottom bool) {
 			m.favCursor = pick(n)
 			m.clampFavoritesOffset()
 		}
+	case PagePlaylists:
+		m.plCursor = pick(m.plLen())
+		m.clampPlOffset()
 	case PageLibrary:
 		if n := len(m.filteredLibrary()); n > 0 {
 			m.libraryCursor = pick(n)
@@ -458,6 +461,14 @@ func (m *Model) switchPage(page Page) {
 		m.historyOffset = 0
 		m.settingsEditField = false
 		m.historyLoaded = false
+	case PagePlaylists:
+		m.searchInput.SetValue("")
+		m.searchInput.Placeholder = ""
+		m.activePanel = PanelSearch
+		m.plOpen = nil
+		m.plCursor, m.plOffset = 0, 0
+		m.settingsEditField = false
+		m.reloadPlaylists()
 	case PageSettings:
 		m.searchInput.Blur()
 		m.activePanel = PanelSearch

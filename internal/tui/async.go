@@ -34,6 +34,7 @@ func (m Model) handleSearchResults(msg SearchResultsMsg) (tea.Model, tea.Cmd) {
 		m.setStatus("Search failed: " + msg.Error.Error())
 	} else {
 		m.results = msg.Results
+		m.resultsTitle = msg.Title
 		m.searchCursor = 0
 		m.searchOffset = 0
 		switch {

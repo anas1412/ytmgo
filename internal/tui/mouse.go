@@ -63,6 +63,8 @@ func (m Model) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 						m.favCursor--
 						m.clampFavoritesOffset()
 					}
+				case PagePlaylists:
+					m.movePlCursor(-1)
 				case PageLibrary:
 					if m.libraryCursor > 0 {
 						m.libraryCursor--
@@ -114,6 +116,8 @@ func (m Model) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 						m.favCursor++
 						m.clampFavoritesOffset()
 					}
+				case PagePlaylists:
+					m.movePlCursor(1)
 				case PageLibrary:
 					maxIdx := len(m.filteredLibrary()) - 1
 					if m.libraryCursor < maxIdx {
@@ -188,35 +192,10 @@ func (m Model) settingsItemAtLine(line int) int {
 func (m Model) handleClick(x, y int) (Model, tea.Cmd) {
 	// ── Header (y=0) → page tabs or search input ──
 	if y == 0 {
-		// Replicate the tab rendering from renderHeader to find tab positions.
-		type tabDef struct {
-			key   string
-			label string
-		}
-		tabs := []tabDef{
-			{"1", "Stream"},
-			{"2", "Favs"},
-			{"3", "Library"},
-			{"4", "History"},
-			{"5", "Downloads"},
-			{"6", "Settings"},
-		}
-		var renderedTabs []string
+		// The tabs renderHeader draws, to find their positions.
+		renderedTabs := m.headerTabs()
 		var tabWidths []int
-		for i, t := range tabs {
-			hint := styleKeyHint.Render("[" + t.key + "]")
-			if !m.settings.ShowHints {
-				hint = ""
-			}
-			label := styleNavTab.Render(t.label)
-			if int(m.activePage) == i {
-				label = styleNavTabActive.Render(t.label)
-			}
-			rendered := label
-			if hint != "" {
-				rendered = hint + " " + label
-			}
-			renderedTabs = append(renderedTabs, rendered)
+		for _, rendered := range renderedTabs {
 			tabWidths = append(tabWidths, lipgloss.Width(rendered))
 		}
 		tabsStr := strings.Join(renderedTabs, " ")
@@ -330,6 +309,9 @@ func (m Model) handleClick(x, y int) (Model, tea.Cmd) {
 					idx = len(m.history) - 1
 				}
 				m.historyCursor = idx
+			case PagePlaylists:
+				m.plCursor = idx + m.plOffset
+				m.clampPlOffset()
 			case PageFavorites:
 				// The tab row sits above the list: one line lower.
 				idx = (y - clickItemOffsetY - 1) / clickLinesPerItem

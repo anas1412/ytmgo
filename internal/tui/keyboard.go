@@ -98,6 +98,9 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if m.pickingFolder {
 		return m.handlePickerKey(msg)
 	}
+	if m.plPick != nil {
+		return m.handlePlPickKey(msg)
+	}
 
 	if m.settingsEditField {
 		switch msg.String() {
@@ -158,8 +161,8 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		case PageSettings:
 			// Tab does nothing on settings — arrows navigate the list.
 			return m, nil
-		case PageFavorites, PageLibrary, PageHistory:
-			// Favorites/Library/History page: search input ↔ list
+		case PageFavorites, PageLibrary, PageHistory, PagePlaylists:
+			// Favorites/Library/History/Playlists page: search input ↔ list
 			if m.searchFocused {
 				m.searchFocused = false
 				m.searchInput.Blur()
@@ -188,6 +191,10 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case "esc":
+		if m.activePage == PagePlaylists && m.plOpen != nil {
+			m.closePlaylist()
+			return m, nil
+		}
 		// A fetch still in flight: esc cancels it and stays where the
 		// user was, rather than letting the page open a second later
 		// behind a mind already changed.
@@ -280,6 +287,8 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 					m.favCursor--
 					m.clampFavoritesOffset()
 				}
+			case PagePlaylists:
+				m.movePlCursor(-1)
 			case PageLibrary:
 				if m.libraryCursor > 0 {
 					m.libraryCursor--
@@ -326,6 +335,8 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 					m.favCursor++
 					m.clampFavoritesOffset()
 				}
+			case PagePlaylists:
+				m.movePlCursor(1)
 			case PageLibrary:
 				maxIdx := len(m.filteredLibrary()) - 1
 				if m.libraryCursor < maxIdx {
@@ -416,6 +427,13 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		//
 		// Like a and A it needs the cursor in the list: with the focus
 		// in the queue, the subject is the queue, not the list beside it.
+		if m.activePage == PagePlaylists && m.plOpen != nil && m.activePanel == PanelSearch {
+			if len(m.plOpen.Tracks) == 0 {
+				return m, nil
+			}
+			m.setStatus(fmt.Sprintf("Queued %d tracks", len(m.plOpen.Tracks)))
+			return m, m.queueTracks(m.plOpen.Tracks)
+		}
 		if !m.browsingHere() {
 			return m, nil
 		}
@@ -778,6 +796,14 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 			return m, saveQueueCmd(m.db, m.queue)
 		}
+		if m.activePage == PagePlaylists && m.activePanel == PanelSearch && !m.searchFocused {
+			if m.plOpen != nil {
+				m.removeFromPlaylist()
+			} else {
+				m.askDeletePlaylist()
+			}
+			return m, nil
+		}
 		// Library page: delete a downloaded track from disk (requires confirmation)
 		if m.activePage == PageLibrary && m.activePanel == PanelSearch && !m.searchFocused {
 			tracks := m.filteredLibrary()
@@ -854,6 +880,12 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "u":
 		// The track's YouTube Music link, for sharing it somewhere else.
 		return m, m.copyLinkAction()
+
+	case "m":
+		return m, m.addToPlaylistAction()
+
+	case "M":
+		return m, m.savePlaylistAction()
 
 	case "c":
 		return m, m.toggleAutoplayAction()
@@ -962,7 +994,13 @@ func (m *Model) handleGlobalKey(msg tea.KeyMsg) (handled bool, cmd tea.Cmd) {
 				}
 			}
 			return true, nil
-		case "6": // Keys.PageSettings
+		case "6": // Keys.PagePlaylists
+			if m.activePage != PagePlaylists {
+				m.switchPage(PagePlaylists)
+				m.setStatus("")
+			}
+			return true, nil
+		case "7": // Keys.PageSettings
 			if m.activePage != PageSettings {
 				m.switchPage(PageSettings)
 				m.setStatus("")

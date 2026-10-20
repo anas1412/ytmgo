@@ -35,7 +35,8 @@ const (
 	PageLibrary               // 2 — downloaded tracks + download queue
 	PageHistory               // 3 — listening history
 	PageDownloads             // 4 — download jobs, full page
-	PageSettings              // 5 — configuration, last as convention has it
+	PagePlaylists             // 5 — playlists of your own
+	PageSettings              // 6 — configuration, last as convention has it
 )
 
 // Panel identifies which panel within a page has keyboard focus.
@@ -103,6 +104,7 @@ type (
 		// came from somewhere that can say more — a pasted playlist
 		// names itself and reports what it could not resolve.
 		Notice string
+		Title  string // a pasted playlist's name
 	}
 
 	// RecommendationsMsg carries the list of recommended tracks.
@@ -368,6 +370,16 @@ type Model struct {
 	savedAlbums  []db.Saved
 	savedCursor  int
 	savedOffset  int
+
+	// ── Playlists (page 6, playlists.go) ──
+	playlists []db.PlaylistInfo
+	plOpen    *db.Playlist // the playlist whose songs are listed; nil lists them all
+	plCursor  int
+	plOffset  int
+	plPick    *plPicker // m's picker or M's name prompt, while open
+	// resultsTitle names the results when they are a pasted playlist,
+	// for M to name the playlist it saves them as.
+	resultsTitle string
 
 	// ── History (listening history) ──
 	history       []db.PlayHistoryEntry

@@ -43,11 +43,14 @@ type KeyMap struct {
 	Update        key.Binding
 	ClearHistory  key.Binding
 	PageStream    key.Binding // 1
-	PageDownloads key.Binding // 6
+	PageDownloads key.Binding // 5
 	PageFavorites key.Binding // 2
 	PageLibrary   key.Binding // 3
 	PageHistory   key.Binding // 4
-	PageSettings  key.Binding // 5
+	PageSettings  key.Binding // 7
+	PagePlaylists key.Binding // 6
+	AddToPlaylist key.Binding
+	SavePlaylist  key.Binding
 	Escape        key.Binding
 }
 
@@ -222,9 +225,21 @@ var Keys = KeyMap{
 		key.WithKeys("4"),
 		key.WithHelp("4", "history"),
 	),
-	PageSettings: key.NewBinding(
+	PagePlaylists: key.NewBinding(
 		key.WithKeys("6"),
-		key.WithHelp("6", "settings page"),
+		key.WithHelp("6", "playlists"),
+	),
+	PageSettings: key.NewBinding(
+		key.WithKeys("7"),
+		key.WithHelp("7", "settings page"),
+	),
+	AddToPlaylist: key.NewBinding(
+		key.WithKeys("m"),
+		key.WithHelp("m", "add to playlist"),
+	),
+	SavePlaylist: key.NewBinding(
+		key.WithKeys("M"),
+		key.WithHelp("M", "save list as playlist"),
 	),
 	PageDownloads: key.NewBinding(
 		key.WithKeys("5"),
@@ -303,14 +318,17 @@ func (k KeyMap) FullHelp() [][]key.Binding {
 			k.Favorite,
 			k.Save,
 			k.FavTabs,
+			k.AddToPlaylist,
+			k.SavePlaylist,
 		},
 		{
 			k.PageStream,
 			k.PageFavorites,
 			k.PageLibrary,
 			k.PageHistory,
-			k.PageSettings,
 			k.PageDownloads,
+			k.PagePlaylists,
+			k.PageSettings,
 			k.Recs,
 			k.Album,
 			k.Enqueue,
@@ -339,6 +357,7 @@ func (k KeyMap) Globals() []key.Binding {
 		k.PageHistory,
 		k.PageSettings,
 		k.PageDownloads,
+		k.PagePlaylists,
 		k.Recs,
 		k.Open,
 	}

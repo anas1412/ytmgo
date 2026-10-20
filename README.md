@@ -361,6 +361,8 @@ Tab cycles focus through: search input → result list → queue panel → searc
 | `x` | Download selected track |
 | `u` | Copy the track's link (host set by **Copy Link As** in Settings) |
 | `e` | Queue every track in the list on screen |
+| `m` | Add the selected song to one of your playlists, or a new one |
+| `M` | Save the list on screen as a playlist (a pasted playlist keeps its name) |
 | `a` | Open the **album** the selected song came from. Inside an album, queue every song on it |
 | `A` | Open the **artist** of the selected track. On their page, switch songs ⇄ releases |
 | `R` | Refresh recommendations |
@@ -368,7 +370,7 @@ Tab cycles focus through: search input → result list → queue panel → searc
 | `y` | Toggle the lyrics pane under the queue (wheel over it to scroll) |
 | `X` | Jump to the Downloads page and back |
 | `U` | Check for updates / confirm install |
-| `1` … `6` | Switch page: Stream / Favorites / Library / History / Downloads / Settings |
+| `1` … `7` | Switch page: Stream / Favorites / Library / History / Downloads / Playlists / Settings |
 | `L` | Jump straight to the Library page |
 | `Ctrl+↑` / `Ctrl+↓` | Move item up/down in queue |
 | `o` | Open download directory |

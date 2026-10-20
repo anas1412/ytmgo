@@ -45,9 +45,17 @@ func (m *Model) enqueueAndMaybePlay(t queue.Track) tea.Cmd {
 // starting playback when nothing is playing. Shared by the album key
 // and the enqueue key so the two cannot drift apart.
 func (m *Model) queueAll(list []search.Result) tea.Cmd {
-	var cmd tea.Cmd
+	ts := make([]queue.Track, len(list))
 	for i, r := range list {
-		t := m.resolveTrack(r)
+		ts[i] = m.resolveTrack(r)
+	}
+	return m.queueTracks(ts)
+}
+
+// queueTracks is queueAll for songs already resolved: a playlist's.
+func (m *Model) queueTracks(ts []queue.Track) tea.Cmd {
+	var cmd tea.Cmd
+	for i, t := range ts {
 		if i == 0 {
 			cmd = m.enqueueAndMaybePlay(t)
 			continue
@@ -83,6 +91,12 @@ func (m *Model) activateSelection() tea.Cmd {
 		tracks := m.filteredLibrary()
 		if len(tracks) > 0 && m.libraryCursor >= 0 && m.libraryCursor < len(tracks) {
 			return m.enqueueAndMaybePlay(tracks[m.libraryCursor])
+		}
+	case PagePlaylists:
+		if m.plOpen == nil {
+			m.openPlaylist()
+		} else if m.plCursor < len(m.plOpen.Tracks) {
+			return m.enqueueAndMaybePlay(m.plOpen.Tracks[m.plCursor])
 		}
 	case PageHistory:
 		if len(m.history) > 0 && m.historyCursor >= 0 && m.historyCursor < len(m.history) {
@@ -341,6 +355,11 @@ func (m *Model) selectedTrack() (queue.Track, bool) {
 	case m.activePage == PageFavorites && m.favTab == favSongs:
 		if m.favCursor >= 0 && m.favCursor < len(m.favorites) {
 			return m.favorites[m.favCursor], true
+		}
+
+	case m.activePage == PagePlaylists:
+		if m.plOpen != nil && m.plCursor < len(m.plOpen.Tracks) {
+			return m.plOpen.Tracks[m.plCursor], true
 		}
 
 	case m.activePage == PageHistory:

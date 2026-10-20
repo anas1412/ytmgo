@@ -2533,7 +2533,8 @@
         <dl>
           <dt><kbd>/</kbd></dt><dd>Search</dd>
           <dt><kbd>↑ ↓</kbd><kbd>j k</kbd></dt><dd>Move in a list</dd>
-          <dt><kbd>1 – 6</kbd></dt><dd>Search, Favourites, Library, History, Downloads, Settings</dd>
+          <dt><kbd>1 – 5</kbd></dt><dd>Search, Favourites, Library, History, Downloads</dd>
+          <dt><kbd>7</kbd></dt><dd>Settings</dd>
           <dt><kbd>y</kbd></dt><dd>Lyrics</dd>
           <dt><kbd>R</kbd></dt><dd>Refresh recommendations</dd>
           <dt><kbd>Esc</kbd></dt><dd>Back</dd>
@@ -4023,7 +4024,7 @@
             if (view !== "library" || !results[selected]) return false;
             deleteFile(results[selected]);
             return true;
-          case "6":
+          case "7":
             navTo("settings");
             return true;
           case "u": {

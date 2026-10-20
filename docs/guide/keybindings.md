@@ -14,7 +14,7 @@ Press `?` at any time to open Settings, which lists the full set.
 | `Tab` | Cycle focus: search → results → queue → search |
 | `↑` `↓` / `j` `k` | Move through a list |
 | `g` / `G` | Jump to the top / bottom of a list |
-| `1` … `6` | Switch page: Stream, Favourites, Library, History, Downloads, Settings |
+| `1` … `7` | Switch page: Stream, Favourites, Library, History, Downloads, Playlists, Settings |
 | `L` | Jump straight to the Library page |
 | `?` | Open Settings, which lists every shortcut |
 | `esc` | Cancel, or step back one level: an album returns to the artist's releases, the artist returns to your results |
@@ -58,6 +58,8 @@ move on. `n` always advances, even with repeat-one enabled.
 | `a` | Open the **album** the selected song came from. Inside an album, queue every song on it |
 | `A` | Open the **artist** of the selected track. On their page, switch songs ⇄ releases |
 | `f` | Toggle favourite on the selected track |
+| `m` | Add the selected song to one of your playlists, or a new one |
+| `M` | Save the list on screen as a playlist (a pasted playlist keeps its name) |
 | `C` | Clear play history (History page) |
 
 ## Downloads

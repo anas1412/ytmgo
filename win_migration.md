@@ -422,12 +422,15 @@ Not done: updates (3), signing (4), winget and Scoop (6).
   TUI's `b` (bookmark) there.
 - ~~**Favourites tabs:**~~ Done in both: Songs, Artists and Albums (the
   TUI steps through them by pressing `2` again; Enter opens, `b` lets go).
-- **Playlists:** done in the GUI (`playlists` table, `gui/myplaylists.go`):
-  the sidebar lists them, + makes one, a page each with Play, Rename and
-  Delete; songs go in by dragging them onto one, or from the right-click
-  menu every song has (also: add to queue, go to album or artist). Save
-  as playlist on a pasted link and on YouTube Music playlists. The TUI's
-  side is next.
+- ~~**Playlists:**~~ Done in both, in the `playlists` table. GUI
+  (`gui/myplaylists.go`): the sidebar lists them, + makes one, a page
+  each with Play, Rename and Delete; songs go in by dragging them onto
+  one, or from the right-click menu every song has (also: add to queue,
+  go to album or artist). Save as playlist on a pasted link and on
+  YouTube Music playlists. TUI (`tui/playlists.go`): page 6 (Settings
+  moved to 7 in both apps), Enter opens one, `e` queues it, `d` removes
+  a song or deletes the playlist after asking; `m` adds the selected
+  song through a picker, `M` saves the list on screen as a playlist.
 - **Right panel:** song and artist details after the Lyrics tab. Opened by clicking the cover in the player bar.
 - ~~**Queue order, in both apps:**~~ Done, Spotify's way, in both: the
   track playing first, then what comes next in play order (shuffle

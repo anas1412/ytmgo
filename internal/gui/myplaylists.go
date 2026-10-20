@@ -57,22 +57,11 @@ func (a *App) AddToPlaylist(id int64, tracks []queue.Track) (int, error) {
 	if err != nil {
 		return 0, problem(err)
 	}
-	have := map[string]bool{}
-	for _, t := range p.Tracks {
-		have[t.ID] = true
-	}
-	added := 0
-	for _, t := range tracks {
-		if !have[t.ID] {
-			have[t.ID] = true
-			p.Tracks = append(p.Tracks, t)
-			added++
-		}
-	}
+	all, added := db.AppendNew(p.Tracks, tracks)
 	if added == 0 {
 		return 0, nil
 	}
-	return added, problem(a.pl.set(id, p.Tracks))
+	return added, problem(a.pl.set(id, all))
 }
 
 // RemoveFromPlaylist takes the song at i out of a playlist.

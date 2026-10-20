@@ -12,11 +12,12 @@ import (
 
 // confirmAction values
 const (
-	confirmNone         = ""
-	confirmClearQueue   = "clear-queue"
-	confirmDeleteTrack  = "delete-track"
-	confirmUpdate       = "update"
-	confirmClearHistory = "clear-history"
+	confirmNone           = ""
+	confirmClearQueue     = "clear-queue"
+	confirmDeleteTrack    = "delete-track"
+	confirmUpdate         = "update"
+	confirmClearHistory   = "clear-history"
+	confirmDeletePlaylist = "delete-playlist"
 )
 
 // isConfirming returns true when a destructive action is awaiting confirmation.
@@ -84,6 +85,13 @@ func (m *Model) executeConfirmedAction() (tea.Model, tea.Cmd) {
 	case confirmUpdate:
 		m.setStatus("⬇  Updating ytmgo…")
 		return m, runUpdateCmd()
+
+	case confirmDeletePlaylist:
+		// Page keys skip the confirmation, so the list may be gone.
+		if m.activePage == PagePlaylists && m.plOpen == nil {
+			m.deleteSelectedPlaylist()
+		}
+		return m, nil
 
 	case confirmClearHistory:
 		if m.db != nil {

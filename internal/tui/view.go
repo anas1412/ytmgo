@@ -143,6 +143,56 @@ func (m Model) View() string {
 	return m.paintBg(m.fillHeight(view))
 }
 
+// pageTabs are the header's tabs, one per Page in order; the header
+// draws them and a click finds them by the same list.
+var pageTabs = []struct{ key, label string }{
+	{"1", "Stream"},
+	{"2", "Favs"},
+	{"3", "Library"},
+	{"4", "History"},
+	{"5", "Downloads"},
+	{"6", "Playlists"},
+	{"7", "Settings"},
+}
+
+// tabHint is shown inline so users discover focus cycling without
+// glancing down at the help bar.
+func (m Model) tabHint() string {
+	return m.hints(styleKeyHint.Render("[tab]") + styleTextDim.Render(" cycle"))
+}
+
+// headerTabs renders the page tabs, with inline key hints matching
+// [h] / [l] style. When the row is too narrow for those, the keys go
+// rather than the last tabs: the footer and ? still list them. The
+// click map reads the same tabs, so the two agree.
+func (m Model) headerTabs() []string {
+	render := func(keys bool) []string {
+		var out []string
+		for i, t := range pageTabs {
+			label := styleNavTab.Render(t.label)
+			if int(m.activePage) == i {
+				label = styleNavTabActive.Render(t.label)
+			}
+			if keys {
+				label = styleKeyHint.Render("["+t.key+"]") + " " + label
+			}
+			out = append(out, label)
+		}
+		return out
+	}
+	tabs := render(m.settings.ShowHints)
+	// What renderHeader puts left of them: the field, its bar where
+	// there is one, two spaces and the [tab] hint; and a space of gap.
+	left := searchBoxWidth(m.width) + 2 + lipgloss.Width(m.tabHint())
+	if !paintBackground {
+		left++
+	}
+	if m.settings.ShowHints && left+lipgloss.Width(strings.Join(tabs, " "))+3 > m.width {
+		tabs = render(false)
+	}
+	return tabs
+}
+
 // hints returns s when inline key hints are on, and nothing when the
 // user has hidden them (z) — the footer keeps the permanent set, so the
 // way back never disappears.
@@ -378,43 +428,10 @@ func (m Model) renderHeader() string {
 		searchView = lipgloss.NewStyle().Foreground(barColor).Render("│") + searchView
 	}
 
-	// Build page tabs (right side) with inline key hints matching [h] / [l] style
-	type tabDef struct {
-		key   string
-		label string
-	}
-	tabs := []tabDef{
-		{"1", "Stream"},
-		{"2", "Favs"},
-		{"3", "Library"},
-		{"4", "History"},
-		{"5", "Downloads"},
-		{"6", "Settings"},
-	}
-	var renderedTabs []string
-	for i, t := range tabs {
-		hint := styleKeyHint.Render("[" + t.key + "]")
-		if !m.settings.ShowHints {
-			hint = ""
-		}
-		label := styleNavTab.Render(t.label)
-		if int(m.activePage) == i {
-			label = styleNavTabActive.Render(t.label)
-		}
-		rendered := label
-		if hint != "" {
-			rendered = hint + " " + label
-		}
-		renderedTabs = append(renderedTabs, rendered)
-	}
-	tabsStr := strings.Join(renderedTabs, " ")
-
-	// Tab hint — shown inline so users discover focus cycling without
-	// glancing down at the help bar.
-	tabHint := m.hints(styleKeyHint.Render("[tab]") + styleTextDim.Render(" cycle"))
+	tabsStr := strings.Join(m.headerTabs(), " ")
 	// [v] used to sit here too; it lives in the help bar now, next to
 	// [X], so the two panel toggles are advertised together in one place.
-	left := lipgloss.JoinHorizontal(lipgloss.Center, logo, searchView, "  ", tabHint)
+	left := lipgloss.JoinHorizontal(lipgloss.Center, logo, searchView, "  ", m.tabHint())
 
 	gap := m.width - lipgloss.Width(left) - lipgloss.Width(tabsStr) - 2
 	if gap < 1 {
@@ -483,6 +500,8 @@ func (m Model) renderPanels() string {
 			n = len(m.downloader.Jobs())
 		}
 		panelLabel = fmt.Sprintf("DOWNLOADS %d", n) + m.hints("  "+oHint+" open folder")
+	case PagePlaylists:
+		panelLabel = m.playlistsLabel()
 	case PageLibrary:
 		dHint := styleKeyHint.Render("[d]")
 		panelLabel = "LIBRARY" + m.hints("  "+dHint+" delete  "+fHint+" add to fav")
@@ -541,6 +560,9 @@ func (m Model) renderPanels() string {
 		} else {
 			panelLabel = "SEARCH RESULTS" + m.hints("  "+eHint+" queue all  "+albHint+" artist  "+aHint+" album  "+xHint+" download  "+fHint+" fav")
 		}
+	}
+	if m.plPick != nil {
+		panelLabel = m.plPickLabel()
 	}
 	// Truncate every panel title so the border always has room for its
 	// corners and a dash either side: a wrapped title grows the box a
@@ -622,6 +644,9 @@ func (m Model) renderPanels() string {
 // ─── Search Results List ───────────────────────────────────────────
 
 func (m Model) renderSearchResults(width, height int) string {
+	if m.plPick != nil {
+		return m.renderPlPicker(width, height)
+	}
 	switch m.activePage {
 	case PageFavorites:
 		return m.renderFavorites(width, height)
@@ -631,6 +656,8 @@ func (m Model) renderSearchResults(width, height int) string {
 		return m.renderHistory(width, height)
 	case PageDownloads:
 		return m.renderDownloadQueue(width, height)
+	case PagePlaylists:
+		return m.renderPlaylists(width, height)
 	}
 	return m.renderStreamList(width, height)
 }

@@ -71,7 +71,7 @@ func playlistCmd(ref search.PlaylistRef) tea.Cmd {
 			notice = fmt.Sprintf("%s — %d tracks, %d not found on YouTube",
 				title, len(results), missed)
 		}
-		return SearchResultsMsg{Results: results, Notice: notice}
+		return SearchResultsMsg{Results: results, Notice: notice, Title: title}
 	}
 }
 

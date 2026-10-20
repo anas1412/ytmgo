@@ -140,3 +140,22 @@ func encodeTracks(tracks []queue.Track) (string, error) {
 	raw, err := json.Marshal(tracks)
 	return string(raw), err
 }
+
+// AppendNew puts tracks at the end of have, leaving out those it has
+// already, and says how many went in: adding to a playlist, in both
+// apps.
+func AppendNew(have, tracks []queue.Track) ([]queue.Track, int) {
+	seen := map[string]bool{}
+	for _, t := range have {
+		seen[t.ID] = true
+	}
+	added := 0
+	for _, t := range tracks {
+		if !seen[t.ID] {
+			seen[t.ID] = true
+			have = append(have, t)
+			added++
+		}
+	}
+	return have, added
+}
