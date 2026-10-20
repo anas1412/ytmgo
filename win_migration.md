@@ -428,7 +428,8 @@ Not done: updates (3), signing (4), winget and Scoop (6).
   one, or from the right-click menu every song has (also: add to queue,
   go to album or artist). Save as playlist on a pasted link and on
   YouTube Music playlists. TUI (`tui/playlists.go`): page 6 (Settings
-  moved to 7 in both apps), Enter opens one, `e` queues it, `d` removes
+  moved to 7 in both apps), Enter opens one, `e` queues it, ctrl+↑↓
+  reorders it, `d` removes
   a song or deletes the playlist after asking; `m` adds the selected
   song through a picker, `M` saves the list on screen as a playlist.
 - **Right panel:** song and artist details after the Lyrics tab. Opened by clicking the cover in the player bar.

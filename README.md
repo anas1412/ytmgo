@@ -372,7 +372,7 @@ Tab cycles focus through: search input → result list → queue panel → searc
 | `U` | Check for updates / confirm install |
 | `1` … `7` | Switch page: Stream / Favorites / Library / History / Downloads / Playlists / Settings |
 | `L` | Jump straight to the Library page |
-| `Ctrl+↑` / `Ctrl+↓` | Move item up/down in queue |
+| `Ctrl+↑` / `Ctrl+↓` | Move item up/down in the queue or an open playlist |
 | `o` | Open download directory |
 | `?` | Open the Settings page (includes all shortcuts) |
 | `esc` | Cancel, or step back one level: album → the artist's releases → your results |

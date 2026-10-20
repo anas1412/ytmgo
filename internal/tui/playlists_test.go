@@ -71,6 +71,16 @@ func TestPlaylists(t *testing.T) {
 	if m.plOpen == nil || len(m.plOpen.Tracks) != 2 || m.plOpen.Tracks[0].Title != "Two" {
 		t.Fatalf("open and d: %+v", m.plOpen)
 	}
+	nm, _ := m.handleKey(tea.KeyMsg{Type: tea.KeyCtrlDown})
+	m = nm.(Model)
+	if m.plOpen.Tracks[1].Title != "Two" || m.plCursor != 1 {
+		t.Fatalf("ctrl+down: %+v, cursor %d", m.plOpen.Tracks, m.plCursor)
+	}
+	nm, _ = m.handleKey(tea.KeyMsg{Type: tea.KeyCtrlUp})
+	m = nm.(Model)
+	if m.plOpen.Tracks[0].Title != "Two" || m.plCursor != 0 {
+		t.Fatalf("ctrl+up: %+v, cursor %d", m.plOpen.Tracks, m.plCursor)
+	}
 	m = pressPl(m, "esc")
 	if m.plOpen != nil || m.playlists[0].Count != 2 {
 		t.Fatalf("esc: %+v", m.playlists)

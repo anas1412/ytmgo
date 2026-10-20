@@ -904,6 +904,14 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, m.toggleSavedAction()
 
 	case "ctrl+up", "ctrl+down":
+		if m.activePage == PagePlaylists && m.plOpen != nil && m.activePanel == PanelSearch {
+			step := 1
+			if msg.String() == "ctrl+up" {
+				step = -1
+			}
+			m.movePlaylistSong(step)
+			return m, nil
+		}
 		idx := m.selectedQueueIndex()
 		cur := m.queue.CurrentIndex()
 		if m.activePage != PageStream || m.activePanel != PanelQueue || idx < 0 || m.queue.IsShuffle() || idx <= cur {

@@ -47,7 +47,7 @@ move on. `n` always advances, even with repeat-one enabled.
 |-----|--------|
 | `d` / `Delete` | Remove the selected track from the queue |
 | `D` | Clear the entire queue (press `Enter` to confirm) |
-| `Ctrl+↑` / `Ctrl+↓` | Move the selected track up or down |
+| `Ctrl+↑` / `Ctrl+↓` | Move the selected track up or down, in the queue or an open playlist |
 
 ## Finding music
 

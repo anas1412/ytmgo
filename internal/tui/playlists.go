@@ -109,6 +109,24 @@ func (m *Model) removeFromPlaylist() {
 	m.setStatus("Removed " + t.Title + " from " + p.Name)
 }
 
+// movePlaylistSong is ctrl+↑/↓ in an open playlist: the song moves one
+// place, and the cursor with it.
+func (m *Model) movePlaylistSong(step int) {
+	p, i := m.plOpen, m.plCursor
+	j := i + step
+	if m.db == nil || i >= len(p.Tracks) || j < 0 || j >= len(p.Tracks) {
+		return
+	}
+	tracks := append([]queue.Track{}, p.Tracks...)
+	tracks[i], tracks[j] = tracks[j], tracks[i]
+	if err := m.db.SetPlaylistTracks(p.ID, tracks); err != nil {
+		m.setStatus("Could not move it: " + err.Error())
+		return
+	}
+	p.Tracks = tracks
+	m.movePlCursor(step)
+}
+
 // askDeletePlaylist is d on the list: it asks first, as every delete does.
 func (m *Model) askDeletePlaylist() {
 	if m.plCursor >= len(m.playlists) {
@@ -326,7 +344,8 @@ func (m Model) playlistsLabel() string {
 	d := styleKeyHint.Render("[d]")
 	e := styleKeyHint.Render("[e]")
 	if m.plOpen != nil {
-		return strings.ToUpper(m.plOpen.Name) + m.hints("  "+e+" queue all  "+d+" remove  "+esc+" back")
+		return strings.ToUpper(m.plOpen.Name) + m.hints("  "+e+" queue all  "+d+" remove  "+
+			styleKeyHint.Render("[ctrl+↑↓]")+" reorder  "+esc+" back")
 	}
 	return fmt.Sprintf("PLAYLISTS %d", len(m.playlists)) +
 		m.hints("  "+styleKeyHint.Render("[enter]")+" open  "+d+" delete")
