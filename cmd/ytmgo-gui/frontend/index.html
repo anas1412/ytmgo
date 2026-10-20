@@ -692,8 +692,8 @@
       .head-row,
       .track {
         display: grid;
-        /* art, title and artist, album, length, then ♥ and + */
-        grid-template-columns: 44px minmax(0, 1.6fr) minmax(0, 1fr) 56px 64px;
+        /* art, title and artist, album, length, then ♥, download and + */
+        grid-template-columns: 44px minmax(0, 1.6fr) minmax(0, 1fr) 56px 96px;
         align-items: center;
         gap: 14px;
         padding: 0 12px;
@@ -1542,19 +1542,21 @@
       .list-head .lib-filter + .icon-btn {
         margin-left: 0;
       }
-      .lib .head-row,
-      .lib .track,
+      /* A playlist's rows have a fourth button, remove: ♥, download, +, ✕. */
       .mypl .head-row,
       .mypl .track {
-        grid-template-columns: 44px minmax(0, 1.6fr) minmax(0, 1fr) 56px 96px;
+        grid-template-columns: 44px minmax(0, 1.6fr) minmax(0, 1fr) 56px 128px;
       }
       @container view (max-width: 560px) {
-        .lib .head-row,
-        .lib .track,
         .mypl .head-row,
         .mypl .track {
-          grid-template-columns: 44px minmax(0, 1fr) 56px 96px;
+          grid-template-columns: 44px minmax(0, 1fr) 56px 128px;
         }
+      }
+      .track .add.dl-btn:disabled {
+        color: var(--mint);
+        cursor: default;
+        background: none;
       }
       .track .add.del:hover {
         color: var(--pink);
@@ -2525,7 +2527,7 @@
       @container view (max-width: 560px) {
         .head-row,
         .track {
-          grid-template-columns: 44px minmax(0, 1fr) 56px 64px;
+          grid-template-columns: 44px minmax(0, 1fr) 56px 96px;
         }
         /* A song row's album column; not an album card's. */
         .track .album,
@@ -2887,6 +2889,7 @@
       };
       const ICON_PLUS = '<path d="M12 5v14" /><path d="M5 12h14" />';
       const ICON_CHECK = '<path d="M20 6 9 17l-5-5" />';
+      const ICON_DOWNLOAD = '<path d="M12 4v11" /><path d="m7 10 5 5 5-5" /><path d="M5 20h14" />';
       const ICON_X = '<path d="M18 6 6 18" /><path d="m6 6 12 12" />';
       const HEART =
         '<path d="M2 9.5a5.5 5.5 0 0 1 9.6-3.7.6.6 0 0 0 .8 0A5.5 5.5 0 0 1 22 9.5c0 2.3-1.5 4-3 5.5l-5.5 5.3a2 2 0 0 1-3 0L5 15c-1.5-1.5-3-3.2-3-5.5" />';
@@ -3131,8 +3134,30 @@
         });
         add.addEventListener("dblclick", (e) => e.stopPropagation());
 
+        // Download, for a song not on disk; the Library holds only those
+        // that are. Quiet once downloaded, so the buttons stay in place.
+        const dl = el("button", "add dl-btn");
+        dl.type = "button";
+        dl.setAttribute("aria-label", `Download ${r.title}`);
+        dl.title = "Download (x)";
+        dl.append(icon(ICON_DOWNLOAD));
+        dl.addEventListener("click", async (e) => {
+          e.stopPropagation();
+          select(i);
+          if (await download(r)) tick(dl, ICON_DOWNLOAD);
+        });
+        dl.addEventListener("dblclick", (e) => e.stopPropagation());
+        if (r.downloaded) {
+          dl.disabled = true;
+          dl.title = "Downloaded";
+          dl.setAttribute("aria-label", `${r.title} is downloaded`);
+          dl.replaceChildren(icon(ICON_CHECK));
+        }
+
         const actions = el("div", "row-actions");
-        actions.append(heartButton(r), add);
+        actions.append(heartButton(r));
+        if (view !== "library") actions.append(dl);
+        actions.append(add);
         if (view === "myplaylist") {
           const rm = el("button", "add del");
           rm.type = "button";
@@ -3617,13 +3642,13 @@
         }
         tick(button || pane.querySelectorAll(".list .track")[results.indexOf(t)]?.querySelector(".add"));
       }
-      function tick(button) {
+      function tick(button, back = ICON_PLUS) {
         if (!button) return;
         button.classList.add("done");
         button.replaceChildren(icon(ICON_CHECK));
         setTimeout(() => {
           button.classList.remove("done");
-          button.replaceChildren(icon(ICON_PLUS));
+          button.replaceChildren(icon(back));
         }, 1200);
       }
 
@@ -4997,6 +5022,7 @@
         menu.replaceChildren(
           el("div", "m-label", t.title),
           item("Add to queue", () => enqueue(t)),
+          ...(t.downloaded ? [] : [item("Download", () => download(t))]),
           item("Go to album", () => openAlbumOf(t)),
           item("Go to artist", () => openArtistOf(t)),
           el("hr"),
@@ -6215,6 +6241,13 @@
       function paintDownloaded(ids) {
         for (const id of ids)
           for (const row of pane.querySelectorAll(`.track[data-id="${CSS.escape(id)}"]`)) {
+            const btn = row.querySelector(".dl-btn");
+            if (btn) {
+              btn.disabled = true;
+              btn.classList.remove("done");
+              btn.title = "Downloaded";
+              btn.replaceChildren(icon(ICON_CHECK));
+            }
             const artist = row.querySelector(".artist");
             if (artist.querySelector(".dl")) continue;
             const dl = el("span", "dl", "✓");
@@ -6243,11 +6276,12 @@
           did = await Download(t);
         } catch (err) {
           cannotDownload(err, `“${t.title}”`);
-          return;
+          return false;
         }
         if (did === "pending") say(`Already downloading “${t.title}”`);
         else if (did === "downloaded") say(`Already downloaded: “${t.title}”`);
         else say(`Download queued: “${t.title}”`, { full: `“${t.title}” is queued. Downloads (5) shows how it’s going.` });
+        return did !== "downloaded";
       }
 
       async function downloadAlbum(p, b) {
