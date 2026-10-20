@@ -776,6 +776,9 @@
         color: #fff;
         opacity: 0;
         transition: opacity var(--hover-fade);
+        /* A layer of its own: the fade then blends it over the cover
+           rather than repainting the cover under it for every frame. */
+        will-change: opacity;
       }
       .track:hover .play,
       .track.selected .play {
@@ -1659,39 +1662,14 @@
       }
 
       /* ── Home ─────────────────────────────────────────────────────── */
-      .home,
-      .browse {
+      .home {
         padding: 4px 8px 40px;
       }
       /* Home keeps one rhythm: 24px between its blocks, 40px between
          shelves, 16px from a shelf's title to its covers, 24px between
          covers, and every left edge on the same line. */
-      .chips {
-        display: flex;
-        gap: 8px;
-        overflow-x: auto;
-        scrollbar-width: none;
-        /* The last chips fade out where the row runs on, rather than cut. */
-        mask-image: linear-gradient(to right, #000 calc(100% - 48px), transparent);
-      }
-      .chips::-webkit-scrollbar {
-        display: none;
-      }
-      .chip {
-        flex: none;
-        padding: 6px 14px;
-        border-radius: 999px;
-        background: var(--raised);
-        font-size: 13px;
-        font-weight: 600;
-        transition: background var(--fast), color var(--fast);
-      }
-      .chip:hover {
-        background: var(--border);
-      }
-      .chip[aria-pressed="true"] {
-        background: var(--text);
-        color: var(--bg);
+      .home > :first-child {
+        margin-top: 0;
       }
       /* Quick tiles: Favourites and what was played lately, as Spotify's. */
       .tiles {
@@ -1869,6 +1847,7 @@
         opacity: 0;
         transform: translateY(8px);
         transition: opacity var(--fast), transform var(--fast) var(--ease);
+        will-change: opacity, transform;
       }
       .card .c-play svg {
         width: 20px;
@@ -1893,31 +1872,6 @@
       }
       .card.skeleton .art-wrap {
         animation: none;
-      }
-      /* Search with nothing typed: moods to browse, Spotify's "Browse all". */
-      .browse h2 {
-        margin: 6px 0 16px;
-        font-size: 22px;
-      }
-      .browse .grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-        gap: 16px;
-      }
-      .mood-tile {
-        height: 96px;
-        padding: 14px 16px;
-        border-radius: var(--radius-m);
-        color: #fff;
-        font-size: 19px;
-        font-weight: 800;
-        text-align: left;
-        text-shadow: 0 1px 2px rgb(0 0 0 / 0.25);
-        transition: transform var(--fast) var(--ease), filter var(--fast);
-      }
-      .mood-tile:hover {
-        transform: translateY(-2px);
-        filter: brightness(1.08);
       }
       /* The sidebar's place for playlists, for when they come. */
       .nav-playlists {
@@ -4373,7 +4327,7 @@
             return true;
           }
           case "R":
-            homeCache = {};
+            home = null;
             navTo("home", true);
             refreshRecs();
             return true;
@@ -5163,7 +5117,7 @@
           renderSettings();
           return;
         }
-        // Search: the last results, or the moods to browse, and the box
+        // Search: the last results, or what to type, and the box
         // ready to type in.
         query.focus();
         if (view === "search") return;
@@ -5740,12 +5694,11 @@
       }
 
       // ── Home ─────────────────────────────────────────────────────────
-      // YouTube Music's home, as its web app shows it signed out: mood
-      // chips, then shelves of albums and playlists. Above them, as on
-      // Spotify, quick tiles (Favourites and what was played lately) and
-      // the recommendations from your own history.
-      let homeCache = {}; // mood params → the home it filters to
-      let homeMood = "";
+      // YouTube Music's home, as its web app shows it signed out: shelves
+      // of albums and playlists. Above them, as on Spotify, quick tiles
+      // (Favourites and what was played lately) and the recommendations
+      // from your own history.
+      let home = null; // the feed, once loaded
       let homeSeq = 0;
       let homeFailed = null; // the problem, while the feed will not load
       let recent = []; // the albums and playlists played lately, for the quick tiles
@@ -5763,11 +5716,11 @@
       const CHEVRON_L = '<path d="m15 18-6-6 6-6" />';
       const CHEVRON_R = '<path d="m9 18 6-6-6-6" />';
 
-      async function loadHome(mood) {
+      async function loadHome() {
         const mine = ++homeSeq;
         homeFailed = null;
         try {
-          homeCache[mood] = await fetchHome(mood);
+          home = await fetchHome("");
         } catch (err) {
           if (mine === homeSeq) homeFailed = problemOf(err);
         }
@@ -5780,7 +5733,7 @@
         results = [];
         selected = -1;
         if (recs === null && !recsSeq) refreshRecs();
-        if (!homeCache[homeMood] && !homeFailed) loadHome(homeMood);
+        if (!home && !homeFailed) loadHome();
         Recent()
           .then((r) => {
             recent = r || [];
@@ -5790,13 +5743,11 @@
           .catch(() => {});
         const keep = pane.querySelector(".home") ? pane.scrollTop : 0;
         const box = el("div", "home");
-        const feed = homeCache[homeMood] || homeCache[""];
-        box.append(moodChips(feed?.moods || []), quickTiles());
+        box.append(quickTiles());
         if (recs?.length) {
           box.append(shelfOf("Recommended for you", "From what you’ve played lately", recs.map(songCard)));
         }
-        const h = homeCache[homeMood];
-        if (h) for (const s of h.shelves) box.append(shelfOf(s.title, s.strapline, s.cards.map(card)));
+        if (home) for (const s of home.shelves) box.append(shelfOf(s.title, s.strapline, s.cards.map(card)));
         else if (homeFailed) {
           const n = el("div", "shelf");
           const offline = homeFailed.kind === "offline";
@@ -5804,29 +5755,13 @@
             n,
             offline ? "You’re offline" : "YouTube Music’s home didn’t load",
             offline ? "The home loads once you’re back online." : "Try again in a moment.",
-            { label: "Try again", run: () => loadHome(homeMood) },
+            { label: "Try again", run: () => loadHome() },
             homeFailed.detail,
           );
           box.append(n);
         } else box.append(skeletonShelf(), skeletonShelf());
         pane.replaceChildren(box);
         pane.scrollTop = keep;
-      }
-
-      function moodChips(moods) {
-        const row = el("div", "chips");
-        for (const m of [{ title: "All", params: "" }, ...moods]) {
-          const c = el("button", "chip", m.title);
-          c.type = "button";
-          c.setAttribute("aria-pressed", homeMood === m.params);
-          c.addEventListener("click", () => {
-            homeMood = m.params;
-            homeFailed = null;
-            renderHome();
-          });
-          row.append(c);
-        }
-        return row;
       }
 
       // A tile opens; its round button, shown under the pointer, plays.
@@ -6000,42 +5935,11 @@
         start();
       }
 
-      // Search with nothing typed: the moods, to browse, as Spotify's
-      // search page has its genres. A mood opens Home filtered to it.
-      // ytmgo's own colours, violet, mint and pink, each into a deeper
-      // shade of itself or of the next, so white type reads on every one.
-      const MOOD_FILLS = [
-        "linear-gradient(135deg, #7c3aed, #4c1d95)",
-        "linear-gradient(135deg, #059b74, #04614a)",
-        "linear-gradient(135deg, #d61f73, #7c3aed)",
-        "linear-gradient(135deg, #5b21b6, #059b74)",
-        "linear-gradient(135deg, #b0175e, #5a0b30)",
-      ];
       function searchLanding() {
         view = "search";
         results = [];
         selected = -1;
-        const moods = (homeCache[""] || Object.values(homeCache)[0])?.moods || [];
-        const box = el("div", "browse");
-        if (!moods.length) {
-          notice(pane, "Search YouTube Music", "Type a song, an artist or an album. A YouTube or Spotify playlist link opens the playlist.", null, null, false);
-          return;
-        }
-        box.append(el("h2", "", "Browse by mood"));
-        const grid = el("div", "grid");
-        moods.forEach((m, i) => {
-          const t = el("button", "mood-tile", m.title);
-          t.type = "button";
-          t.style.background = MOOD_FILLS[i % MOOD_FILLS.length];
-          t.addEventListener("click", () => {
-            homeMood = m.params;
-            homeFailed = null;
-            navTo("home", true);
-          });
-          grid.append(t);
-        });
-        box.append(grid);
-        pane.replaceChildren(box);
+        notice(pane, "Search YouTube Music", "Type a song, an artist or an album. A YouTube or Spotify playlist link opens the playlist.", null, null, false);
       }
 
       // ── Library ──────────────────────────────────────────────────────
@@ -6476,7 +6380,7 @@
         if (failedQuery && query.value.trim() === failedQuery) run(failedQuery);
         if (view === "home" && (recsFailed || homeFailed)) {
           if (recsFailed) refreshRecs();
-          if (homeFailed) loadHome(homeMood);
+          if (homeFailed) loadHome();
         }
         if (resumeAt != null && now) {
           const at = resumeAt;

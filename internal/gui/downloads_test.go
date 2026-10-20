@@ -1,7 +1,10 @@
 package gui
 
 import (
+	"bytes"
 	"errors"
+	"image"
+	_ "image/jpeg"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -272,7 +275,7 @@ func TestServeMedia(t *testing.T) {
 	dir := t.TempDir()
 	png, song := filepath.Join(dir, "c.png"), filepath.Join(dir, "A - T.m4a")
 	for _, args := range [][]string{
-		{"-f", "lavfi", "-i", "color=red:s=16x16", "-frames:v", "1", png},
+		{"-f", "lavfi", "-i", "color=red:s=1200x1200", "-frames:v", "1", png},
 		{"-f", "lavfi", "-t", "0.3", "-i", "anullsrc", "-i", png, "-map", "0", "-map", "1", "-c:a", "aac", "-c:v", "mjpeg", "-disposition:v", "attached_pic", song},
 	} {
 		if out, err := exec.Command("ffmpeg", append([]string{"-v", "error", "-y"}, args...)...).CombinedOutput(); err != nil {
@@ -306,8 +309,13 @@ func TestServeMedia(t *testing.T) {
 	if code, _, b := get(src, "Range", "bytes=0-3"); code != 206 || len(b) != 4 {
 		t.Errorf("ranged read: %d, %d bytes", code, len(b))
 	}
-	if code, ctype, _ := get(a.MediaBase() + "/art?p=" + url.QueryEscape(song)); code != 200 || !strings.HasPrefix(ctype, "image/") {
+	code, ctype, img := get(a.MediaBase() + "/art?p=" + url.QueryEscape(song))
+	if code != 200 || !strings.HasPrefix(ctype, "image/") {
 		t.Errorf("cover: %d %s", code, ctype)
+	}
+	// A big cover comes down to 544px.
+	if c, _, err := image.DecodeConfig(bytes.NewReader(img)); err != nil || c.Width != 544 {
+		t.Errorf("cover is %dpx wide, %v", c.Width, err)
 	}
 	if code, _, _ := get(a.MediaBase() + "/art?p=" + url.QueryEscape(png)); code != 404 {
 		t.Errorf("a file outside the library: %d", code)

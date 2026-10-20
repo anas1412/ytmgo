@@ -492,7 +492,11 @@ func (a *App) embeddedArt(path string) []byte {
 		return img
 	}
 	out, err := proc.CommandContext(context.Background(), deps.Path("ffmpeg"),
-		"-v", "quiet", "-i", path, "-an", "-c:v", "copy", "-frames:v", "1", "-f", "image2pipe", "-").Output()
+		// At most 544px, the size YouTube's covers come in: a file's own
+		// can be thousands of pixels, scaled down for every frame a hover
+		// fades over it.
+		"-v", "quiet", "-i", path, "-an", "-frames:v", "1",
+		"-vf", "scale='min(544,iw)':-2", "-c:v", "mjpeg", "-q:v", "3", "-f", "image2pipe", "-").Output()
 	if err != nil || len(out) == 0 {
 		out = nil
 	}

@@ -409,8 +409,8 @@ Not done: updates (3), signing (4), winget and Scoop (6).
 
 - ~~**Home:** a Home button and a home screen, with recommendations on it.~~ Done:
   Home is first in the sidebar (`1`), YouTube Music's signed-out home
-  (`ytmusic.HomeFeed`, its moods and shelves), quick tiles and your
-  recommendations; Search shows moods to browse when empty. Playlists of
+  (`ytmusic.HomeFeed`, its shelves), quick tiles and your
+  recommendations. Mood filters were dropped in 1.6.1. Playlists of
   your own have a placeholder in the sidebar.
 - ~~**Clickable links everywhere:**~~ Done in the GUI: a song's title opens
   its album, its artist the artist's page, its album name the album, in
