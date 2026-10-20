@@ -1553,6 +1553,14 @@
           grid-template-columns: 44px minmax(0, 1fr) 56px 128px;
         }
       }
+      #np-dl.done,
+      #np-dl:disabled {
+        color: var(--mint);
+      }
+      #np-dl:disabled {
+        cursor: default;
+        background: none;
+      }
       .track .add.dl-btn:disabled {
         color: var(--mint);
         cursor: default;
@@ -1619,6 +1627,13 @@
         border-radius: var(--radius-m);
         background: var(--raised);
         box-shadow: 0 16px 40px rgb(0 0 0 / 0.5);
+        /* Many playlists make it long: it scrolls rather than run off. */
+        max-height: calc(100vh - 16px);
+        overflow-y: auto;
+      }
+      .menu button.danger:hover,
+      .menu button.danger:focus-visible {
+        color: var(--pink);
       }
       .menu button {
         display: block;
@@ -2661,6 +2676,9 @@
               <div class="np-status" id="np-status" role="status" aria-live="polite"></div>
             </div>
           </div>
+          <button class="heart" id="np-dl" hidden aria-label="Download" title="Download (x)">
+            <svg viewBox="0 0 24 24"><path d="M12 4v11" /><path d="m7 10 5 5 5-5" /><path d="M5 20h14" /></svg>
+          </button>
           <button class="heart" id="np-heart" hidden aria-pressed="false" aria-label="Add to favourites" title="Favourite (f)">
             <svg viewBox="0 0 24 24"><path d="M2 9.5a5.5 5.5 0 0 1 9.6-3.7.6.6 0 0 0 .8 0A5.5 5.5 0 0 1 22 9.5c0 2.3-1.5 4-3 5.5l-5.5 5.3a2 2 0 0 1-3 0L5 15c-1.5-1.5-3-3.2-3-5.5" /></svg>
           </button>
@@ -2854,6 +2872,8 @@
         RemoveLibraryFolder,
         CheckUpdate,
         InstallUpdate,
+        Radio,
+        ShowInFolder,
       } from "./wailsjs/go/gui/App.js";
 
       const $ = (id) => document.getElementById(id);
@@ -3164,16 +3184,9 @@
           rm.setAttribute("aria-label", `Remove ${r.title} from this playlist`);
           rm.title = "Remove from this playlist";
           rm.append(icon(ICON_X));
-          rm.addEventListener("click", async (e) => {
+          rm.addEventListener("click", (e) => {
             e.stopPropagation();
-            try {
-              page = { ...page, ...(await RemoveFromPlaylist(page.id, i)) };
-              results = page.tracks;
-              renderMyPlaylist();
-              loadPlaylists();
-            } catch (err) {
-              say("That didn’t save", { error: true, full: problemOf(err).detail });
-            }
+            removeFromMyPlaylist(i);
           });
           rm.addEventListener("dblclick", (e) => e.stopPropagation());
           actions.append(rm);
@@ -3198,7 +3211,7 @@
         row.addEventListener("dblclick", () => playNow(i));
         row.addEventListener("contextmenu", (e) => {
           select(i);
-          songMenu(e, r);
+          songMenu(e, r, view === "myplaylist" ? { remove: { label: "Remove from this playlist", run: () => removeFromMyPlaylist(i) } } : {});
         });
         draggable(row, () => ({ kind: "result", index: i, track: r }));
         return row;
@@ -3591,7 +3604,9 @@
           }
         });
         draggable(row, () => ({ kind: "queue", index: i, track: t }));
-        row.addEventListener("contextmenu", (e) => songMenu(e, t));
+        row.addEventListener("contextmenu", (e) =>
+          songMenu(e, t, i === qs.current ? {} : { remove: { label: "Remove from queue", run: async () => setQueue(await Remove(i)) } }),
+        );
         return row;
       }
       function focusRow(i) {
@@ -3930,6 +3945,12 @@
         };
         if (art_) art.src = sized(art_, 120);
         else art.removeAttribute("src");
+        const dl = $("np-dl");
+        dl.hidden = false;
+        paintNpDownload(t.downloaded || dlDone.has(t.id));
+        dl.onclick = async () => {
+          if (await download(t)) tick(dl, ICON_DOWNLOAD);
+        };
         const heart = $("np-heart");
         heart.hidden = false;
         heart.dataset.id = t.id;
@@ -3962,6 +3983,7 @@
         renderPanel();
         Presence(null, false, 0);
         $("np-heart").hidden = true;
+        $("np-dl").hidden = true;
         $("np-title").textContent = "";
         $("np-sub").textContent = "Nothing playing yet";
         $("np-text").removeAttribute("title");
@@ -4944,6 +4966,18 @@
         }
       }
 
+      // The song at i out of the playlist open: its ✕, and the menu's.
+      async function removeFromMyPlaylist(i) {
+        try {
+          page = { ...page, ...(await RemoveFromPlaylist(page.id, i)) };
+          results = page.tracks;
+          renderMyPlaylist();
+          loadPlaylists();
+        } catch (err) {
+          say("That didn’t save", { error: true, full: problemOf(err).detail });
+        }
+      }
+
       async function addToPlaylist(pl, tracks) {
         try {
           const n = await AddToPlaylist(pl.id, tracks);
@@ -5006,11 +5040,13 @@
       // ── The song menu ────────────────────────────────────────────────
       // Right-click on any song: into a playlist, into the queue, or to
       // its album or artist.
-      function songMenu(e, t) {
+      // What a song can be asked to do, wherever it shows. ctx.remove is
+      // where it is listed and can be taken out of: a playlist, the queue.
+      function songMenu(e, t, ctx = {}) {
         e.preventDefault();
         const menu = $("menu");
-        const item = (text, run) => {
-          const b = el("button", "", text);
+        const item = (text, run, cls = "") => {
+          const b = el("button", cls, text);
           b.type = "button";
           b.setAttribute("role", "menuitem");
           b.addEventListener("click", () => {
@@ -5019,12 +5055,25 @@
           });
           return b;
         };
+        const onDisk = !!t.file_path;
+        // A link is for a song YouTube Music has; a file has none.
+        const hasLink = /^[\w-]{11}$/.test(t.id);
         menu.replaceChildren(
           el("div", "m-label", t.title),
+          item("Play now", () => playTrack(t)),
           item("Add to queue", () => enqueue(t)),
           ...(t.downloaded ? [] : [item("Download", () => download(t))]),
+          item("Start radio", () => startRadio(t)),
+          el("hr"),
           item("Go to album", () => openAlbumOf(t)),
           item("Go to artist", () => openArtistOf(t)),
+          el("hr"),
+          item(favSet.has(t.id) ? "Remove from favourites" : "Add to favourites", () => toggleFav(t)),
+          ...(hasLink ? [item("Copy link", () => copyLink(t))] : []),
+          ...(onDisk ? [item("Show in folder", () => showInFolder(t))] : []),
+          ...(ctx.remove || onDisk ? [el("hr")] : []),
+          ...(ctx.remove ? [item(ctx.remove.label, ctx.remove.run, "danger")] : []),
+          ...(onDisk ? [item("Delete from disk…", () => deleteFile(t), "danger")] : []),
           el("hr"),
           el("div", "m-label", "Add to playlist"),
           item("New playlist…", () => newPlaylist([t])),
@@ -5034,8 +5083,34 @@
         // Where the pointer is, kept inside the window.
         const r = menu.getBoundingClientRect();
         menu.style.left = `${Math.min(e.clientX, innerWidth - r.width - 8)}px`;
-        menu.style.top = `${Math.min(e.clientY, innerHeight - r.height - 8)}px`;
+        menu.style.top = `${Math.max(8, Math.min(e.clientY, innerHeight - r.height - 8))}px`;
         menu.querySelector("button")?.focus();
+      }
+
+      // Start radio: the song, then songs like it, after what is playing.
+      async function startRadio(t) {
+        say(`Finding songs like “${t.title}”…`, { sticky: true });
+        let tracks;
+        try {
+          tracks = await Radio(t);
+        } catch (err) {
+          const p = problemOf(err);
+          say(p.kind === "offline" ? "Offline, so there’s no radio" : "No radio for that song", {
+            error: p.kind === "offline",
+            full: p.kind === "offline" ? "You’re offline. Radio needs YouTube Music to find songs like this one." : `YouTube Music found no songs like “${t.title}”.`,
+          });
+          return;
+        }
+        playList(tracks);
+        say(`Radio on “${t.title}”`, { full: `Playing “${t.title}”, then ${tracks.length - 1} songs like it.` });
+      }
+
+      async function showInFolder(t) {
+        try {
+          await ShowInFolder(t.file_path);
+        } catch (err) {
+          say("The folder didn’t open", { error: true, full: problemOf(err).detail });
+        }
       }
       function closeMenu() {
         $("menu").hidden = true;
@@ -6238,7 +6313,17 @@
       }
 
       // ✓ on the rows of songs that just finished.
+      // The player's download button: a quiet tick once the song is on disk.
+      function paintNpDownload(done) {
+        const b = $("np-dl");
+        b.disabled = done;
+        b.classList.remove("done");
+        b.title = done ? "Downloaded" : "Download (x)";
+        b.replaceChildren(icon(done ? ICON_CHECK : ICON_DOWNLOAD));
+      }
+
       function paintDownloaded(ids) {
+        if (now && ids.includes(now.track.id)) paintNpDownload(true);
         for (const id of ids)
           for (const row of pane.querySelectorAll(`.track[data-id="${CSS.escape(id)}"]`)) {
             const btn = row.querySelector(".dl-btn");
