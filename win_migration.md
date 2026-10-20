@@ -443,6 +443,14 @@ Not done: updates (3), signing (4), winget and Scoop (6).
   track playing first, then what comes next in play order (shuffle
   included), then what has played. Adding a song puts it next, after
   songs added before it (`queue.AddNext`, `queue.Order`).
+- **Fix the Discord integration on Windows.** Not working there yet
+  (Show on Discord in Settings; `internal/discordrpc`, `gui/share.go`).
+  Not yet looked into; nothing is known about the cause. Start by seeing
+  what happens on a Windows machine with Discord open: whether the
+  connection is made at all (`discordrpc.go` opens it through rich-go's
+  `ipc` package: Discord's named pipe `\\.\pipe\discord-ipc-0` on
+  Windows, a socket under XDG_RUNTIME_DIR on Linux), then whether the
+  presence and its cover arrive.
 
 ## Open decisions
 
