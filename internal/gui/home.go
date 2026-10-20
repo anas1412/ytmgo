@@ -27,29 +27,18 @@ type Shelf struct {
 	Cards     []Card `json:"cards"`
 }
 
-// Mood is a chip over the home: Params asks for the home it filters to.
-type Mood struct {
-	Title  string `json:"title"`
-	Params string `json:"params"`
-}
-
 // HomeView is YouTube Music's home, as its web app shows it signed out.
 type HomeView struct {
-	Moods   []Mood  `json:"moods"`
 	Shelves []Shelf `json:"shelves"`
 }
 
-// Home reads YouTube Music's home feed: the whole of it with "", or
-// what a mood's Params filters it to.
-func (a *App) Home(params string) (HomeView, error) {
-	h, err := a.home(params)
+// Home reads YouTube Music's home feed.
+func (a *App) Home() (HomeView, error) {
+	h, err := a.home()
 	if err != nil {
 		return HomeView{}, problem(err)
 	}
-	v := HomeView{Moods: []Mood{}, Shelves: []Shelf{}}
-	for _, m := range h.Moods {
-		v.Moods = append(v.Moods, Mood{Title: m.Title, Params: m.Params})
-	}
+	v := HomeView{Shelves: []Shelf{}}
 	for _, s := range h.Shelves {
 		shelf := Shelf{Title: s.Title, Strapline: s.Strapline}
 		for _, it := range s.Items {

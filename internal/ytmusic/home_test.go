@@ -35,21 +35,14 @@ func TestHomeItemKinds(t *testing.T) {
 	}
 }
 
-// Live: the home has moods and more shelves than its first page holds.
+// Live: the home has more shelves than its first page holds.
 func TestHomeFeedLive(t *testing.T) {
 	if testing.Short() {
 		t.Skip("calls YouTube Music")
 	}
-	h, err := HomeFeed("")
-	if err != nil {
-		t.Fatal(err)
+	h, err := HomeFeed()
+	if err != nil || len(h.Shelves) < 3 {
+		t.Fatalf("%d shelves, %v", len(h.Shelves), err)
 	}
-	if len(h.Moods) == 0 || len(h.Shelves) < 3 {
-		t.Fatalf("%d moods, %d shelves", len(h.Moods), len(h.Shelves))
-	}
-	m, err := HomeFeed(h.Moods[0].Params)
-	if err != nil || len(m.Shelves) == 0 {
-		t.Fatalf("mood %q: %v, %d shelves", h.Moods[0].Title, err, len(m.Shelves))
-	}
-	t.Logf("%d moods, %d shelves; %q has %d", len(h.Moods), len(h.Shelves), h.Moods[0].Title, len(m.Shelves))
+	t.Logf("%d shelves", len(h.Shelves))
 }

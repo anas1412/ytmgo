@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"ytmgo/internal/queue"
 	"ytmgo/internal/search"
@@ -84,6 +85,27 @@ func TestDeleteFileOnlyInTheLibrary(t *testing.T) {
 // the download folder first.
 func TestLibraryFolders(t *testing.T) {
 	a, scanned := libApp(t)
+	// Adding and removing a folder rescan in the background. Each scan
+	// makes the download folder again (ResolveDownloadDir), so the test
+	// waits for all three, or one would make it while the temp folders
+	// are being deleted.
+	scans := make(chan struct{}, 3)
+	scan := a.scanLibrary
+	a.scanLibrary = func(downloads string, extra []string) ([]queue.Track, error) {
+		defer func() { scans <- struct{}{} }()
+		return scan(downloads, extra)
+	}
+	defer func() {
+		for range 3 {
+			select {
+			case <-scans:
+			case <-time.After(5 * time.Second):
+				t.Fatal("a rescan never ran")
+			}
+		}
+		a.scanMu.Lock() // and the last has returned
+		a.scanMu.Unlock()
+	}()
 	picked := t.TempDir()
 	a.host.PickFolder = func(string) (string, error) { return picked, nil }
 	got, err := a.AddLibraryFolder()

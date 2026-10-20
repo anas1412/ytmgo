@@ -24,16 +24,8 @@ type HomeShelf struct {
 	Items     []HomeItem
 }
 
-// Mood is one of the chips over the home feed, "Relax" or "Workout";
-// Params asks for the home filtered by it.
-type Mood struct {
-	Title  string
-	Params string
-}
-
 // Home is YouTube Music's home feed, as the web app shows it signed out.
 type Home struct {
-	Moods   []Mood
 	Shelves []HomeShelf
 }
 
@@ -42,30 +34,16 @@ type Home struct {
 // shelf a signed-out home has.
 const homePages = 3
 
-// HomeFeed reads the home feed, filtered by a mood's Params, or whole
-// with "". Shelves come a page at a time; the pages after the first are
-// continuations, which YouTube Music answers only for the same visitor
-// as the first, so its visitorData goes along with them.
-func HomeFeed(params string) (Home, error) {
-	body := map[string]interface{}{"context": clientContext(), "browseId": "FEmusic_home"}
-	if params != "" {
-		body["params"] = params
-	}
-	root, err := post("browse", body)
+// HomeFeed reads the home feed. Shelves come a page at a time; the
+// pages after the first are continuations, which YouTube Music answers
+// only for the same visitor as the first, so its visitorData goes along
+// with them.
+func HomeFeed() (Home, error) {
+	root, err := post("browse", map[string]interface{}{"context": clientContext(), "browseId": "FEmusic_home"})
 	if err != nil {
 		return Home{}, err
 	}
-	var h Home
-	for _, c := range findAll(root, "chipCloudChipRenderer") {
-		m := Mood{
-			Title:  digString(c, "text", "runs", 0, "text"),
-			Params: digString(c, "navigationEndpoint", "browseEndpoint", "params"),
-		}
-		if m.Title != "" && m.Params != "" {
-			h.Moods = append(h.Moods, m)
-		}
-	}
-	h.Shelves = homeShelves(root)
+	h := Home{Shelves: homeShelves(root)}
 
 	visitor := digString(root, "responseContext", "visitorData")
 	for page := 1; page < homePages && visitor != ""; page++ {

@@ -5804,7 +5804,7 @@
         const mine = ++homeSeq;
         homeFailed = null;
         try {
-          home = await fetchHome("");
+          home = await fetchHome();
         } catch (err) {
           if (mine === homeSeq) homeFailed = problemOf(err);
         }

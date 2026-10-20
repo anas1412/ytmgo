@@ -71,7 +71,7 @@ type App struct {
 	// located is the page ids Locate found, by library.MatchKey.
 	located map[string]queue.Track
 	// home is ytmusic.HomeFeed.
-	home func(params string) (ytmusic.Home, error)
+	home func() (ytmusic.Home, error)
 	// recordSource and sources are the database's recent albums and
 	// playlists, for the quick tiles.
 	recordSource func(db.Source) error

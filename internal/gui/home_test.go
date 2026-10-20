@@ -12,20 +12,16 @@ import (
 // Songs on the home carry a playable track; other cards carry the id
 // their page opens by.
 func TestHomeCards(t *testing.T) {
-	a := &App{settings: settings.Defaults(), q: queue.New(), home: func(params string) (ytmusic.Home, error) {
-		if params != "relax" {
-			t.Errorf("params %q", params)
-		}
+	a := &App{settings: settings.Defaults(), q: queue.New(), home: func() (ytmusic.Home, error) {
 		return ytmusic.Home{
-			Moods: []ytmusic.Mood{{Title: "Relax", Params: "relax"}},
 			Shelves: []ytmusic.HomeShelf{{Title: "Mixed", Items: []ytmusic.HomeItem{
 				{Kind: "album", ID: "MPREb_x", Title: "Discovery"},
 				{Kind: "song", ID: "abcdefghijk", Title: "One More Time", Artist: "Daft Punk"},
 			}}},
 		}, nil
 	}}
-	v, err := a.Home("relax")
-	if err != nil || len(v.Moods) != 1 || len(v.Shelves) != 1 {
+	v, err := a.Home()
+	if err != nil || len(v.Shelves) != 1 {
 		t.Fatalf("%+v, %v", v, err)
 	}
 	album, song := v.Shelves[0].Cards[0], v.Shelves[0].Cards[1]
