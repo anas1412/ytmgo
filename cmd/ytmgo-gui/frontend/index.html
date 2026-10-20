@@ -1369,6 +1369,53 @@
         font-family: "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif;
         font-size: 22px;
       }
+      .about-app {
+        margin-top: 36px;
+      }
+      .about-app p {
+        margin: 12px 0 0;
+        max-width: 60ch;
+        color: var(--mid);
+        line-height: 1.5;
+      }
+      .app-head {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        padding-top: 16px;
+        border-top: 1px solid var(--border);
+      }
+      .app-logo {
+        width: 44px;
+        height: 44px;
+      }
+      .app-name {
+        font-size: 17px;
+        font-weight: 700;
+      }
+      .app-ver {
+        color: var(--mid);
+        font-size: 13px;
+        font-variant-numeric: tabular-nums;
+      }
+      .app-status {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-top: 12px;
+        color: var(--text);
+      }
+      .app-links {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 16px;
+      }
+      .about-app .app-credits {
+        margin-top: 16px;
+        color: var(--dim);
+        font-size: 12px;
+      }
       .setting {
         display: flex;
         align-items: center;
@@ -2496,8 +2543,7 @@
          extras give way first. */
       @media (max-width: 760px) {
         .extras .volume,
-        .extras .vol,
-        #version {
+        .extras .vol {
           display: none;
         }
       }
@@ -2660,7 +2706,6 @@
             <svg viewBox="0 0 24 24"><path d="M11 5 6 9H2v6h4l5 4z" /><path class="wave" d="M15.5 8.5a5 5 0 0 1 0 7" /></svg>
           </button>
           <input class="volume" id="volume" type="range" min="0" max="100" value="70" aria-label="Volume" title="Volume (+ / −)" />
-          <span id="version"></span>
         </div>
       </footer>
     </div>
@@ -2825,7 +2870,8 @@
       // A search that failed, run again when the connection comes back.
       let failedQuery = "";
 
-      Version().then((v) => ($("version").textContent = v));
+      let appVersion = "";
+      Version().then((v) => (appVersion = v));
 
       const el = (tag, cls, text) => {
         const n = document.createElement(tag);
@@ -5304,7 +5350,45 @@
         });
         box.append(setting("Show on Discord", "Your Discord status shows the song you’re listening to, while Discord is open.", dsw));
         box.append(setting("Last.fm scrobbling", "Send the songs you hear to your Last.fm profile. You approve ytmgo on last.fm; no password is typed here.", control, note));
+        box.append(aboutApp());
         pane.replaceChildren(box);
+      }
+
+      // Settings' last section: what ytmgo is, which version, whether a
+      // newer one is out, and where to find more.
+      const REPO = "https://github.com/anas1412/ytmgo";
+      function aboutApp() {
+        const box = el("section", "about-app");
+        box.append(el("h2", "", "About"));
+        const head = el("div", "app-head");
+        const logo = el("img", "app-logo");
+        logo.src = "ytmgo-icon.png";
+        logo.alt = "";
+        const name = el("div");
+        const dev = appVersion === "dev" || !appVersion;
+        name.append(el("div", "app-name", "ytmgo"), el("div", "app-ver", dev ? "Development build" : `Version ${appVersion.replace(/^v/, "")}`));
+        head.append(logo, name);
+        box.append(head);
+        box.append(el("p", "", "Music from YouTube Music, on your computer: search, play, download and keep your own playlists. Free and open source, under the MIT licence."));
+
+        // Whether there is something newer, from the check at start.
+        let status = "Updates are checked when ytmgo starts.";
+        if (dev) status = "Updates are off for development builds.";
+        else if (update?.available) status = `Version ${update.latest.replace(/^v/, "")} is out.`;
+        else if (update) status = "You have the latest version.";
+        const line = el("div", "app-status", status);
+        if (update?.available) line.append(button("Update", () => $("update").click(), true));
+        box.append(line);
+
+        const links = el("div", "app-links");
+        links.append(
+          button("Source code", () => openLink(REPO)),
+          button("Report a problem", () => openLink(`${REPO}/issues`)),
+        );
+        if (!dev) links.append(button("What’s new", () => openLink(`${REPO}/releases/tag/${appVersion}`)));
+        box.append(links);
+        box.append(el("p", "app-credits", "Plays and downloads with yt-dlp and ffmpeg; lyrics from LRCLIB. ytmgo is not made by, or affiliated with, YouTube or Google."));
+        return box;
       }
 
       // Links open in the user's browser, through Wails.
