@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
-	"path"
 	"time"
 
 	"ytmgo/internal/coverart"
@@ -21,6 +20,7 @@ import (
 	"ytmgo/internal/queue"
 	"ytmgo/internal/search"
 	"ytmgo/internal/settings"
+	"ytmgo/internal/update"
 	"ytmgo/internal/visualizer"
 	"ytmgo/internal/ytmusic"
 	"ytmgo/internal/ytresolve"
@@ -303,36 +303,16 @@ func prefetchURLCmd(trackID, artist, title string) tea.Cmd {
 
 // ─── Update check ─────────────────────────────────────────────────────────
 
-// checkUpdateCmd fetches the latest release tag from GitHub by following
-// the /releases/latest redirect. No API key, no rate limits — just a
-// single HTTP HEAD. Returns nil (no message) on any failure so the
-// handler is never called — zero UX impact when offline.
+// checkUpdateCmd fetches the latest release tag (update.Latest).
+// Returns nil (no message) on any failure so the handler is never
+// called — zero UX impact when offline.
 func checkUpdateCmd(currentVersion string) tea.Cmd {
 	return func() tea.Msg {
 		if currentVersion == "dev" || currentVersion == "" {
 			return nil
 		}
-		// Don't follow redirect — we want the Location header.
-		client := &http.Client{
-			Timeout: 10 * time.Second,
-			CheckRedirect: func(*http.Request, []*http.Request) error {
-				return http.ErrUseLastResponse
-			},
-		}
-		resp, err := client.Get("https://github.com/anas1412/ytmgo/releases/latest")
-		if err != nil {
-			return nil
-		}
-		resp.Body.Close()
-		if resp.StatusCode != http.StatusFound && resp.StatusCode != http.StatusMovedPermanently {
-			return nil
-		}
-		loc := resp.Header.Get("Location")
-		if loc == "" {
-			return nil
-		}
-		latest := path.Base(loc) // e.g. "/…/tag/v0.2.0" → "v0.2.0"
-		if latest == "" {
+		latest, err := update.Latest()
+		if err != nil || latest == "" {
 			return nil
 		}
 		return UpdateCheckMsg{LatestVersion: latest}

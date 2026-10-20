@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -66,5 +67,22 @@ func TestWaitKillsOrphans(t *testing.T) {
 	time.Sleep(5 * time.Second)
 	if _, err := os.Stat(marker); err == nil {
 		t.Fatal("the orphaned child was still running after Wait")
+	}
+}
+
+// Hand passes its arguments as written: a folder with a space in it
+// reaches the program unquoted, the way NSIS reads /D=.
+func TestHandUnquoted(t *testing.T) {
+	out := filepath.Join(t.TempDir(), "args.txt")
+	if err := Hand(`C:\windows\system32\cmd.exe`, `/c echo /D=C:\Jane Doe\ytmgo>`+out); err != nil {
+		t.Fatal(err)
+	}
+	var got []byte
+	for i := 0; i < 50 && len(got) == 0; i++ {
+		time.Sleep(100 * time.Millisecond)
+		got, _ = os.ReadFile(out)
+	}
+	if s := strings.TrimSpace(string(got)); s != `/D=C:\Jane Doe\ytmgo` {
+		t.Errorf("got %q", s)
 	}
 }

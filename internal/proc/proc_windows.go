@@ -5,6 +5,7 @@ package proc
 import (
 	"context"
 	"os/exec"
+	"strings"
 	"sync"
 	"syscall"
 	"unsafe"
@@ -111,6 +112,23 @@ func killOnCloseJob() (windows.Handle, error) {
 // window is the user's, and must not close when ytmgo does.
 func Open(path string) error {
 	cmd := exec.Command("explorer.exe", path)
+	if err := cmd.Start(); err != nil {
+		return err
+	}
+	go cmd.Wait() // release the process handle
+	return nil
+}
+
+// Hand starts a program that is to outlive ytmgo: the update's
+// installer, which replaces the app it was started from. It is in no
+// job of ytmgo's, and nothing waits for it to finish.
+//
+// The arguments go on the command line as written, not quoted: NSIS
+// reads /D= only unquoted and last, and an install folder with a space
+// in it ("C:\Users\Jane Doe\…") would otherwise arrive in quotes.
+func Hand(path string, args ...string) error {
+	cmd := exec.Command(path)
+	cmd.SysProcAttr = &syscall.SysProcAttr{CmdLine: syscall.EscapeArg(path) + " " + strings.Join(args, " ")}
 	if err := cmd.Start(); err != nil {
 		return err
 	}

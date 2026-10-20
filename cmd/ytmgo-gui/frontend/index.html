@@ -131,6 +131,61 @@
         background: var(--hover);
         color: var(--text);
       }
+      /* A new version is out (Updates, below): mint, as things that
+         are ready are; it fills as the installer downloads. */
+      .titlebar .update {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        width: auto;
+        min-width: 92px;
+        height: 28px;
+        align-self: center;
+        margin-right: 10px;
+        padding: 0 12px;
+        border-radius: 999px;
+        color: var(--mint);
+        font-size: 13px;
+        font-weight: 600;
+        font-variant-numeric: tabular-nums;
+        background: linear-gradient(90deg, rgb(6 214 160 / 0.28) var(--p, 0%), rgb(6 214 160 / 0.12) var(--p, 0%));
+      }
+      .titlebar .update[hidden] {
+        display: none;
+      }
+      .titlebar .update:hover {
+        background: rgb(6 214 160 / 0.22);
+        color: var(--mint);
+      }
+      .titlebar .update.busy {
+        cursor: default;
+        background: linear-gradient(90deg, rgb(6 214 160 / 0.28) var(--p, 0%), rgb(6 214 160 / 0.12) var(--p, 0%));
+      }
+      .titlebar .update svg {
+        width: 14px;
+        height: 14px;
+        stroke-width: 2;
+      }
+      .update .up-spin {
+        width: 12px;
+        height: 12px;
+        border: 2px solid currentColor;
+        border-right-color: transparent;
+        border-radius: 50%;
+        animation: spin 0.7s linear infinite;
+      }
+      /* One icon at a time: download, spinner while busy, retry once failed. */
+      .update:not(.busy) .up-spin,
+      .update.busy .i-get,
+      .update:not(.failed) .i-retry,
+      .update.failed .i-get {
+        display: none;
+      }
+      .titlebar .update.failed,
+      .titlebar .update.failed:hover {
+        color: var(--pink);
+        background: rgb(247 37 133 / 0.14);
+      }
       .titlebar #win-close:hover {
         background: #e81123;
         color: #fff;
@@ -2489,6 +2544,12 @@
         <kbd aria-hidden="true">/</kbd>
       </form>
       <div class="win-buttons">
+      <button type="button" id="update" class="update" hidden>
+        <svg class="i-get" viewBox="0 0 24 24"><path d="M12 4v11" /><path d="m7 10 5 5 5-5" /><path d="M5 20h14" /></svg>
+        <svg class="i-retry" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7L3 8" /><path d="M3 3v5h5" /></svg>
+        <span class="up-spin" aria-hidden="true"></span>
+        <span id="update-text">Update</span>
+      </button>
       <button type="button" id="win-min" aria-label="Minimise" title="Minimise">
         <svg viewBox="0 0 12 12"><path d="M1 6h10" /></svg>
       </button>
@@ -2772,6 +2833,8 @@
         DeleteFile,
         AddLibraryFolder,
         RemoveLibraryFolder,
+        CheckUpdate,
+        InstallUpdate,
       } from "./wailsjs/go/gui/App.js";
 
       const $ = (id) => document.getElementById(id);
@@ -6188,6 +6251,53 @@
         pane.replaceChildren(box);
         pane.scrollTop = scroll;
       }
+
+      // ── Updates ──────────────────────────────────────────────────────
+      // Asked once at start (Go's CheckUpdate). When a newer version is
+      // out, Update shows in the title bar; it asks, then downloads the
+      // installer and hands over to it: ytmgo closes, updates and opens
+      // again. Offline, or on a local build, nothing shows.
+      let update = null;
+      async function checkUpdate() {
+        try {
+          update = await CheckUpdate();
+        } catch {
+          return;
+        }
+        const b = $("update");
+        b.hidden = !update.available;
+        b.title = `ytmgo ${update.latest} is out. You have ${update.current}.`;
+      }
+      // Asks the first time; once it has failed, a click retries.
+      $("update").addEventListener("click", async () => {
+        const b = $("update");
+        if (b.classList.contains("busy")) return;
+        if (!b.classList.contains("failed") && !(await ask(`Update to ${update.latest}?`, "ytmgo closes, updates and opens again. Your music, playlists and settings stay.", "Update now"))) return;
+        b.classList.remove("failed");
+        b.classList.add("busy");
+        b.style.setProperty("--p", "0%");
+        $("update-text").textContent = "0%";
+        b.title = `Downloading ytmgo ${update.latest}`;
+        try {
+          await InstallUpdate();
+          b.style.setProperty("--p", "100%");
+          $("update-text").textContent = "Restarting";
+          b.title = "Installing; ytmgo opens again in a moment";
+        } catch (err) {
+          const pr = problemOf(err);
+          b.classList.remove("busy");
+          b.classList.add("failed");
+          b.style.removeProperty("--p");
+          $("update-text").textContent = "Failed, retry";
+          b.title = `The update didn’t download: ${pr.detail}. Click to try again.`;
+          say("The update didn’t download", { error: true, full: pr.kind === "offline" ? "You’re offline. Retry once you’re back." : pr.detail });
+        }
+      });
+      window.runtime?.EventsOn("update", (p) => {
+        $("update-text").textContent = `${p}%`;
+        $("update").style.setProperty("--p", `${p}%`);
+      });
+      checkUpdate();
 
       window.runtime?.EventsOn("downloads", setJobs);
       // A finished download marks its song in the queue, so it plays

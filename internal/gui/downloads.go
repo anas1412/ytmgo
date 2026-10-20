@@ -32,6 +32,8 @@ type Host struct {
 	// PickFolder shows the native folder dialog. An empty path is the
 	// user cancelling.
 	PickFolder func(title string) (string, error)
+	// Quit closes the app, as its own close button does.
+	Quit func()
 }
 
 // Attach gives the app its window. A function, not a method, so the

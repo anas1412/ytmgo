@@ -35,3 +35,15 @@ func Open(path string) error {
 	go cmd.Wait() // reap it, so it does not linger as a zombie
 	return nil
 }
+
+// Hand starts a program that is to outlive ytmgo, in no group of
+// ytmgo's, with nothing waiting for it to finish.
+func Hand(path string, args ...string) error {
+	cmd := exec.Command(path, args...)
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
+	if err := cmd.Start(); err != nil {
+		return err
+	}
+	go cmd.Wait() // reap it, so it does not linger as a zombie
+	return nil
+}

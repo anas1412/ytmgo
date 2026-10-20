@@ -92,6 +92,7 @@ func main() {
 				PickFolder: func(title string) (string, error) {
 					return runtime.OpenDirectoryDialog(ctx, runtime.OpenDialogOptions{Title: title})
 				},
+				Quit: func() { runtime.Quit(ctx) },
 			})
 		},
 		// The database is opened here rather than in gui.New so that

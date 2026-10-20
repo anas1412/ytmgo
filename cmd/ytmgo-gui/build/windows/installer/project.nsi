@@ -56,6 +56,7 @@ VIAddVersionKey "ProductName"     "${INFO_PRODUCTNAME}"
 ManifestDPIAware true
 
 !include "MUI.nsh"
+!include "LogicLib.nsh"
 
 !define MUI_ICON "..\icon.ico"
 !define MUI_UNICON "..\icon.ico"
@@ -92,6 +93,30 @@ ShowInstDetails show # This will always show the installation details.
 
 Function .onInit
    !insertmacro wails.checkArchitecture
+   # Silent is an update: ytmgo started this (gui/update.go), with /D=
+   # its own folder, and is closing. Its exe cannot be replaced while it
+   # runs, so wait until it can be written, for up to 15 seconds.
+   ${If} ${Silent}
+   ${AndIf} ${FileExists} "$INSTDIR\${PRODUCT_EXECUTABLE}"
+     StrCpy $1 0
+     ${Do}
+       ClearErrors
+       FileOpen $0 "$INSTDIR\${PRODUCT_EXECUTABLE}" a
+       ${IfNot} ${Errors}
+         FileClose $0
+         ${Break}
+       ${EndIf}
+       Sleep 500
+       IntOp $1 $1 + 1
+     ${LoopUntil} $1 >= 30
+   ${EndIf}
+FunctionEnd
+
+# After an update, ytmgo opens again on the new version.
+Function .onInstSuccess
+   ${If} ${Silent}
+     Exec '"$INSTDIR\${PRODUCT_EXECUTABLE}"'
+   ${EndIf}
 FunctionEnd
 
 Section
