@@ -399,6 +399,123 @@
         position: relative;
       }
 
+      /* ── About: the song playing and its artist ───────────────────── */
+      .about {
+        padding: 20px 20px 28px;
+      }
+      .about .about-art {
+        width: 100%;
+        height: auto;
+        aspect-ratio: 1;
+        border-radius: var(--radius-m);
+        box-shadow: 0 10px 30px rgb(0 0 0 / 0.45);
+      }
+      .about-title {
+        margin-top: 18px;
+        font-size: 22px;
+        font-weight: 700;
+        line-height: 1.25;
+        overflow-wrap: anywhere;
+      }
+      .about-by {
+        margin-top: 4px;
+        color: var(--mid);
+        font-size: 15px;
+      }
+      .about-album {
+        margin-top: 2px;
+        color: var(--dim);
+        font-size: 13px;
+      }
+      .about-card {
+        margin-top: 24px;
+        border-radius: var(--radius-m);
+        background: var(--surface);
+        overflow: hidden;
+      }
+      .about-photo {
+        position: relative;
+        aspect-ratio: 16 / 10;
+        background: var(--raised) center 25% / cover no-repeat;
+      }
+      .about-photo h3 {
+        position: absolute;
+        inset: 0 0 auto;
+        margin: 0;
+        padding: 14px 16px 32px;
+        font-size: 15px;
+        background: linear-gradient(rgb(0 0 0 / 0.55), transparent);
+      }
+      .about-who {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 16px 16px 0;
+      }
+      .about-text {
+        flex: 1;
+        min-width: 0;
+      }
+      .about-name {
+        font-size: 17px;
+        font-weight: 700;
+        overflow: hidden;
+        white-space: nowrap;
+        text-overflow: ellipsis;
+      }
+      .about-aud {
+        color: var(--mid);
+        font-size: 13px;
+      }
+      .about-bio {
+        margin: 12px 16px 0;
+        color: var(--mid);
+        line-height: 1.5;
+        display: -webkit-box;
+        -webkit-box-orient: vertical;
+        -webkit-line-clamp: 4;
+        overflow: hidden;
+        white-space: pre-line;
+        user-select: text;
+      }
+      .about-bio.open {
+        display: block;
+      }
+      .about-more {
+        margin: 6px 16px 0;
+        padding: 0;
+        border: 0;
+        background: none;
+        color: var(--text);
+        font: inherit;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      .about-more:hover {
+        text-decoration: underline;
+      }
+      .about-card > :last-child {
+        margin-bottom: 16px;
+      }
+      .about-card.skeleton .bar {
+        height: 14px;
+        margin: 16px 16px 0;
+        width: 60%;
+      }
+      .about-card.skeleton .bar.short {
+        width: 35%;
+      }
+      .about-card .notice {
+        padding: 28px 16px;
+      }
+      #np-cover {
+        cursor: pointer;
+      }
+      #np-cover:focus-visible {
+        outline: 2px solid var(--violet-text);
+        outline-offset: 2px;
+      }
+
       /* ── Search field ─────────────────────────────────────────────── */
       .field {
         position: relative;
@@ -2428,10 +2545,11 @@
 
       <div class="splitter split-right" role="separator" aria-orientation="vertical" aria-label="Resize side panel" tabindex="0" title="Drag to resize, double-click to reset"></div>
 
-      <aside class="side-panel" aria-label="Queue and lyrics">
+      <aside class="side-panel" aria-label="Queue, lyrics and the song playing">
         <div class="panel-head" role="tablist">
           <button class="tab" role="tab" data-tab="queue" aria-selected="true">Queue</button>
           <button class="tab" role="tab" data-tab="lyrics" aria-selected="false">Lyrics</button>
+          <button class="tab" role="tab" data-tab="about" aria-selected="false">About</button>
           <button class="icon-btn" id="close-panel" aria-label="Close panel" title="Close">
             <svg viewBox="0 0 24 24"><path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg>
           </button>
@@ -2441,7 +2559,7 @@
 
       <footer class="player" aria-label="Now playing">
         <div class="np">
-          <div class="art-wrap"><img class="art" id="np-art" alt="" /></div>
+          <div class="art-wrap" id="np-cover" role="button" tabindex="0" aria-label="About this song" title="About this song"><img class="art" id="np-art" alt="" /></div>
           <div class="np-text" id="np-text">
             <div class="np-title" id="np-title"></div>
             <div class="np-line">
@@ -3180,6 +3298,7 @@
 
       function renderPanel() {
         if (layout.tab === "queue") renderQueue();
+        else if (layout.tab === "about") renderAbout();
         else renderLyrics();
       }
 
@@ -4247,20 +4366,17 @@
         );
       }
       function openArtistOf(t) {
-        openPage(
-          "artist",
-          async () => {
-            if (t.artist_browse_id) return fetchArtist(t.artist_browse_id);
-            // Songs saved before they carried an artist id reach the
-            // artist through their album, as in the TUI.
-            if (t.album_browse_id) return fetchArtistOfAlbum(t.album_browse_id);
-            const l = await Locate(t);
-            if (l.artist_browse_id) return fetchArtist(l.artist_browse_id);
-            if (l.album_browse_id) return fetchArtistOfAlbum(l.album_browse_id);
-            throw JSON.stringify({ kind: "unavailable", detail: NO_PAGE });
-          },
-          t.artist,
-        );
+        openPage("artist", () => artistOfSong(t), t.artist);
+      }
+      async function artistOfSong(t) {
+        if (t.artist_browse_id) return fetchArtist(t.artist_browse_id);
+        // Songs saved before they carried an artist id reach the
+        // artist through their album, as in the TUI.
+        if (t.album_browse_id) return fetchArtistOfAlbum(t.album_browse_id);
+        const l = await Locate(t);
+        if (l.artist_browse_id) return fetchArtist(l.artist_browse_id);
+        if (l.album_browse_id) return fetchArtistOfAlbum(l.album_browse_id);
+        throw JSON.stringify({ kind: "unavailable", detail: NO_PAGE });
       }
       // A song's names as links, Spotify's way: the title opens the
       // album it is from, the artist the artist's page. In the main
@@ -5232,6 +5348,105 @@
         followLyrics(true);
         // Discord counts the elapsed time from where the song is.
         if (now && !audio.paused) Presence(now.track, true, audio.currentTime);
+      });
+
+      // ── About ────────────────────────────────────────────────────────
+      // The song playing, large, and who made it: the artist's photo,
+      // audience and bio from their YouTube Music page, as Spotify's
+      // now-playing view has them. Opened by the tab or by clicking the
+      // cover in the player. The artist loads the first time the tab
+      // shows a song, and is kept for it.
+      let about = null; // { id, state: "loading" | "ok" | "none" | "error", artist, problem }
+      let aboutShown = "";
+      const aboutOf = new Map(); // song id → its ArtistView
+
+      async function loadAbout(t) {
+        about = { id: t.id, state: "loading" };
+        try {
+          const a = aboutOf.get(t.id) || (await artistOfSong(t));
+          aboutOf.set(t.id, a);
+          if (about.id === t.id) about = { id: t.id, state: "ok", artist: a };
+        } catch (err) {
+          const pr = problemOf(err);
+          if (about.id === t.id) about = { id: t.id, state: pr.kind === "unavailable" ? "none" : "error", problem: pr };
+        }
+        renderPanel();
+      }
+
+      function renderAbout() {
+        const body = $("panel-body");
+        const t = now?.track;
+        if (t && about?.id !== t.id) loadAbout(t);
+        const key = t ? `${t.id}:${about.state}` : "none";
+        if (key === aboutShown && body.dataset.shows === "about") return;
+        aboutShown = key;
+        body.dataset.shows = "about";
+        $("follow")?.remove();
+        if (!t) {
+          notice(body, "Nothing playing", "Play a song to see it here, with who made it.", null, null, false);
+          return;
+        }
+        const box = el("div", "about");
+        const art = cover(artOf(t), 544);
+        art.classList.add("about-art");
+        const by = el("div", "about-by");
+        by.append(artistLink(t, true));
+        box.append(art, titleLink(t, "about-title", true), by);
+        const album = albumOf(t);
+        if (album) box.append(el("div", "about-album", `From ${album}`));
+        box.append(artistCard());
+        body.replaceChildren(box);
+        body.scrollTop = 0;
+      }
+
+      // The artist, Spotify's "About the artist" card: their photo with
+      // the heading over it, name, audience and Follow, then the bio,
+      // four lines of it until Show more.
+      function artistCard() {
+        const card = el("section", "about-card");
+        if (about.state === "loading") {
+          card.classList.add("skeleton");
+          card.setAttribute("aria-label", "Loading the artist…");
+          card.append(el("div", "about-photo"), el("div", "bar"), el("div", "bar short"));
+          return card;
+        }
+        if (about.state === "none") return document.createDocumentFragment();
+        if (about.state === "error") {
+          notice(card, "The artist didn’t load", about.problem.kind === "offline" ? "You’re offline. This loads once you’re back." : "YouTube Music didn’t answer. Try again in a moment.", { label: "Try again", run: () => loadAbout(now.track) }, about.problem.detail);
+          return card;
+        }
+        const a = about.artist;
+        const photo = el("div", "about-photo");
+        if (a.photoURL) photo.style.backgroundImage = `url("${sized(a.photoURL, 544)}")`;
+        photo.append(el("h3", "", "About the artist"));
+        const who = el("div", "about-who");
+        const name = el("div", "about-name");
+        name.append(pageLink(a.name, () => openPage("artist", () => fetchArtist(a.browseID), a.name)));
+        const text = el("div", "about-text");
+        text.append(name, el("div", "about-aud", a.audience || (a.subscribers ? `${a.subscribers} subscribers` : "")));
+        who.append(text, followButton({ kind: "artist", id: a.browseID, title: a.name, subtitle: "", coverURL: a.photoURL }));
+        card.append(photo, who);
+        if (a.about) {
+          const bio = el("p", "about-bio", a.about);
+          const more = el("button", "about-more", "Show more");
+          more.type = "button";
+          more.addEventListener("click", () => {
+            const open = bio.classList.toggle("open");
+            more.textContent = open ? "Show less" : "Show more";
+          });
+          card.append(bio, more);
+          // Short bios need no button.
+          requestAnimationFrame(() => (more.hidden = bio.scrollHeight <= bio.clientHeight + 1));
+        }
+        return card;
+      }
+
+      const npCover = $("np-cover");
+      npCover.addEventListener("click", () => openPanel("about"));
+      npCover.addEventListener("keydown", (e) => {
+        if (e.key !== "Enter" && e.key !== " ") return;
+        e.preventDefault();
+        openPanel("about");
       });
 
       // ── Window ───────────────────────────────────────────────────────

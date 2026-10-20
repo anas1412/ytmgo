@@ -26,6 +26,9 @@ func TestLiveArtist(t *testing.T) {
 	if a.ThumbURL == "" {
 		t.Error("no artist image")
 	}
+	if a.About == "" || a.Audience == "" {
+		t.Errorf("no bio or audience: %q, %q", a.About, a.Audience)
+	}
 	t.Logf("%s — %s subscribers, %d songs, %d releases", a.Name, a.Subscribers, len(a.TopSongs), len(a.Albums))
 
 	if len(a.Albums) < 5 {

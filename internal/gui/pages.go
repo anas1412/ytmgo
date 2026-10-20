@@ -76,6 +76,8 @@ type ArtistView struct {
 	Name        string      `json:"name"`
 	Subscribers string      `json:"subscribers"`
 	PhotoURL    string      `json:"photoURL"`
+	Audience    string      `json:"audience"`
+	About       string      `json:"about"`
 	Songs       []PageTrack `json:"songs"`
 	Releases    []Release   `json:"releases"`
 }
@@ -91,7 +93,7 @@ func (a *App) Artist(browseID string) (ArtistView, error) {
 	}
 	v := ArtistView{
 		BrowseID: page.BrowseID, Name: page.Name, Subscribers: page.Subscribers,
-		PhotoURL: page.ThumbURL, Songs: a.pageTracks(search.ArtistSongs(page)), Releases: []Release{},
+		PhotoURL: page.ThumbURL, Audience: page.Audience, About: page.About, Songs: a.pageTracks(search.ArtistSongs(page)), Releases: []Release{},
 	}
 	for _, al := range page.Albums {
 		v.Releases = append(v.Releases, Release{BrowseID: al.BrowseID, Title: al.Title, Artist: al.Artist, Year: al.Year, CoverURL: al.CoverURL})

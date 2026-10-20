@@ -772,6 +772,8 @@ type ArtistPage struct {
 	Name        string
 	Subscribers string // as rendered, e.g. "7.17M"
 	ThumbURL    string
+	Audience    string  // "71.8M monthly audience"
+	About       string  // the bio, from Wikipedia mostly; may be empty
 	TopSongs    []Track // up to 100, most played first
 	Albums      []Album // Albums, then Singles & EPs, in that order
 }
@@ -793,6 +795,8 @@ func Artist(browseID string) (ArtistPage, error) {
 		a.Subscribers = digString(h, "subscriptionButton", "subscribeButtonRenderer",
 			"subscriberCountText", "runs", 0, "text")
 		a.ThumbURL = largestThumbnail(dig(h, "thumbnail", "musicThumbnailRenderer", "thumbnail", "thumbnails"))
+		a.Audience = digString(h, "monthlyListenerCount", "runs", 0, "text")
+		a.About = digString(h, "description", "runs", 0, "text")
 	}
 
 	// Albums and singles arrive as separate carousels of two-row items.

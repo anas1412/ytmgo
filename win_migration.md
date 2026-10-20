@@ -432,7 +432,10 @@ Not done: updates (3), signing (4), winget and Scoop (6).
   reorders it, `d` removes
   a song or deletes the playlist after asking; `m` adds the selected
   song through a picker, `M` saves the list on screen as a playlist.
-- **Right panel:** song and artist details after the Lyrics tab. Opened by clicking the cover in the player bar.
+- ~~**Right panel:**~~ Done in the GUI: an About tab after Lyrics, opened
+  by clicking the cover in the player bar. The song large, then the
+  artist: photo, monthly audience, Follow and bio, from their YouTube
+  Music page (`ArtistPage.Audience`, `About`).
 - ~~**Queue order, in both apps:**~~ Done, Spotify's way, in both: the
   track playing first, then what comes next in play order (shuffle
   included), then what has played. Adding a song puts it next, after
