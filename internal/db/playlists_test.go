@@ -1,6 +1,7 @@
 package db
 
 import (
+	"slices"
 	"testing"
 
 	"ytmgo/internal/queue"
@@ -21,7 +22,7 @@ func TestPlaylists(t *testing.T) {
 	if err != nil || len(list) != 2 || list[0].ID != gym {
 		t.Fatalf("list %+v, %v", list, err)
 	}
-	if c := list[1]; c.Name != "Chill" || c.Count != 2 || c.Seconds != 150 || c.CoverURL != "https://a" {
+	if c := list[1]; c.Name != "Chill" || c.Count != 2 || c.Seconds != 150 || len(c.Covers) != 1 || c.Covers[0] != "https://a" {
 		t.Errorf("summary %+v", c)
 	}
 
@@ -54,5 +55,16 @@ func TestPlaylists(t *testing.T) {
 	}
 	if err := d.SetPlaylistTracks(gym, nil); err == nil {
 		t.Error("changed a deleted playlist")
+	}
+}
+
+// Covers: four different ones at most, in order, none without.
+func TestCovers(t *testing.T) {
+	ts := []queue.Track{{CoverURL: "a"}, {CoverURL: "a"}, {}, {CoverURL: "b"}, {CoverURL: "c"}, {CoverURL: "d"}, {CoverURL: "e"}}
+	if got := Covers(ts); !slices.Equal(got, []string{"a", "b", "c", "d"}) {
+		t.Errorf("got %v", got)
+	}
+	if got := Covers(nil); got == nil || len(got) != 0 {
+		t.Errorf("empty: %#v", got)
 	}
 }

@@ -27,6 +27,7 @@ type MyPlaylistPage struct {
 	ID      int64         `json:"id"`
 	Name    string        `json:"name"`
 	Seconds int           `json:"seconds"`
+	Covers  []string      `json:"covers"`
 	Tracks  []queue.Track `json:"tracks"`
 }
 
@@ -36,7 +37,7 @@ func (a *App) MyPlaylist(id int64) (MyPlaylistPage, error) {
 	if err != nil {
 		return MyPlaylistPage{}, problem(err)
 	}
-	v := MyPlaylistPage{ID: p.ID, Name: p.Name, Tracks: a.mark(p.Tracks)}
+	v := MyPlaylistPage{ID: p.ID, Name: p.Name, Covers: db.Covers(p.Tracks), Tracks: a.mark(p.Tracks)}
 	for _, t := range p.Tracks {
 		v.Seconds += t.DurationSec
 	}

@@ -1899,6 +1899,20 @@
         width: 36px;
         height: 36px;
       }
+      .pl-item.no-art {
+        grid-template-columns: minmax(0, 1fr);
+      }
+      /* Four covers in one square: a playlist of your own (plArt). */
+      .art-wrap.mosaic {
+        display: grid;
+        grid-template: 1fr 1fr / 1fr 1fr;
+      }
+      .art-wrap.mosaic > .art-wrap {
+        width: 100%;
+        height: 100%;
+        border-radius: 0;
+        box-shadow: none;
+      }
       .pl-item .pl-name,
       .pl-item .pl-sub {
         overflow: hidden;
@@ -2846,6 +2860,18 @@
         img.src = sized(url, px);
         wrap.append(img);
         return wrap;
+      }
+
+      // A playlist of your own has no picture of its own, so it shows its
+      // songs' (Go picks them, db.Covers): four as a grid, fewer as the
+      // first alone, none as no picture at all (null). They come from the
+      // songs whenever it loads, so they follow its first songs.
+      function plArt(covers, px) {
+        if (!covers?.length) return null;
+        if (covers.length < 4) return cover(covers[0], px);
+        const grid = el("div", "art-wrap mosaic");
+        grid.append(...covers.map((c) => cover(c, Math.ceil(px / 2))));
+        return grid;
       }
 
       // Playback says what happened in the player itself, on the line
@@ -4409,7 +4435,10 @@
           a.append(...actions);
           info.append(a);
         }
-        head.append(cover(coverURL, 320), info);
+        // A URL, or a picture already made (or none: plArt).
+        const art = typeof coverURL === "string" ? cover(coverURL, 320) : coverURL;
+        if (art) head.append(art);
+        head.append(info);
         return head;
       }
       function pill(text, run, primary = false) {
@@ -4678,7 +4707,10 @@
             if (view === "myplaylist" && page?.id === p.id) b.setAttribute("aria-current", "page");
             const text = el("div");
             text.append(el("div", "pl-name", p.name), el("div", "pl-sub", `${p.count} ${p.count === 1 ? "song" : "songs"}`));
-            b.append(cover(p.coverURL, 120), text);
+            const art = plArt(p.covers, 120);
+            if (art) b.append(art);
+            else b.classList.add("no-art");
+            b.append(text);
             b.addEventListener("click", () => openMyPlaylist(p.id, p.name));
             return b;
           }),
@@ -4769,7 +4801,7 @@
             say("That playlist wasn’t deleted", { error: true, full: problemOf(err).detail });
           }
         });
-        const head = header("playlist", p.tracks[0]?.cover_url || "", p.name, meta, n ? [play, add, rename, del] : [rename, del]);
+        const head = header("playlist", plArt(p.covers, 320), p.name, meta, n ? [play, add, rename, del] : [rename, del]);
         if (!n) {
           pane.replaceChildren(backButton(), head);
           const empty = el("div");
@@ -5565,7 +5597,7 @@
         if (!page) return null;
         if (view === "album") return { kind: "album", id: page.browseID, title: page.title, subtitle: page.artist, coverURL: page.coverURL };
         if (view === "playlist") return { kind: "playlist", id: page.id, title: page.title, subtitle: page.subtitle || "", coverURL: page.coverURL || "" };
-        if (view === "myplaylist") return { kind: "myplaylist", id: String(page.id), title: page.name, subtitle: "Your playlist", coverURL: page.tracks[0]?.cover_url || "" };
+        if (view === "myplaylist") return { kind: "myplaylist", id: String(page.id), title: page.name, subtitle: "Your playlist", coverURL: page.covers?.[0] || "" };
         return null;
       }
       const PLAY = '<path d="M8 5v14l11-7z" />';
@@ -5675,8 +5707,9 @@
         for (const src of recent) {
           const load = { album: () => fetchAlbum(src.id), myplaylist: () => MyPlaylist(+src.id) }[src.kind] || (() => fetchPlaylist(src.id));
           const extra = src.kind === "playlist" ? { coverURL: src.coverURL, subtitle: src.subtitle } : {};
+          const mine = src.kind === "myplaylist" && myPlaylists.find((p) => String(p.id) === src.id);
           const tile = tileOf(
-            cover(src.coverURL, 120),
+            (mine && plArt(mine.covers, 120)) || cover(src.coverURL, 120),
             src.title,
             src.subtitle ? `${src.title}, ${src.subtitle}` : src.title,
             () => openPage(src.kind, load, src.title, extra),

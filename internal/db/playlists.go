@@ -3,6 +3,7 @@ package db
 import (
 	"encoding/json"
 	"fmt"
+	"slices"
 	"strings"
 
 	"ytmgo/internal/queue"
@@ -12,13 +13,13 @@ import (
 // songs are kept whole, in order, as the queue's are.
 
 // PlaylistInfo is a playlist as a list shows it: its name, how many
-// songs, how long, and its first song's cover.
+// songs, how long, and the covers its picture is made of (Covers).
 type PlaylistInfo struct {
-	ID       int64  `json:"id"`
-	Name     string `json:"name"`
-	Count    int    `json:"count"`
-	Seconds  int    `json:"seconds"`
-	CoverURL string `json:"coverURL"`
+	ID      int64    `json:"id"`
+	Name    string   `json:"name"`
+	Count   int      `json:"count"`
+	Seconds int      `json:"seconds"`
+	Covers  []string `json:"covers"`
 }
 
 // Playlist is one playlist and its songs.
@@ -65,10 +66,8 @@ func (d *DB) LoadPlaylists() ([]PlaylistInfo, error) {
 		p.Count = len(tracks)
 		for _, t := range tracks {
 			p.Seconds += t.DurationSec
-			if p.CoverURL == "" {
-				p.CoverURL = t.CoverURL
-			}
 		}
+		p.Covers = Covers(tracks)
 		out = append(out, p)
 	}
 	return out, rows.Err()
@@ -139,6 +138,23 @@ func encodeTracks(tracks []queue.Track) (string, error) {
 	}
 	raw, err := json.Marshal(tracks)
 	return string(raw), err
+}
+
+// Covers is what a playlist of your own shows for a picture, having
+// none of its own: up to four different covers of its songs, first
+// first. The apps draw four as a grid, fewer as the first alone, and
+// none as no picture at all.
+func Covers(tracks []queue.Track) []string {
+	out := []string{}
+	for _, t := range tracks {
+		if t.CoverURL != "" && !slices.Contains(out, t.CoverURL) {
+			out = append(out, t.CoverURL)
+			if len(out) == 4 {
+				break
+			}
+		}
+	}
+	return out
 }
 
 // AppendNew puts tracks at the end of have, leaving out those it has
