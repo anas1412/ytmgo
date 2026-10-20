@@ -753,6 +753,9 @@
       .art.loaded {
         opacity: 1;
       }
+      .art.seen {
+        transition: none;
+      }
       .art-wrap .play {
         position: absolute;
         inset: 0;
@@ -2381,6 +2384,9 @@
       .track.dragged-from {
         opacity: 0.35;
       }
+      .mypl .list {
+        position: relative;
+      }
       .drop-line {
         position: absolute;
         left: 8px;
@@ -2813,6 +2819,7 @@
         CreatePlaylist,
         AddToPlaylist,
         RemoveFromPlaylist,
+        MovePlaylistTrack,
         RenamePlaylist,
         DeletePlaylist,
         ToggleSaved,
@@ -2897,6 +2904,8 @@
       MediaBase().then((b) => (mediaBase = b));
       const artOf = (t) => t?.cover_url || (t?.file_path && mediaBase ? `${mediaBase}/art?p=${encodeURIComponent(t.file_path)}` : "");
 
+      const seenArt = new Set(); // covers loaded once already, by URL
+
       // A cover image that retries once and falls back to a music note.
       function cover(url, px) {
         const wrap = el("div", "art-wrap");
@@ -2906,8 +2915,17 @@
         }
         const img = el("img", "art");
         img.alt = "";
-        img.loading = "lazy";
-        img.addEventListener("load", () => img.classList.add("loaded"));
+        const src = sized(url, px);
+        // A cover shown before is in the browser's cache: it goes up at
+        // once, not fading in again each time a list is drawn anew. Only
+        // the fade is skipped; what is fetched is still the browser's
+        // call, so a cover that changes still shows the new one.
+        if (seenArt.has(src)) img.classList.add("loaded", "seen");
+        else img.loading = "lazy";
+        img.addEventListener("load", () => {
+          seenArt.add(src);
+          img.classList.add("loaded");
+        });
         img.addEventListener("error", () => {
           if (img.dataset.retried) {
             wrap.classList.add("missing");
@@ -2920,7 +2938,7 @@
           img.removeAttribute("src");
           setTimeout(() => (img.src = src), 900);
         });
-        img.src = sized(url, px);
+        img.src = src;
         wrap.append(img);
         return wrap;
       }
@@ -3656,8 +3674,9 @@
         text.append(el("div", "g-title", drag.track.title), el("div", "g-sub", drag.track.artist || ""));
         ghost.replaceChildren(cover(artOf(drag.track), 120), text);
         ghost.classList.add("show");
-        // A song dragged from the results needs somewhere to land.
-        if (drag.kind === "result" && (!layout.rightOpen || layout.tab !== "queue")) openPanel("queue", true);
+        // A song dragged from the results needs somewhere to land; in a
+        // playlist of your own it can land among its songs instead.
+        if (drag.kind === "result" && view !== "myplaylist" && (!layout.rightOpen || layout.tab !== "queue")) openPanel("queue", true);
         scrollLoop();
       }
 
@@ -3670,6 +3689,7 @@
         for (const it of document.querySelectorAll(".pl-item.drop-on")) if (it !== pl) it.classList.remove("drop-on");
         pl?.classList.add("drop-on");
         drag.toPlaylist = pl ? { id: +pl.dataset.id, name: pl.dataset.name } : null;
+        locatePlaylistDrop();
         const body = $("panel-body");
         const box = body.getBoundingClientRect();
         const inside = drag.px >= box.left && drag.px <= box.right && drag.py >= box.top && drag.py <= box.bottom;
@@ -3706,6 +3726,40 @@
         line.style.top = `${k < rows.length ? rows[k].offsetTop : after ? after.offsetTop + after.offsetHeight : 0}px`;
       }
 
+      // A row of the playlist open in the main view moves within it:
+      // before the first row whose middle is below the pointer, or to the
+      // end. drag.plAt is that place; null when the pointer is elsewhere.
+      function locatePlaylistDrop() {
+        const list = view === "myplaylist" && drag.kind === "result" && drag.index >= 0 ? pane.querySelector(".mypl .list") : null;
+        let line = list?.querySelector(".drop-line");
+        drag.plAt = null;
+        if (!list) return;
+        const box = list.getBoundingClientRect();
+        const shown = pane.getBoundingClientRect();
+        if (drag.px < box.left || drag.px > box.right || drag.py < shown.top || drag.py > shown.bottom) {
+          line?.remove();
+          return;
+        }
+        const rows = [...list.querySelectorAll(".track")];
+        let at = rows.findIndex((r) => {
+          const b = r.getBoundingClientRect();
+          return drag.py < b.top + b.height / 2;
+        });
+        if (at < 0) at = rows.length;
+        // Onto its own place: nothing would change, so no line.
+        if (at === drag.index || at === drag.index + 1) {
+          line?.remove();
+          return;
+        }
+        drag.plAt = at;
+        if (!line) {
+          line = el("div", "drop-line");
+          list.append(line);
+        }
+        const last = rows[rows.length - 1];
+        line.style.top = `${at < rows.length ? rows[at].offsetTop : last.offsetTop + last.offsetHeight}px`;
+      }
+
       // Near the top or bottom edge of the queue, it scrolls, faster the
       // closer the pointer is, so a song can be dropped anywhere in a
       // long queue.
@@ -3723,6 +3777,15 @@
           body.scrollTop += speed;
           locateDrop();
         }
+        // The same at the edges of a playlist being reordered.
+        if (view === "myplaylist" && drag.kind === "result") {
+          const v = pane.getBoundingClientRect();
+          const s = drag.py < v.top + EDGE ? -Math.ceil((v.top + EDGE - drag.py) / 4) : drag.py > v.bottom - EDGE ? Math.ceil((drag.py - (v.bottom - EDGE)) / 4) : 0;
+          if (s && drag.px >= v.left && drag.px <= v.right) {
+            pane.scrollTop += s;
+            locateDrop();
+          }
+        }
         requestAnimationFrame(scrollLoop);
       }
 
@@ -3736,6 +3799,20 @@
         body.classList.remove("drop-target");
         body.querySelector(".drop-line")?.remove();
         for (const it of document.querySelectorAll(".pl-item.drop-on")) it.classList.remove("drop-on");
+        pane.querySelector(".mypl .drop-line")?.remove();
+        if (commit && d.plAt != null && view === "myplaylist") {
+          const to = d.plAt > d.index ? d.plAt - 1 : d.plAt;
+          try {
+            page = { ...page, ...(await MovePlaylistTrack(page.id, d.index, to)) };
+            results = page.tracks;
+            selected = to;
+            renderMyPlaylist();
+            loadPlaylists(); // the picture follows its first songs
+          } catch (err) {
+            say("That didn’t save", { error: true, full: problemOf(err).detail });
+          }
+          return;
+        }
         if (commit && d.toPlaylist) {
           addToPlaylist(d.toPlaylist, [d.track]);
           return;
