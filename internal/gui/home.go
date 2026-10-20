@@ -1,6 +1,7 @@
 package gui
 
 import (
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -293,7 +294,9 @@ func (a *App) artistPages(ids []string) map[string]ytmusic.ArtistPage {
 	var mu sync.Mutex
 	var wg sync.WaitGroup
 	sem := make(chan struct{}, 6)
-	for _, id := range ids {
+	// An artist can be listed twice (followed, and in the top artists);
+	// fetched at the same moment, both would miss the cache.
+	for _, id := range slices.Compact(slices.Sorted(slices.Values(ids))) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
