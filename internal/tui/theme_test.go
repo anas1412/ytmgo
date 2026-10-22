@@ -316,7 +316,7 @@ func TestNoLiteralANSIInFrames(t *testing.T) {
 	for _, th := range themeOrder {
 		ApplyTheme(th)
 		m := worstCaseModel(t, 150, 40)
-		for _, line := range strings.Split(m.View(), "\n") {
+		for line := range strings.SplitSeq(m.View(), "\n") {
 			if loc := re.FindString(line); loc != "" {
 				t.Fatalf("%s: frame contains a literal ANSI fragment %q — an inner escape was mangled", th, loc)
 			}

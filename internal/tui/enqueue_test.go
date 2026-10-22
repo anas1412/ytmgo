@@ -23,7 +23,7 @@ func enqueueModel(t *testing.T, n int) Model {
 	m.activePage = PageStream
 	m.activePanel = PanelSearch
 	m.showingRecommendations = false
-	for i := 0; i < n; i++ {
+	for i := range n {
 		m.results = append(m.results, search.Result{
 			ID: "aaaaaaaaaa" + string(rune('a'+i)), Title: "Song", Uploader: "Artist", URL: "u",
 		})

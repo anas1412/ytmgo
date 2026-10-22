@@ -17,12 +17,12 @@ type HomeItem struct {
 
 // homeItem reads a two-row card. What it is comes from where it leads:
 // a page type for albums, playlists and artists, a videoId for songs.
-func homeItem(item interface{}) (HomeItem, bool) {
+func homeItem(item any) (HomeItem, bool) {
 	if item == nil {
 		return HomeItem{}, false
 	}
 	var sub []string
-	runs, _ := dig(item, "subtitle", "runs").([]interface{})
+	runs, _ := dig(item, "subtitle", "runs").([]any)
 	for _, r := range runs {
 		sub = append(sub, digString(r, "text"))
 	}

@@ -172,7 +172,7 @@ var lrcTimeRe = regexp.MustCompile(`\[(\d{1,3}):(\d{2})(?:[.:](\d{1,3}))?\]`)
 // several timestamps (repeat notation) expands to one Line each.
 func ParseLRC(raw string) []Line {
 	var lines []Line
-	for _, ln := range strings.Split(raw, "\n") {
+	for ln := range strings.SplitSeq(raw, "\n") {
 		ms := lrcTimeRe.FindAllStringSubmatch(ln, -1)
 		if len(ms) == 0 {
 			continue
@@ -199,7 +199,7 @@ func ParseLRC(raw string) []Line {
 
 func plainFromText(text string, source string) *Lyrics {
 	var lines []Line
-	for _, ln := range strings.Split(text, "\n") {
+	for ln := range strings.SplitSeq(text, "\n") {
 		lines = append(lines, Line{Text: strings.TrimRight(ln, " \t\r")})
 	}
 	// Trim leading and trailing blanks; interior blanks are stanza

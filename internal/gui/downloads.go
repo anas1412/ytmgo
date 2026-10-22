@@ -404,8 +404,8 @@ func (a *App) downloadFirst(t queue.Track) (string, error) {
 	a.dlMu.Unlock()
 	for {
 		jobs := dl.Jobs()
-		for i := len(jobs) - 1; i >= 0; i-- {
-			j := jobs[i]
+		for _, j := range slices.Backward(jobs) {
+
 			if j.TrackID != t.ID {
 				continue
 			}

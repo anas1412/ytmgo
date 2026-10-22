@@ -174,7 +174,7 @@ type apiError struct {
 
 // call signs and sends one request, decoding the JSON body into out
 // when out is not nil.
-func call(httpMethod string, params map[string]string, out interface{}) error {
+func call(httpMethod string, params map[string]string, out any) error {
 	if !Configured() {
 		return errors.New("lastfm: no API key in this build")
 	}
@@ -183,7 +183,7 @@ func call(httpMethod string, params map[string]string, out interface{}) error {
 
 // callWith is call with the credentials passed in, so a test can drive
 // it against a local server without a real key in the build.
-func callWith(key, secret, httpMethod string, params map[string]string, out interface{}) error {
+func callWith(key, secret, httpMethod string, params map[string]string, out any) error {
 	params["api_key"] = key
 	params["api_sig"] = sign(params, secret)
 	params["format"] = "json"

@@ -88,7 +88,7 @@ func IsVideoID(s string) bool {
 
 // Search runs a songs-filtered YouTube Music search.
 func Search(query string, limit int) ([]Track, error) {
-	body := map[string]interface{}{
+	body := map[string]any{
 		"context": clientContext(),
 		"query":   query,
 		"params":  songsFilterParams,
@@ -102,7 +102,7 @@ func Search(query string, limit int) ([]Track, error) {
 	if shelf == nil {
 		return nil, nil // no matches — YouTube omits the shelf entirely
 	}
-	contents, _ := dig(shelf, "contents").([]interface{})
+	contents, _ := dig(shelf, "contents").([]any)
 
 	var tracks []Track
 	for _, c := range contents {
@@ -125,7 +125,7 @@ func Search(query string, limit int) ([]Track, error) {
 // Radio returns the autoplay queue seeded from a track: what YouTube
 // Music would play next. The seed track itself is excluded.
 func Radio(videoID string, limit int) ([]Track, error) {
-	body := map[string]interface{}{
+	body := map[string]any{
 		"context":                       clientContext(),
 		"videoId":                       videoID,
 		"playlistId":                    "RDAMVM" + videoID,
@@ -143,7 +143,7 @@ func Radio(videoID string, limit int) ([]Track, error) {
 	if panel == nil {
 		return nil, fmt.Errorf("ytmusic radio: no playlist panel in response")
 	}
-	contents, _ := dig(panel, "contents").([]interface{})
+	contents, _ := dig(panel, "contents").([]any)
 
 	var tracks []Track
 	for _, c := range contents {
@@ -169,9 +169,9 @@ func Radio(videoID string, limit int) ([]Track, error) {
 
 // ─── request plumbing ───────────────────────────────────────────────
 
-func clientContext() map[string]interface{} {
-	return map[string]interface{}{
-		"client": map[string]interface{}{
+func clientContext() map[string]any {
+	return map[string]any{
+		"client": map[string]any{
 			"clientName":    "WEB_REMIX",
 			"clientVersion": clientVersion,
 			"hl":            "en",
@@ -179,11 +179,11 @@ func clientContext() map[string]interface{} {
 	}
 }
 
-func post(endpoint string, body map[string]interface{}) (interface{}, error) {
+func post(endpoint string, body map[string]any) (any, error) {
 	return postTo(baseURL, endpoint, body)
 }
 
-func postTo(base, endpoint string, body map[string]interface{}) (interface{}, error) {
+func postTo(base, endpoint string, body map[string]any) (any, error) {
 	payload, err := json.Marshal(body)
 	if err != nil {
 		return nil, fmt.Errorf("ytmusic %s: marshal: %w", endpoint, err)
@@ -210,7 +210,7 @@ func postTo(base, endpoint string, body map[string]interface{}) (interface{}, er
 		return nil, fmt.Errorf("ytmusic %s: HTTP %d", endpoint, resp.StatusCode)
 	}
 
-	var root interface{}
+	var root any
 	if err := json.NewDecoder(resp.Body).Decode(&root); err != nil {
 		return nil, fmt.Errorf("ytmusic %s: decode: %w", endpoint, err)
 	}
@@ -219,7 +219,7 @@ func postTo(base, endpoint string, body map[string]interface{}) (interface{}, er
 
 // ─── response parsing ───────────────────────────────────────────────
 
-func parseSearchItem(item interface{}) (Track, bool) {
+func parseSearchItem(item any) (Track, bool) {
 	t := Track{
 		VideoID: digString(item, "flexColumns", 0, "musicResponsiveListItemFlexColumnRenderer",
 			"text", "runs", 0, "navigationEndpoint", "watchEndpoint", "videoId"),
@@ -237,7 +237,7 @@ func parseSearchItem(item interface{}) (Track, bool) {
 
 	// Second column runs: [Artist, " & ", Artist, " • ", Album, " • ", "4:58"].
 	runs, _ := dig(item, "flexColumns", 1, "musicResponsiveListItemFlexColumnRenderer",
-		"text", "runs").([]interface{})
+		"text", "runs").([]any)
 	if last, groups := readByline(&t, runs); groups > 1 {
 		t.Duration = parseClock(last)
 	}
@@ -246,7 +246,7 @@ func parseSearchItem(item interface{}) (Track, bool) {
 	return t, true
 }
 
-func parseRadioItem(item interface{}) (Track, bool) {
+func parseRadioItem(item any) (Track, bool) {
 	t := Track{
 		VideoID: digString(item, "videoId"),
 		Title:   digString(item, "title", "runs", 0, "text"),
@@ -257,7 +257,7 @@ func parseRadioItem(item interface{}) (Track, bool) {
 
 	// Byline runs: [Artist, " • ", Album, " • ", "2016"], read like a
 	// search row's.
-	runs, _ := dig(item, "longBylineText", "runs").([]interface{})
+	runs, _ := dig(item, "longBylineText", "runs").([]any)
 	readByline(&t, runs)
 
 	t.Duration = parseClock(digString(item, "lengthText", "runs", 0, "text"))
@@ -272,7 +272,7 @@ func parseRadioItem(item interface{}) (Track, bool) {
 // YouTube Music shows between them; the album is the run that links to
 // an album page, wherever it sits. A separator inside the artist group
 // (" & ", ", ") is plain text, so it can never be taken for the album.
-func readByline(t *Track, runs []interface{}) (last string, groups int) {
+func readByline(t *Track, runs []any) (last string, groups int) {
 	groups = 1
 	for _, r := range runs {
 		s := digString(r, "text")
@@ -301,17 +301,17 @@ func readByline(t *Track, runs []interface{}) (last string, groups int) {
 // one. Identified by the run's own pageType rather than the id prefix:
 // UC ids are channel ids generally, and only this tag says the channel
 // is an artist page.
-func artistBrowseIDFromRun(run interface{}) string {
+func artistBrowseIDFromRun(run any) string {
 	return browseIDOfType(run, "MUSIC_PAGE_TYPE_ARTIST")
 }
 
 // albumBrowseIDFromRun returns the album browse id (MPREb_…) carried by
 // a byline run, or "" when the run doesn't link to an album page.
-func albumBrowseIDFromRun(run interface{}) string {
+func albumBrowseIDFromRun(run any) string {
 	return browseIDOfType(run, "MUSIC_PAGE_TYPE_ALBUM")
 }
 
-func browseIDOfType(run interface{}, pageType string) string {
+func browseIDOfType(run any, pageType string) string {
 	if digString(run, "navigationEndpoint", "browseEndpoint",
 		"browseEndpointContextSupportedConfigs", "browseEndpointContextMusicConfig",
 		"pageType") != pageType {
@@ -325,8 +325,8 @@ var sizeRe = regexp.MustCompile(`=w\d+-h\d+`)
 
 // largestThumbnail picks the biggest listed thumbnail and upgrades the
 // size parameters (googleusercontent serves arbitrary sizes on request).
-func largestThumbnail(v interface{}) string {
-	thumbs, _ := v.([]interface{})
+func largestThumbnail(v any) string {
+	thumbs, _ := v.([]any)
 	if len(thumbs) == 0 {
 		return ""
 	}
@@ -363,17 +363,17 @@ func parseClock(s string) int {
 
 // dig walks a decoded JSON value by map keys (string) and array
 // indices (int). Returns nil as soon as a step doesn't match.
-func dig(v interface{}, path ...interface{}) interface{} {
+func dig(v any, path ...any) any {
 	for _, p := range path {
 		switch step := p.(type) {
 		case string:
-			m, ok := v.(map[string]interface{})
+			m, ok := v.(map[string]any)
 			if !ok {
 				return nil
 			}
 			v = m[step]
 		case int:
-			arr, ok := v.([]interface{})
+			arr, ok := v.([]any)
 			if !ok || step < 0 || step >= len(arr) {
 				return nil
 			}
@@ -388,7 +388,7 @@ func dig(v interface{}, path ...interface{}) interface{} {
 	return v
 }
 
-func digString(v interface{}, path ...interface{}) string {
+func digString(v any, path ...any) string {
 	s, _ := dig(v, path...).(string)
 	return s
 }
@@ -397,19 +397,19 @@ func digString(v interface{}, path ...interface{}) string {
 // findAll returns every value stored under key, at any depth. findKey
 // stops at the first; an artist page carries its releases across two
 // carousels, so both have to be reached.
-func findAll(v interface{}, key string) []interface{} {
-	var out []interface{}
-	var walk func(interface{})
-	walk = func(n interface{}) {
+func findAll(v any, key string) []any {
+	var out []any
+	var walk func(any)
+	walk = func(n any) {
 		switch t := n.(type) {
-		case map[string]interface{}:
+		case map[string]any:
 			for k, vv := range t {
 				if k == key {
 					out = append(out, vv)
 				}
 				walk(vv)
 			}
-		case []interface{}:
+		case []any:
 			for _, vv := range t {
 				walk(vv)
 			}
@@ -419,9 +419,9 @@ func findAll(v interface{}, key string) []interface{} {
 	return out
 }
 
-func findKey(v interface{}, key string) interface{} {
+func findKey(v any, key string) any {
 	switch t := v.(type) {
-	case map[string]interface{}:
+	case map[string]any:
 		if sub, ok := t[key]; ok {
 			return sub
 		}
@@ -430,7 +430,7 @@ func findKey(v interface{}, key string) interface{} {
 				return r
 			}
 		}
-	case []interface{}:
+	case []any:
 		for _, vv := range t {
 			if r := findKey(vv, key); r != nil {
 				return r
@@ -451,7 +451,7 @@ var ErrNoLyrics = errors.New("ytmusic: no lyrics")
 // only — YouTube Music does not provide timings, so synced lyrics come
 // from elsewhere.
 func PlainLyrics(videoID string) (string, error) {
-	root, err := post("next", map[string]interface{}{
+	root, err := post("next", map[string]any{
 		"context": clientContext(),
 		"videoId": videoID,
 	})
@@ -463,7 +463,7 @@ func PlainLyrics(videoID string) (string, error) {
 		return "", ErrNoLyrics
 	}
 
-	root, err = post("browse", map[string]interface{}{
+	root, err = post("browse", map[string]any{
 		"context":  clientContext(),
 		"browseId": browseID,
 	})
@@ -474,7 +474,7 @@ func PlainLyrics(videoID string) (string, error) {
 	if shelf == nil {
 		return "", ErrNoLyrics
 	}
-	runs, _ := dig(shelf, "description", "runs").([]interface{})
+	runs, _ := dig(shelf, "description", "runs").([]any)
 	var b strings.Builder
 	for _, r := range runs {
 		b.WriteString(digString(r, "text"))
@@ -494,15 +494,15 @@ func PlainLyrics(videoID string) (string, error) {
 // response carries no panelIdentifier at all, and the ids are MPLYt,
 // so neither condition could ever match and every lookup reported that
 // the track had no lyrics.
-func lyricsBrowseID(root interface{}) string {
+func lyricsBrowseID(root any) string {
 	var found string
-	var walk func(v interface{})
-	walk = func(v interface{}) {
+	var walk func(v any)
+	walk = func(v any) {
 		if found != "" {
 			return
 		}
 		switch t := v.(type) {
-		case map[string]interface{}:
+		case map[string]any:
 			if b, ok := t["browseId"].(string); ok && strings.HasPrefix(b, "MPLY") {
 				found = b
 				return
@@ -510,7 +510,7 @@ func lyricsBrowseID(root interface{}) string {
 			for _, vv := range t {
 				walk(vv)
 			}
-		case []interface{}:
+		case []any:
 			for _, vv := range t {
 				walk(vv)
 			}
@@ -544,7 +544,7 @@ type Album struct {
 
 // SearchAlbums runs an albums-filtered YouTube Music search.
 func SearchAlbums(query string, limit int) ([]Album, error) {
-	body := map[string]interface{}{
+	body := map[string]any{
 		"context": clientContext(),
 		"query":   query,
 		"params":  albumsFilterParams,
@@ -558,7 +558,7 @@ func SearchAlbums(query string, limit int) ([]Album, error) {
 	if shelf == nil {
 		return nil, nil // no matches — YouTube omits the shelf entirely
 	}
-	contents, _ := dig(shelf, "contents").([]interface{})
+	contents, _ := dig(shelf, "contents").([]any)
 
 	var albums []Album
 	for _, c := range contents {
@@ -581,7 +581,7 @@ func SearchAlbums(query string, limit int) ([]Album, error) {
 // AlbumTracks fetches an album page and returns its metadata plus the
 // full tracklist, in album order.
 func AlbumTracks(browseID string) (Album, error) {
-	body := map[string]interface{}{
+	body := map[string]any{
 		"context":  clientContext(),
 		"browseId": browseID,
 	}
@@ -597,7 +597,7 @@ func AlbumTracks(browseID string) (Album, error) {
 		album.Artist = digString(header, "straplineTextOne", "runs", 0, "text")
 		album.ArtistBrowseID = artistBrowseIDFromRun(dig(header, "straplineTextOne", "runs", 0))
 		// subtitle runs read ["Album", " • ", "2015"] — the year is last.
-		if runs, _ := dig(header, "subtitle", "runs").([]interface{}); len(runs) > 0 {
+		if runs, _ := dig(header, "subtitle", "runs").([]any); len(runs) > 0 {
 			album.Year = digString(runs[len(runs)-1], "text")
 		}
 		album.CoverURL = largestThumbnail(dig(header, "thumbnail", "musicThumbnailRenderer", "thumbnail", "thumbnails"))
@@ -607,7 +607,7 @@ func AlbumTracks(browseID string) (Album, error) {
 	if shelf == nil {
 		return album, fmt.Errorf("ytmusic album: no tracklist in response")
 	}
-	contents, _ := dig(shelf, "contents").([]interface{})
+	contents, _ := dig(shelf, "contents").([]any)
 	for _, c := range contents {
 		item := dig(c, "musicResponsiveListItemRenderer")
 		if item == nil {
@@ -661,15 +661,15 @@ func AlbumTracks(browseID string) (Album, error) {
 // (OLAK5uy_…) carried by the album header's play/shuffle buttons.
 // Scoped to the header because the full album page also lists related
 // albums, each with its own OLAK id.
-func audioPlaylistID(header interface{}) string {
+func audioPlaylistID(header any) string {
 	var found string
-	var walk func(v interface{})
-	walk = func(v interface{}) {
+	var walk func(v any)
+	walk = func(v any) {
 		if found != "" {
 			return
 		}
 		switch t := v.(type) {
-		case map[string]interface{}:
+		case map[string]any:
 			if s, ok := t["playlistId"].(string); ok && strings.HasPrefix(s, "OLAK5uy_") {
 				found = s
 				return
@@ -677,7 +677,7 @@ func audioPlaylistID(header interface{}) string {
 			for _, vv := range t {
 				walk(vv)
 			}
-		case []interface{}:
+		case []any:
 			for _, vv := range t {
 				walk(vv)
 			}
@@ -692,9 +692,9 @@ func audioPlaylistID(header interface{}) string {
 // client: music.youtube.com serves the same playlist with the
 // music-video ids swapped back in.
 func albumAudioVideoIDs(playlistID string) ([]string, error) {
-	root, err := postTo(webBaseURL, "browse", map[string]interface{}{
-		"context": map[string]interface{}{
-			"client": map[string]interface{}{
+	root, err := postTo(webBaseURL, "browse", map[string]any{
+		"context": map[string]any{
+			"client": map[string]any{
 				"clientName":    "WEB",
 				"clientVersion": webClientVersion,
 				"hl":            "en",
@@ -709,10 +709,10 @@ func albumAudioVideoIDs(playlistID string) ([]string, error) {
 	// videoId. They are siblings in one contents array, so a depth-first
 	// walk sees them in playlist order.
 	var ids []string
-	var walk func(v interface{})
-	walk = func(v interface{}) {
+	var walk func(v any)
+	walk = func(v any) {
 		switch t := v.(type) {
-		case map[string]interface{}:
+		case map[string]any:
 			if lv, ok := t["lockupViewModel"]; ok {
 				if id := digString(lv, "contentId"); IsVideoID(id) {
 					ids = append(ids, id)
@@ -722,7 +722,7 @@ func albumAudioVideoIDs(playlistID string) ([]string, error) {
 			for _, vv := range t {
 				walk(vv)
 			}
-		case []interface{}:
+		case []any:
 			for _, vv := range t {
 				walk(vv)
 			}
@@ -732,7 +732,7 @@ func albumAudioVideoIDs(playlistID string) ([]string, error) {
 	return ids, nil
 }
 
-func parseAlbumItem(item interface{}) (Album, bool) {
+func parseAlbumItem(item any) (Album, bool) {
 	a := Album{
 		Title: digString(item, "flexColumns", 0, "musicResponsiveListItemFlexColumnRenderer",
 			"text", "runs", 0, "text"),
@@ -747,7 +747,7 @@ func parseAlbumItem(item interface{}) (Album, bool) {
 		return a, false
 	}
 	// Second column reads ["Album", " • ", "Artist", " • ", "2015"].
-	runs, _ := dig(item, "flexColumns", 1, "musicResponsiveListItemFlexColumnRenderer", "text", "runs").([]interface{})
+	runs, _ := dig(item, "flexColumns", 1, "musicResponsiveListItemFlexColumnRenderer", "text", "runs").([]any)
 	var fields []string
 	for _, r := range runs {
 		s := digString(r, "text")
@@ -787,7 +787,7 @@ type ArtistPage struct {
 // Artist fetches an artist's page: their discography and their
 // most-played songs.
 func Artist(browseID string) (ArtistPage, error) {
-	root, err := post("browse", map[string]interface{}{
+	root, err := post("browse", map[string]any{
 		"context":  clientContext(),
 		"browseId": browseID,
 	})
@@ -811,7 +811,7 @@ func Artist(browseID string) (ArtistPage, error) {
 	for _, shelf := range findAll(root, "musicCarouselShelfRenderer") {
 		title := digString(shelf, "header", "musicCarouselShelfBasicHeaderRenderer", "title", "runs", 0, "text")
 		if title == "Fans might also like" {
-			contents, _ := dig(shelf, "contents").([]interface{})
+			contents, _ := dig(shelf, "contents").([]any)
 			for _, c := range contents {
 				if it, ok := homeItem(dig(c, "musicTwoRowItemRenderer")); ok && it.Kind == "artist" {
 					a.Related = append(a.Related, it)
@@ -822,7 +822,7 @@ func Artist(browseID string) (ArtistPage, error) {
 		if title != "Albums" && title != "Singles & EPs" && title != "Singles" {
 			continue
 		}
-		contents, _ := dig(shelf, "contents").([]interface{})
+		contents, _ := dig(shelf, "contents").([]any)
 		for _, c := range contents {
 			item := dig(c, "musicTwoRowItemRenderer")
 			if item == nil {
@@ -864,7 +864,7 @@ func Artist(browseID string) (ArtistPage, error) {
 // A failure here is not fatal to the page: the discography still stands
 // on its own, so the caller gets the artist with an empty song list.
 func artistTopSongs(playlistID, artist string) ([]Track, error) {
-	root, err := post("browse", map[string]interface{}{
+	root, err := post("browse", map[string]any{
 		"context":  clientContext(),
 		"browseId": playlistID,
 	})
@@ -874,7 +874,7 @@ func artistTopSongs(playlistID, artist string) ([]Track, error) {
 	return parseSongRows(root, artist), nil
 }
 
-func parseSongRows(root interface{}, artist string) []Track {
+func parseSongRows(root any, artist string) []Track {
 	var out []Track
 	for _, item := range findAll(root, "musicResponsiveListItemRenderer") {
 		vid := digString(item, "playlistItemData", "videoId")
@@ -931,7 +931,7 @@ type Playlist struct {
 // duration sits in the fixed right-hand column instead of the byline.
 func PlaylistTracks(playlistID string) (Playlist, error) {
 	p := Playlist{ID: playlistID}
-	root, err := post("browse", map[string]interface{}{
+	root, err := post("browse", map[string]any{
 		"context":  clientContext(),
 		"browseId": "VL" + strings.TrimPrefix(playlistID, "VL"),
 	})
@@ -947,7 +947,7 @@ func PlaylistTracks(playlistID string) (Playlist, error) {
 	if shelf == nil {
 		return p, fmt.Errorf("ytmusic playlist: no tracklist in response")
 	}
-	contents, _ := dig(shelf, "contents").([]interface{})
+	contents, _ := dig(shelf, "contents").([]any)
 	for _, c := range contents {
 		item := dig(c, "musicResponsiveListItemRenderer")
 		if item == nil {
@@ -971,8 +971,8 @@ func PlaylistTracks(playlistID string) (Playlist, error) {
 
 // releaseYear is the year in a release card's subtitle, "2023" or
 // "Single • 2023"; "" when it has none.
-func releaseYear(item interface{}) string {
-	runs, _ := dig(item, "subtitle", "runs").([]interface{})
+func releaseYear(item any) string {
+	runs, _ := dig(item, "subtitle", "runs").([]any)
 	for _, r := range runs {
 		if s := strings.TrimSpace(digString(r, "text")); len(s) == 4 && strings.Trim(s, "0123456789") == "" {
 			return s

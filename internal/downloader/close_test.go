@@ -30,7 +30,7 @@ func liveWorkers() int {
 		buf = make([]byte, 2*len(buf))
 	}
 	live := 0
-	for _, g := range strings.Split(string(buf[:n]), "\n\n") {
+	for g := range strings.SplitSeq(string(buf[:n]), "\n\n") {
 		if !strings.Contains(g, "(*Downloader).worker") {
 			continue
 		}
@@ -52,7 +52,7 @@ func TestCloseWaitsForTheWorker(t *testing.T) {
 
 	const n = 20
 	ds := make([]*Downloader, 0, n)
-	for i := 0; i < n; i++ {
+	for range n {
 		ds = append(ds, New(t.TempDir(), "m4a"))
 	}
 	// The runtime knows about a goroutine the moment it is created, so
@@ -98,7 +98,7 @@ func TestSendDoesNotBlockAfterClose(t *testing.T) {
 	d.Close()
 	// Past the buffer, with no reader: this returns only because send
 	// gives up when the context is done.
-	for i := 0; i < 100; i++ {
+	for range 100 {
 		d.send(ProgressEvent{TrackID: "y"})
 	}
 }

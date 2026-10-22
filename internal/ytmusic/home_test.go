@@ -8,8 +8,8 @@ import (
 // A card is whatever it leads to: an album page, a playlist, an artist
 // or a song; a card that leads nowhere known is left out.
 func TestHomeItemKinds(t *testing.T) {
-	card := func(nav string) interface{} {
-		var v interface{}
+	card := func(nav string) any {
+		var v any
 		json.Unmarshal([]byte(`{"title":{"runs":[{"text":"T"}]},"subtitle":{"runs":[{"text":"Song"},{"text":" • "},{"text":"Daft Punk"}]},"navigationEndpoint":`+nav+`}`), &v)
 		return v
 	}
@@ -42,7 +42,7 @@ func TestReleaseYear(t *testing.T) {
 		`[{"text":"Single"},{"text":" • "},{"text":"2021"}]`:          "2021",
 		`[{"text":"Daft Punk"},{"text":" • "},{"text":"905M views"}]`: "",
 	} {
-		var v interface{}
+		var v any
 		json.Unmarshal([]byte(`{"subtitle":{"runs":`+sub+`}}`), &v)
 		if got := releaseYear(v); got != want {
 			t.Errorf("%s: %q, want %q", sub, got, want)

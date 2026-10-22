@@ -27,7 +27,7 @@ func TestRecommendationsStayRelated(t *testing.T) {
 	// Autoplay's case: one track wanted, seeded with what just played.
 	// The radio opens with that track's neighbours, which are exactly
 	// what gets filtered out, so asking for only `limit` left nothing.
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		recs, err := FetchRecommendations(1, []string{seed})
 		if err != nil {
 			t.Skipf("live radio unavailable: %v", err)

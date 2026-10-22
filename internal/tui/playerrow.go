@@ -183,10 +183,7 @@ func (m Model) playerRowLayout() playerRowLayout {
 		hPart = styleKeyHint.Render("[h]") + " "
 		lPart = " " + styleKeyHint.Render("[l]")
 	}
-	l.barWidth = innerW - lipgloss.Width(hPart) - lipgloss.Width(lPart) - len(cur) - len(tot) - 2
-	if l.barWidth < 5 {
-		l.barWidth = 5
-	}
+	l.barWidth = max(innerW-lipgloss.Width(hPart)-lipgloss.Width(lPart)-len(cur)-len(tot)-2, 5)
 	l.barStart = contentStartX + lipgloss.Width(hPart) + len(cur) + 1
 
 	displayPct := 0.0

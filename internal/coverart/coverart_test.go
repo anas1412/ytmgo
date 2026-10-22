@@ -9,8 +9,8 @@ import (
 // solid builds a test image split down the middle: red left, blue right.
 func solid(w, h int) image.Image {
 	img := image.NewRGBA(image.Rect(0, 0, w, h))
-	for y := 0; y < h; y++ {
-		for x := 0; x < w; x++ {
+	for y := range h {
+		for x := range w {
 			c := color.RGBA{255, 0, 0, 255}
 			if x >= w/2 {
 				c = color.RGBA{0, 0, 255, 255}

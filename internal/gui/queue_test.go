@@ -107,7 +107,7 @@ func TestEndedSkipAndTheEnd(t *testing.T) {
 func TestCycleRepeat(t *testing.T) {
 	a, _ := queueApp(t)
 	var got []string
-	for i := 0; i < 4; i++ {
+	for range 4 {
 		got = append(got, a.CycleRepeat().Repeat)
 	}
 	if want := []string{"one", "all", "off", "one"}; !eq(got, want) {

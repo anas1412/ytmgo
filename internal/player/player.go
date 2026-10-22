@@ -309,7 +309,7 @@ func (p *Player) ensureRunning() error {
 // dialSocket waits for the mpv socket to appear and connects to it.
 func (p *Player) dialSocket() (net.Conn, error) {
 	var lastErr error
-	for i := 0; i < 100; i++ { // up to 5s
+	for range 100 { // up to 5s
 		conn, err := net.DialTimeout("unix", p.socketPath, time.Second)
 		if err == nil {
 			return conn, nil
@@ -322,11 +322,11 @@ func (p *Player) dialSocket() (net.Conn, error) {
 
 // send writes one IPC command on the persistent connection.
 // Caller must hold p.mu.
-func (p *Player) send(args ...interface{}) error {
+func (p *Player) send(args ...any) error {
 	if p.conn == nil {
 		return fmt.Errorf("mpv not running")
 	}
-	data, err := json.Marshal(map[string]interface{}{"command": args})
+	data, err := json.Marshal(map[string]any{"command": args})
 	if err != nil {
 		return fmt.Errorf("mpv command marshal: %w", err)
 	}
@@ -341,10 +341,10 @@ func (p *Player) send(args ...interface{}) error {
 // ipcEvent is one line from the mpv IPC stream. Command responses and
 // events share the stream; responses carry "error", events carry "event".
 type ipcEvent struct {
-	Event  string      `json:"event"`
-	ID     int         `json:"id"`
-	Data   interface{} `json:"data"`
-	Reason string      `json:"reason"`
+	Event  string `json:"event"`
+	ID     int    `json:"id"`
+	Data   any    `json:"data"`
+	Reason string `json:"reason"`
 }
 
 // readLoop consumes events from the persistent connection until it closes.

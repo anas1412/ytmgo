@@ -22,7 +22,7 @@ func TestCoverForAsksOnce(t *testing.T) {
 		return "https://yt/" + title + ".jpg", nil
 	}
 	got := make(chan string, 4)
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		if c, ok := coverFor("Djo", "End of Beginning", func(c string) { got <- c }); ok || c != "" {
 			t.Fatalf("first asks: %q, %v", c, ok)
 		}
