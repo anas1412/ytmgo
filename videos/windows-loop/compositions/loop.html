@@ -1,0 +1,227 @@
+<template>
+  <style>
+    /* ytmgo's palette, as the app and the terminal loop use it. */
+    #root {
+      position: absolute;
+      inset: 0;
+      overflow: hidden;
+      background: #0a0a0f;
+      font-family: "Inter", sans-serif;
+    }
+
+    /* The >_y mark: the first and last frame, as in the terminal loop. */
+    #loop-logo {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    #loop-logo svg {
+      display: block;
+      width: 300px;
+      height: 300px;
+    }
+
+    /* The app's window, at the size the screens were captured (1824×1008),
+       on the terminal loop's margins. */
+    #loop-win {
+      position: absolute;
+      left: 48px;
+      top: 36px;
+      width: 1824px;
+      height: 1008px;
+      overflow: hidden;
+      border-radius: 16px;
+      background: #0d0d12;
+      box-shadow: 0 0 0 1px #2a2a3e;
+    }
+    #loop-win .screen {
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: 1824px;
+      height: 1008px;
+    }
+
+    /* What the screens leave blank, drawn here: the progress, its time,
+       and the query as it is typed. Positions are the GUI's own,
+       measured in the capture. */
+    /* The seek track runs from x 666, its length set by the player's
+       layout: shorter while One More Time plays than after. */
+    #loop-fill-a,
+    #loop-fill-b {
+      position: absolute;
+      left: 666px;
+      top: 981px;
+      height: 4px;
+      border-radius: 2px;
+      background: #ececf1;
+      transform-origin: 0 50%;
+    }
+    #loop-fill-a {
+      width: 492px;
+    }
+    #loop-fill-b {
+      width: 513px;
+    }
+    #loop-tnow {
+      position: absolute;
+      left: 606px;
+      top: 974px;
+      width: 50px;
+      height: 18px;
+      color: #6e6e82;
+      font-size: 12px;
+      line-height: 18px;
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+    }
+    #loop-query {
+      position: absolute;
+      left: 709px;
+      top: 7px;
+      height: 34px;
+      display: flex;
+      align-items: center;
+      color: #ececf1;
+      font-size: 15px;
+      white-space: pre;
+    }
+    #loop-caret {
+      width: 1.5px;
+      height: 18px;
+      margin-left: 1px;
+      background: #ececf1;
+    }
+    #loop-heart {
+      position: absolute;
+      left: 1363px;
+      top: 405px;
+      width: 18px;
+      height: 18px;
+    }
+    #loop-cursor {
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: 30px;
+      height: 30px;
+      filter: drop-shadow(0 2px 3px rgb(0 0 0 / 0.5));
+    }
+  </style>
+
+  <div data-hf-id="hf-28q5" id="root" data-composition-id="loop" data-width="1920" data-height="1080">
+    <div data-hf-id="hf-1j02" id="loop-win">
+      <img data-hf-id="hf-mf8x" id="s1" class="screen clip" src="assets/s1.jpg" data-start="0" data-duration="2.35" data-track-index="1" alt="" />
+      <img data-hf-id="hf-nyd8" id="s1f" class="screen clip" src="assets/s1f.jpg" data-start="2.35" data-duration="1" data-track-index="1" alt="" />
+      <img data-hf-id="hf-0a2x" id="s2" class="screen clip" src="assets/s2.jpg" data-start="3.35" data-duration="0.85" data-track-index="1" alt="" />
+      <img data-hf-id="hf-qntp" id="s2h" class="screen clip" src="assets/s2h.jpg" data-start="4.2" data-duration="0.6" data-track-index="1" alt="" />
+      <img data-hf-id="hf-uy5p" id="s3" class="screen clip" src="assets/s3.jpg" data-start="4.8" data-duration="1.5" data-track-index="1" alt="" />
+      <img data-hf-id="hf-egkv" id="s4" class="screen clip" src="assets/s4.jpg" data-start="6.3" data-duration="1.15" data-track-index="1" alt="" />
+      <img data-hf-id="hf-uov7" id="s4h" class="screen clip" src="assets/s4h.jpg" data-start="7.45" data-duration="0.6" data-track-index="1" alt="" />
+      <img data-hf-id="hf-rpiz" id="s4l" class="screen clip" src="assets/s4l.jpg" data-start="8.05" data-duration="3.95" data-track-index="1" alt="" />
+
+      <div data-hf-id="hf-q3kt" id="loop-fill-a"></div>
+      <div data-hf-id="hf-w9am" id="loop-fill-b"></div>
+      <div data-hf-id="hf-xt3i" id="loop-tnow">2:19</div>
+      <div data-hf-id="hf-bmzo" id="loop-query"><span data-hf-id="hf-th63" id="loop-typed"></span><span data-hf-id="hf-9n82" id="loop-caret"></span></div>
+      <svg data-hf-id="hf-p7p6" id="loop-heart" viewBox="0 0 24 24">
+        <path data-hf-id="hf-2d7z"
+          d="M2 9.5a5.5 5.5 0 0 1 9.6-3.7.6.6 0 0 0 .8 0A5.5 5.5 0 0 1 22 9.5c0 2.3-1.5 4-3 5.5l-5.5 5.3a2 2 0 0 1-3 0L5 15c-1.5-1.5-3-3.2-3-5.5"
+          fill="#06d6a0"
+          stroke="#06d6a0"
+          stroke-width="2"
+        />
+      </svg>
+      <svg data-hf-id="hf-jlhm" id="loop-cursor" viewBox="0 0 24 24">
+        <path data-hf-id="hf-dvxa" d="M3 2 L3 19 L7.6 14.8 L10.6 21.6 L13.6 20.3 L10.7 13.6 L17 13.6 Z" fill="#ffffff" stroke="#111118" stroke-width="1.3" stroke-linejoin="round" />
+      </svg>
+    </div>
+
+    <div data-hf-id="hf-iq9h" id="loop-logo">
+      <svg data-hf-id="hf-to3d" viewBox="0 0 512 512">
+        <polyline data-hf-id="hf-4u3p" points="45,300 135,357 45,414" fill="none" stroke="#06d6a0" stroke-width="44" />
+        <rect data-hf-id="hf-tbnf" id="loop-under" x="172" y="392" width="148" height="34" fill="#06d6a0" />
+        <path data-hf-id="hf-m2oc" d="M245 62 V230 Q245 308 325 308 H400 M432 62 V340 Q432 430 345 432" fill="none" stroke="#7c3aed" stroke-width="78" />
+      </svg>
+    </div>
+  </div>
+
+  <script>
+    const D = 12;
+    const tl = gsap.timeline({ paused: true });
+
+    // Seek-safe text: a pure function of tween progress.
+    function type(el, str, at, dur) {
+      const p = { n: 0 };
+      tl.fromTo(p, { n: 0 }, { n: str.length, duration: dur, ease: "none", onUpdate: () => (el.textContent = str.slice(0, Math.round(p.n))) }, at);
+    }
+    function clock(el, from, to, at, dur) {
+      const p = { s: from };
+      const fmt = (s) => Math.floor(s / 60) + ":" + String(Math.floor(s % 60)).padStart(2, "0");
+      tl.fromTo(p, { s: from }, { s: to, duration: dur, ease: "none", onUpdate: () => (el.textContent = fmt(p.s)) }, at);
+    }
+    const typed = document.getElementById("loop-typed");
+    const tnow = document.getElementById("loop-tnow");
+
+    // ---------- the mark's underscore blinks, phase locked, as in the terminal loop ----------
+    for (let t = 0; t < D; t += 1) {
+      tl.set("#loop-under", { opacity: 1 }, t).set("#loop-under", { opacity: 0 }, t + 0.5);
+    }
+
+    // ---------- open: the mark gives way to the window (0.7 → 1.7) ----------
+    tl.fromTo("#loop-logo svg", { scale: 1, opacity: 1 }, { scale: 0.55, opacity: 0, duration: 0.5, ease: "power2.in" }, 0.7);
+    tl.fromTo(
+      "#loop-win",
+      { opacity: 0, scale: 0.9, clipPath: "inset(42% 44% 42% 44% round 16px)" },
+      { opacity: 1, scale: 1, clipPath: "inset(0% 0% 0% 0% round 16px)", duration: 0.75, ease: "expo.out" },
+      0.95,
+    );
+
+    // ---------- screens that arrive by navigation cross over briefly ----------
+    for (const [id, at] of [["#s2", 3.35], ["#s4", 6.3]]) {
+      tl.fromTo(id, { opacity: 0 }, { opacity: 1, duration: 0.18, ease: "power2.out" }, at);
+    }
+
+    // ---------- the cursor ----------
+    const cur = "#loop-cursor";
+    const click = (at) => tl.fromTo(cur, { scale: 1 }, { scale: 0.86, duration: 0.07, ease: "power2.in", yoyo: true, repeat: 1, transformOrigin: "3px 2px" }, at);
+    tl.fromTo(cur, { x: 1180, y: 640, opacity: 0 }, { opacity: 1, duration: 0.25, ease: "power2.out" }, 1.55);
+    tl.to(cur, { x: 900, y: 18, duration: 0.6, ease: "power2.inOut" }, 1.75); // to the search box
+    click(2.35);
+    tl.to(cur, { x: 560, y: 596, duration: 0.7, ease: "power2.inOut" }, 3.55); // to the song
+    click(4.6);
+    click(4.74);
+    tl.to(cur, { x: 952, y: 596, duration: 0.55, ease: "power2.inOut" }, 5.45); // to its album
+    click(6.18);
+    tl.to(cur, { x: 1370, y: 410, duration: 0.7, ease: "power2.inOut" }, 6.9); // to a heart
+    click(7.93);
+    tl.to(cur, { opacity: 0, duration: 0.2, ease: "power2.in" }, 10.15);
+
+    // ---------- the search: focus, then the query typed ----------
+    tl.set("#loop-caret", { opacity: 0 }, 0).set("#loop-caret", { opacity: 1 }, 2.35).set("#loop-caret", { opacity: 0 }, 3.35);
+    tl.set(typed, { textContent: "" }, 0);
+    type(typed, "daft punk", 2.45, 0.7);
+
+    // ---------- the heart pops as it fills ----------
+    tl.set("#loop-heart", { opacity: 0 }, 0);
+    tl.fromTo("#loop-heart", { opacity: 1, scale: 1.35 }, { scale: 1, duration: 0.32, ease: "back.out(2)" }, 8.05);
+    tl.set("#loop-heart", { opacity: 0 }, 8.5);
+
+    // ---------- playback: One More Time runs on, then the new song from 0:00 ----------
+    const OMT = 321, HBFS = 227, SWITCH = 4.8;
+    tl.set("#loop-fill-a", { opacity: 1 }, 0).set("#loop-fill-a", { opacity: 0 }, SWITCH);
+    tl.set("#loop-fill-b", { opacity: 0 }, 0).set("#loop-fill-b", { opacity: 1 }, SWITCH);
+    tl.fromTo("#loop-fill-a", { scaleX: 139 / OMT }, { scaleX: (139 + SWITCH) / OMT, duration: SWITCH, ease: "none" }, 0);
+    clock(tnow, 139, 139 + SWITCH, 0, SWITCH);
+    tl.fromTo("#loop-fill-b", { scaleX: 0 }, { scaleX: (D - SWITCH) / HBFS, duration: D - SWITCH, ease: "none" }, SWITCH);
+    clock(tnow, 0, D - SWITCH, SWITCH, D - SWITCH);
+
+    // ---------- close: the window folds back into the mark (10.6 → 11.45) ----------
+    tl.to("#loop-win", { opacity: 0, scale: 0.9, clipPath: "inset(42% 44% 42% 44% round 16px)", duration: 0.5, ease: "expo.in" }, 10.6);
+    tl.to("#loop-logo svg", { scale: 1, opacity: 1, duration: 0.5, ease: "power3.out" }, 10.95);
+
+    window.__timelines["loop"] = tl;
+  </script>
+</template>

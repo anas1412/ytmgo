@@ -3,14 +3,8 @@ import { onMounted, ref } from 'vue'
 import { withBase } from 'vitepress'
 import { cachedVersion, fetchVersion } from './release'
 
-// The page leads with the download that fits the visitor's system.
-// Until the browser says what that is (and always in the static page),
-// both are offered equally, so nobody is shown the wrong one first.
-type Os = 'windows' | 'linux' | 'other'
-const os = ref<Os>('other')
 const version = ref<string | null>(null)
 const copied = ref(false)
-const loop = ref<HTMLVideoElement | null>(null)
 
 const RELEASE = 'https://github.com/anas1412/ytmgo/releases/latest/download'
 // The site serves the installer itself (docs/public/install.sh): a shorter
@@ -20,14 +14,6 @@ const INSTALL = 'curl -fsSL https://anas1412.github.io/ytmgo/install.sh | bash'
 // The command with a break allowed after each slash, so it wraps between
 // path parts and never mid-word. It is a constant, so v-html is safe.
 const installHtml = INSTALL.replace(/\/(?=[^/])/g, '/<wbr>')
-
-function detect(): Os {
-  const ua = navigator.userAgent
-  if (/Android|iPhone|iPad|iPod|Mobile|CrOS/i.test(ua)) return 'other'
-  if (/Windows/i.test(ua)) return 'windows'
-  if (/Linux|X11/i.test(ua)) return 'linux'
-  return 'other'
-}
 
 async function copy() {
   try {
@@ -39,18 +25,18 @@ async function copy() {
   }
 }
 
-// The terminal loop is silent and starts by itself; a click pauses it,
-// and it stays still for readers who ask for less motion.
-function toggleLoop() {
-  const v = loop.value
-  if (v) v.paused ? v.play() : v.pause()
+// The two loops are silent and start by themselves; a click pauses one,
+// and both stay still for readers who ask for less motion.
+function toggleLoop(e: Event) {
+  const v = e.currentTarget as HTMLVideoElement
+  v.paused ? v.play() : v.pause()
 }
 
 onMounted(() => {
-  os.value = detect()
   version.value = cachedVersion()
   fetchVersion().then((v) => v && (version.value = v)).catch(() => {})
-  if (matchMedia('(prefers-reduced-motion: reduce)').matches) loop.value?.pause()
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches)
+    document.querySelectorAll<HTMLVideoElement>('.lp video').forEach((v) => v.pause())
 })
 
 // Lucide (lucide.dev, ISC), inlined as the rest of the site does: no
@@ -129,29 +115,14 @@ const rows: { what: string; win: string; linux: string }[] = [
         </p>
 
         <div class="cta">
-          <template v-if="os === 'linux'">
-            <div class="cmd" role="group" aria-label="Install command">
-              <code v-html="installHtml"></code>
-              <button type="button" @click="copy">{{ copied ? 'Copied' : 'Copy' }}</button>
-            </div>
-            <a class="btn ghost" href="#windows">Get the Windows app</a>
-          </template>
-          <template v-else-if="os === 'windows'">
-            <a class="btn primary" :href="`${RELEASE}/ytmgo-gui-setup.exe`">
-              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15V3" /><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><path d="m7 10 5 5 5-5" /></svg>
-              Download for Windows
-            </a>
-            <a class="btn ghost" href="#linux">Get the Linux app</a>
-          </template>
-          <template v-else>
-            <a class="btn primary" href="#windows">Get it for Windows</a>
-            <a class="btn ghost" href="#linux">Get it for Linux</a>
-          </template>
+          <a class="btn primary" href="#download">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15V3" /><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><path d="m7 10 5 5 5-5" /></svg>
+            Download
+          </a>
         </div>
 
         <p class="fine">
-          <template v-if="os === 'windows'">Windows 10 and 11, 64-bit. </template>
-          <template v-else-if="os === 'other'">Runs on Windows and Linux. </template>
+          For Windows and Linux.
           <template v-if="version">Version {{ version.replace(/^v/, '') }}. </template>
           Free and open source, under the MIT licence.
         </p>
@@ -176,14 +147,24 @@ const rows: { what: string; win: string; linux: string }[] = [
     </section>
 
     <!-- ── The two apps ─────────────────────────────────────────────── -->
-    <section class="apps" aria-labelledby="apps-title">
-      <h2 id="apps-title">One library, two ways in</h2>
-      <p class="section-lede">Pick the one that fits how you work. Both play the same music.</p>
+    <section id="download" class="apps" aria-labelledby="apps-title">
+      <h2 id="apps-title">Download</h2>
+      <p class="section-lede">A desktop app for Windows, and a terminal app for Linux.</p>
 
       <div class="app-grid">
         <article id="windows" class="app">
           <div class="app-media">
-            <img :src="withBase('/windows-album.jpg')" width="1600" height="1000" loading="lazy" alt="ytmgo for Windows showing an album page with its tracks and the queue" />
+            <video
+              :src="withBase('/windows-loop.mp4')"
+              :poster="withBase('/windows-loop-poster.jpg')"
+              autoplay
+              muted
+              loop
+              playsinline
+              aria-label="ytmgo for Windows: searching, playing a song, opening its album and liking a track"
+              title="Click to pause"
+              @click="toggleLoop"
+            ></video>
           </div>
           <h3>
             <svg viewBox="0 0 24 24" aria-hidden="true"><rect width="20" height="14" x="2" y="3" rx="2" /><path d="M8 21h8" /><path d="M12 17v4" /></svg>
@@ -210,7 +191,6 @@ const rows: { what: string; win: string; linux: string }[] = [
         <article id="linux" class="app">
           <div class="app-media">
             <video
-              ref="loop"
               :src="withBase('/hero-loop.mp4')"
               :poster="withBase('/hero-loop-poster.jpg')"
               autoplay
@@ -290,8 +270,7 @@ const rows: { what: string; win: string; linux: string }[] = [
         own computer, and needs no account to use.
       </p>
       <div class="actions">
-        <a class="btn primary" :href="`${RELEASE}/ytmgo-gui-setup.exe`">Download for Windows</a>
-        <a class="btn ghost" href="#linux">Install on Linux</a>
+        <a class="btn primary" href="#download">Download</a>
         <a class="btn ghost" href="https://github.com/anas1412/ytmgo">View the source</a>
       </div>
     </section>
@@ -458,9 +437,6 @@ const rows: { what: string; win: string; linux: string }[] = [
   gap: 12px;
   margin-top: 32px;
 }
-.lp .cta .cmd {
-  flex: 1 1 100%;
-}
 .lp .fine {
   margin: 18px 0 0;
   color: var(--lp-mid);
@@ -500,11 +476,14 @@ const rows: { what: string; win: string; linux: string }[] = [
 .lp .app {
   display: flex;
   flex-direction: column;
-  scroll-margin-top: 96px;
+}
+.lp .apps {
+  scroll-margin-top: 40px;
 }
 .lp .app-media {
   overflow: hidden;
-  aspect-ratio: 16 / 10;
+  /* 16:9, the videos' own shape, so neither is cropped. */
+  aspect-ratio: 16 / 9;
   border: 1px solid var(--lp-line);
   border-radius: 12px;
   background: var(--lp-soft);
@@ -516,6 +495,7 @@ const rows: { what: string; win: string; linux: string }[] = [
   width: 100%;
   height: 100%;
   object-fit: cover;
+  object-position: top;
 }
 .lp .app-media video {
   cursor: pointer;

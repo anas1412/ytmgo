@@ -25,7 +25,6 @@ export default defineConfig({
 
     nav: [
       { text: 'Guide', link: '/guide/install', activeMatch: '/guide/' },
-      { text: 'Windows', link: '/guide/install#windows' },
       { text: 'Keybindings', link: '/guide/keybindings' },
       { text: 'CLI', link: '/guide/cli' },
       {
