@@ -1,7 +1,9 @@
 import { h } from 'vue'
 import DefaultTheme from 'vitepress/theme'
-import { withBase, type Theme } from 'vitepress'
+import { type Theme } from 'vitepress'
 import './custom.css'
+import Landing from './Landing.vue'
+import { REPO, cachedVersion, fetchVersion } from './release'
 
 // The nav's "Releases" entry shows the current version instead of the
 // word. Read in the browser rather than baked in at build time, because
@@ -22,38 +24,14 @@ import './custom.css'
 //
 // Any failure leaves the entry reading "Releases", which is what the
 // config says and what a reader without JavaScript sees.
-const REPO = 'anas1412/ytmgo'
-const CACHE_KEY = 'ytmgo:release'
-
-function cachedVersion(): string | null {
-  try {
-    const { version } = JSON.parse(localStorage.getItem(CACHE_KEY) ?? '{}')
-    return typeof version === 'string' ? version : null
-  } catch {
-    return null
-  }
-}
-
-async function fetchVersion(): Promise<string | null> {
-  // No custom headers: an Accept of application/vnd.github+json is not
-  // CORS-safelisted, so it turns this into a preflighted request — an
-  // extra round trip to be told what the default already returns.
-  const res = await fetch(`https://api.github.com/repos/${REPO}/releases/latest`)
-  if (!res.ok) return null
-  const { tag_name } = await res.json()
-  if (typeof tag_name !== 'string') return null
-  try {
-    localStorage.setItem(CACHE_KEY, JSON.stringify({ at: Date.now(), version: tag_name }))
-  } catch {
-    // Private browsing, or storage full. The version still renders.
-  }
-  return tag_name
-}
-
 function showVersion(version: string) {
-  // Every copy: the bar has one, the mobile menu another.
+  // Every copy: the bar has one, the mobile menu another. Only those:
+  // the home page links to release downloads too, and their labels
+  // are their own.
   document
-    .querySelectorAll<HTMLAnchorElement>(`a[href^="https://github.com/${REPO}/releases"]`)
+    .querySelectorAll<HTMLAnchorElement>(
+      `:is(.VPNavBar, .VPNavScreen) a[href^="https://github.com/${REPO}/releases"]`,
+    )
     .forEach((a) => {
       const label = a.querySelector('span') ?? a
       if (label.textContent !== version) label.textContent = version
@@ -104,32 +82,11 @@ function mountReleaseVersion() {
   watch()
 }
 
-// The hero shows a silent motion loop of the app in place of the
-// screenshot (source: videos/hero-loop). Clicking pauses it, and it
-// stays paused for readers who ask for reduced motion.
-function heroVideo() {
-  return h('video', {
-    class: 'image-src',
-    src: withBase('/hero-loop.mp4'),
-    poster: withBase('/hero-loop-poster.jpg'),
-    autoplay: true,
-    muted: true,
-    loop: true,
-    playsinline: true,
-    'aria-label': 'ytmgo searching, queueing and playing a track in the terminal',
-    onPlayOnce: (e: Event) => {
-      if (matchMedia('(prefers-reduced-motion: reduce)').matches) (e.target as HTMLVideoElement).pause()
-    },
-    onClick: (e: Event) => {
-      const v = e.target as HTMLVideoElement
-      v.paused ? v.play() : v.pause()
-    },
-  })
-}
-
 export default {
   extends: DefaultTheme,
-  Layout: () => h(DefaultTheme.Layout, null, { 'home-hero-image': heroVideo }),
+  // The home page is one component, in place of the stock hero and
+  // feature grid: it shows the download that fits the visitor's system.
+  Layout: () => h(DefaultTheme.Layout, null, { 'home-hero-before': () => h(Landing) }),
   enhanceApp() {
     mountReleaseVersion()
   },

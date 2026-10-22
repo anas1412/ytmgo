@@ -2,7 +2,7 @@ import { defineConfig } from 'vitepress'
 
 export default defineConfig({
   title: 'ytmgo',
-  description: 'A terminal-based YouTube Music client. Search, download, queue, and play music from the keyboard.',
+  description: 'A free YouTube Music client with no account and no API key: a desktop app for Windows, a terminal app for Linux.',
   base: '/ytmgo/',
   lang: 'en-GB',
   cleanUrls: true,
@@ -11,13 +11,13 @@ export default defineConfig({
   head: [
     ['link', { rel: 'icon', href: '/ytmgo/ytmgo-icon.png' }],
     ['meta', { property: 'og:type', content: 'website' }],
-    ['meta', { property: 'og:title', content: 'ytmgo: YouTube Music from the terminal' }],
-    ['meta', { property: 'og:description', content: 'Search, download, queue, and play music, all from the keyboard, inside your terminal.' }],
-    ['meta', { property: 'og:image', content: 'https://raw.githubusercontent.com/anas1412/ytmgo/main/ytmgo-og.png' }],
+    ['meta', { property: 'og:title', content: 'ytmgo: YouTube Music without the browser' }],
+    ['meta', { property: 'og:description', content: 'A free YouTube Music client with no account and no API key. A desktop app for Windows, a terminal app for Linux.' }],
+    ['meta', { property: 'og:image', content: 'https://anas1412.github.io/ytmgo/og.jpg' }],
     ['meta', { property: 'og:image:width', content: '1200' }],
     ['meta', { property: 'og:image:height', content: '630' }],
     ['meta', { name: 'twitter:card', content: 'summary_large_image' }],
-    ['meta', { name: 'twitter:image', content: 'https://raw.githubusercontent.com/anas1412/ytmgo/main/ytmgo-og.png' }],
+    ['meta', { name: 'twitter:image', content: 'https://anas1412.github.io/ytmgo/og.jpg' }],
   ],
 
   themeConfig: {
@@ -25,6 +25,7 @@ export default defineConfig({
 
     nav: [
       { text: 'Guide', link: '/guide/install', activeMatch: '/guide/' },
+      { text: 'Windows', link: '/guide/install#windows' },
       { text: 'Keybindings', link: '/guide/keybindings' },
       { text: 'CLI', link: '/guide/cli' },
       {
