@@ -331,6 +331,13 @@ type Model struct {
 	artistSeq         int             // bumped per fetch; stale responses dropped
 	artistSongs       []search.Result // top songs, as playable results
 	artistArtURL      string          // artist photo, reloaded when an album closes
+	// preBrowseCursor/Offset park the search cursor when an artist or
+	// album is opened from the results. The browse pages reuse
+	// searchCursor/searchOffset for their own lists, so the position the
+	// user pressed A/a from has to be stashed here and restored when esc
+	// walks back out to the results.
+	preBrowseCursor int
+	preBrowseOffset int
 
 	openAlbum      *ytmusic.Album  // non-nil: showing this album's tracks
 	albumTracks    []search.Result // tracks of openAlbum, as playable results
@@ -865,6 +872,31 @@ func (m Model) streamListLen() int {
 func (m *Model) resetStreamCursor() {
 	m.searchCursor = 0
 	m.searchOffset = 0
+}
+
+// saveBrowseRestore parks the current search cursor so esc from an
+// artist or album can put it back. The browse pages reuse
+// searchCursor/searchOffset, so this must run before they start using
+// them — at the moment the open fetch is issued.
+func (m *Model) saveBrowseRestore() {
+	m.preBrowseCursor = m.searchCursor
+	m.preBrowseOffset = m.searchOffset
+}
+
+// restoreBrowseRestore puts the search cursor back where it was when
+// the browse page was opened. The results list is not replaced by
+// navigating into an artist or album, so the parked position stays
+// valid; the clamp only guards a list that changed while the user was
+// away.
+func (m *Model) restoreBrowseRestore() {
+	if n := len(m.results); n > 0 && m.preBrowseCursor >= n {
+		m.preBrowseCursor = n - 1
+	}
+	if m.preBrowseCursor < 0 {
+		m.preBrowseCursor = 0
+	}
+	m.searchCursor = m.preBrowseCursor
+	m.searchOffset = m.preBrowseOffset
 }
 
 // showRecommendations restores the recommendations list in the results

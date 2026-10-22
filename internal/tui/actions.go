@@ -111,6 +111,7 @@ func (m *Model) activateSelection() tea.Cmd {
 				m.albumSeq++
 				m.albumCoverURL = a.CoverURL
 				m.setStatus("Opening " + a.Title + "…")
+				m.saveBrowseRestore()
 				return openAlbumCmd(a, m.albumSeq)
 			}
 			return nil
@@ -438,6 +439,7 @@ func (m *Model) openAlbumOfSelected() tea.Cmd {
 	// The song's own thumbnail is the album's art; the fetched page
 	// refines it in handleAlbumTracks.
 	m.albumCoverURL = t.CoverURL
+	m.saveBrowseRestore()
 	name := albumLabel(t.Album)
 	if name == "" {
 		name = "album"
@@ -492,6 +494,7 @@ func (m *Model) openArtistOfSelected() tea.Cmd {
 	m.artistSeq++
 	m.browseLoadingName = who
 	m.setStatus("Opening " + who + "…")
+	m.saveBrowseRestore()
 	if t.ArtistBrowseID == "" {
 		// Queue and history rows saved before tracks carried an artist
 		// id; the album they name knows who made it.

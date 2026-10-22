@@ -215,7 +215,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			// behind would put a query in the box that matches nothing
 			// on the screen it returns to.
 			m.searchInput.SetValue("")
-			m.resetStreamCursor()
+			m.restoreBrowseRestore()
 			m.setStatus("Back to results")
 			return m, m.refreshCoverCmd()
 		}
@@ -223,13 +223,13 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		// cover override leaves with it, restoring the playing art.
 		if m.activePage == PageStream && (m.openAlbum != nil || m.isLoadingAlbum || m.albumCoverURL != "") {
 			coverCmd := m.leaveAlbumView()
-			m.resetStreamCursor()
 			// An album opened from an artist steps back to that artist,
 			// not out of it. leaveAlbumView has just cleared the strip's
 			// art, so the artist's photo is fetched again.
 			if m.openArtist != nil {
 				m.artistShowsAlbums = true
 				m.albumMode = true
+				m.resetStreamCursor() // the artist's releases start at the top
 				m.setStatus(fmt.Sprintf("%s — %d releases", m.openArtist.Name, len(m.openArtist.Albums)))
 				if m.artistArtURL != "" {
 					m.albumSeq++
@@ -238,6 +238,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				}
 				return m, coverCmd
 			}
+			m.restoreBrowseRestore() // back to the results row the album was opened from
 			m.setStatus("Albums")
 			return m, coverCmd
 		}
