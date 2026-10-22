@@ -6,6 +6,7 @@ import (
 	"ytmgo/internal/player"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 )
 
 // ─── Confirmation State ─────────────────────────────────────────────
@@ -18,6 +19,7 @@ const (
 	confirmUpdate         = "update"
 	confirmClearHistory   = "clear-history"
 	confirmDeletePlaylist = "delete-playlist"
+	confirmQuit           = "quit"
 )
 
 // isConfirming returns true when a destructive action is awaiting confirmation.
@@ -35,6 +37,24 @@ func (m *Model) startConfirm(action, data string) {
 func (m *Model) clearConfirm() {
 	m.confirmAction = confirmNone
 	m.confirmData = ""
+}
+
+// confirmStatus renders the styled confirmation prompt shown in the status bar.
+// action and prompt are caller-styled: action is the bold white verb (e.g.
+// "Delete"), and prompt is optional extra context (a track title, an update
+// version) shown after it. The trailing "[Enter] yes  [Esc] no" hint is shared
+// by every confirmation.
+func confirmStatus(action, prompt string) string {
+	bullet := lipgloss.NewStyle().Foreground(colorWarning).Render("●")
+	enterKey := lipgloss.NewStyle().Foreground(colorAccent2).Bold(true).Render("[Enter]")
+	enterDesc := lipgloss.NewStyle().Foreground(colorTextDim).Render("yes")
+	escKey := lipgloss.NewStyle().Foreground(colorAccent3).Bold(true).Render("[Esc]")
+	escDesc := lipgloss.NewStyle().Foreground(colorTextDim).Render("no")
+	msg := bullet + " " + action
+	if prompt != "" {
+		msg += " " + prompt
+	}
+	return msg + "  " + enterKey + " " + enterDesc + "  " + escKey + " " + escDesc
 }
 
 // executeConfirmedAction runs the confirmed destructive action and returns
@@ -106,6 +126,11 @@ func (m *Model) executeConfirmedAction() (tea.Model, tea.Cmd) {
 		m.loadPlayHistory()
 		m.setStatus("History cleared")
 		return m, nil
+
+	case confirmQuit:
+		m.quitting = true
+		m.Shutdown()
+		return m, tea.Quit
 	}
 
 	return m, nil

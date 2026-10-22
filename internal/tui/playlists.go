@@ -133,15 +133,10 @@ func (m *Model) askDeletePlaylist() {
 		return
 	}
 	p := m.playlists[m.plCursor]
-	m.startConfirm(confirmDeletePlaylist, p.Name)
-	bullet := lipgloss.NewStyle().Foreground(colorWarning).Render("●")
 	action := lipgloss.NewStyle().Foreground(colorText).Bold(true).Render("Delete playlist")
 	title := lipgloss.NewStyle().Foreground(colorText).Render("\"" + p.Name + "\"?")
-	enterKey := lipgloss.NewStyle().Foreground(colorAccent2).Bold(true).Render("[Enter]")
-	enterDesc := lipgloss.NewStyle().Foreground(colorTextDim).Render("yes")
-	escKey := lipgloss.NewStyle().Foreground(colorAccent3).Bold(true).Render("[Esc]")
-	escDesc := lipgloss.NewStyle().Foreground(colorTextDim).Render("no")
-	m.setStatus(bullet + " " + action + " " + title + "  " + enterKey + " " + enterDesc + "  " + escKey + " " + escDesc)
+	m.startConfirm(confirmDeletePlaylist, p.Name)
+	m.setStatus(confirmStatus(action, title))
 }
 
 func (m *Model) deleteSelectedPlaylist() {
