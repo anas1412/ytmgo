@@ -170,22 +170,12 @@ const rows: { what: string; win: string; linux: string }[] = [
             <svg viewBox="0 0 24 24" aria-hidden="true"><rect width="20" height="14" x="2" y="3" rx="2" /><path d="M8 21h8" /><path d="M12 17v4" /></svg>
             Desktop app for Windows
           </h3>
-          <p>
-            A window like the music apps you know: a home page of new releases from artists you follow,
-            drag and drop, a right-click menu on every song, and updates in one click.
-          </p>
           <div class="actions">
             <a class="btn primary" :href="`${RELEASE}/ytmgo-gui-setup.exe`">
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15V3" /><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><path d="m7 10 5 5 5-5" /></svg>
               Download for Windows
             </a>
           </div>
-          <p class="note">
-            Windows 10 and 11, 64-bit. It installs for you alone, with no administrator prompt, and brings
-            yt-dlp with it. The installer is not signed yet, so SmartScreen warns about an unknown publisher:
-            choose <strong>More info</strong>, then <strong>Run anyway</strong>.
-            <a :href="withBase('/guide/install#windows')">Windows install notes</a>
-          </p>
         </article>
 
         <article id="linux" class="app">
@@ -206,22 +196,10 @@ const rows: { what: string; win: string; linux: string }[] = [
             <svg viewBox="0 0 24 24" aria-hidden="true"><polyline points="4 17 10 11 4 5" /><line x1="12" x2="20" y1="19" y2="19" /></svg>
             Terminal app for Linux
           </h3>
-          <p>
-            Everything from the keyboard, inside your terminal, with mouse support when you want it.
-            Album art at full resolution in kitty, Ghostty and WezTerm, and a live spectrum under your results.
-          </p>
           <div class="cmd" role="group" aria-label="Install command">
             <code v-html="installHtml"></code>
             <button type="button" @click="copy">{{ copied ? 'Copied' : 'Copy' }}</button>
           </div>
-          <p class="note">
-            Arch installs from the AUR; everywhere else fetches the release binary and offers to install
-            mpv, yt-dlp, ffmpeg and cava.
-            <a :href="`${RELEASE}/ytmgo_Linux_x86_64.tar.gz`">x86_64</a>,
-            <a :href="`${RELEASE}/ytmgo_Linux_arm64.tar.gz`">arm64</a> and
-            <a href="https://aur.archlinux.org/packages/ytmgo-bin">AUR</a> downloads.
-            <a :href="withBase('/guide/install')">Install guide</a>
-          </p>
         </article>
       </div>
     </section>
@@ -518,26 +496,12 @@ const rows: { what: string; win: string; linux: string }[] = [
   stroke-linecap: round;
   stroke-linejoin: round;
 }
-.lp .app > p {
-  margin: 12px 0 0;
-  color: var(--lp-mid);
-  line-height: 1.65;
-}
 .lp .app .actions,
 .lp .app .cmd {
   margin-top: 22px;
 }
 .lp .app .cmd {
   align-self: stretch;
-}
-.lp .app .note {
-  margin-top: 16px;
-  font-size: 14px;
-  line-height: 1.6;
-}
-.lp .app .note a {
-  color: var(--lp-violet);
-  font-weight: 500;
 }
 
 /* ── Features: a plain list, divided by hairlines ────────────────── */
