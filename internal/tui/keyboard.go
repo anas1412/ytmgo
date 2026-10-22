@@ -457,6 +457,37 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.setStatus(fmt.Sprintf("Queued %d tracks", len(list)))
 		return m, cmd
 
+	case "E":
+		// Download the whole list on screen — the download-queue sibling
+		// of e. Same contexts as e: a pasted playlist, a search, or an
+		// artist's songs. Each track goes into the download folder.
+		if m.activePage == PagePlaylists && m.plOpen != nil && m.activePanel == PanelSearch {
+			if len(m.plOpen.Tracks) == 0 {
+				return m, nil
+			}
+			return m, m.downloadAll(m.plOpen.Tracks)
+		}
+		if !m.browsingHere() {
+			return m, nil
+		}
+		list := m.results
+		if m.streamShowsTracks() {
+			list = m.streamTracks()
+		} else if m.albumMode {
+			// The list on screen is releases, not tracks.
+			m.setStatus("Open an album to download its tracks")
+			return m, nil
+		}
+		if len(list) == 0 {
+			m.setStatus("Nothing to download")
+			return m, nil
+		}
+		ts := make([]queue.Track, len(list))
+		for i, r := range list {
+			ts[i] = m.resolveTrack(r)
+		}
+		return m, m.downloadAll(ts)
+
 	case "v":
 		// The visualizer: the spectrum beneath the results, on every
 		// page that has a results list.

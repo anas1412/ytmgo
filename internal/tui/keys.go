@@ -4,54 +4,55 @@ import "github.com/charmbracelet/bubbles/key"
 
 // KeyMap defines every key binding in the TUI.
 type KeyMap struct {
-	Quit          key.Binding
-	Help          key.Binding
-	FocusNext     key.Binding
-	Enter         key.Binding
-	Up            key.Binding
-	Down          key.Binding
-	JumpTop       key.Binding
-	JumpBottom    key.Binding
-	PlayPause     key.Binding
-	NextTrack     key.Binding
-	PrevTrack     key.Binding
-	SeekForward   key.Binding
-	SeekBackward  key.Binding
-	VolumeUp      key.Binding
-	VolumeDown    key.Binding
-	Delete        key.Binding
-	Favorite      key.Binding
-	Save          key.Binding // b: follow an artist, like an album
-	FavTabs       key.Binding // 2 again: the Favs page's tabs
-	Autoplay      key.Binding
-	CopyLink      key.Binding
-	Shuffle       key.Binding
-	Repeat        key.Binding
-	ClearQueue    key.Binding
-	MoveUp        key.Binding
-	MoveDown      key.Binding
-	Download      key.Binding
-	Recs          key.Binding
-	Album         key.Binding
-	Enqueue       key.Binding
-	ArtistInfo    key.Binding
-	Visualizer    key.Binding
-	Lyrics        key.Binding
-	Hints         key.Binding
-	Downloads     key.Binding
-	Open          key.Binding
-	Update        key.Binding
-	ClearHistory  key.Binding
-	PageStream    key.Binding // 1
-	PageDownloads key.Binding // 5
-	PageFavorites key.Binding // 2
-	PageLibrary   key.Binding // 3
-	PageHistory   key.Binding // 4
-	PageSettings  key.Binding // 7
-	PagePlaylists key.Binding // 6
-	AddToPlaylist key.Binding
-	SavePlaylist  key.Binding
-	Escape        key.Binding
+	Quit            key.Binding
+	Help            key.Binding
+	FocusNext       key.Binding
+	Enter           key.Binding
+	Up              key.Binding
+	Down            key.Binding
+	JumpTop         key.Binding
+	JumpBottom      key.Binding
+	PlayPause       key.Binding
+	NextTrack       key.Binding
+	PrevTrack       key.Binding
+	SeekForward     key.Binding
+	SeekBackward    key.Binding
+	VolumeUp        key.Binding
+	VolumeDown      key.Binding
+	Delete          key.Binding
+	Favorite        key.Binding
+	Save            key.Binding // b: follow an artist, like an album
+	FavTabs         key.Binding // 2 again: the Favs page's tabs
+	Autoplay        key.Binding
+	CopyLink        key.Binding
+	Shuffle         key.Binding
+	Repeat          key.Binding
+	ClearQueue      key.Binding
+	MoveUp          key.Binding
+	MoveDown        key.Binding
+	Download        key.Binding
+	Recs            key.Binding
+	Album           key.Binding
+	Enqueue         key.Binding
+	EnqueueDownload key.Binding
+	ArtistInfo      key.Binding
+	Visualizer      key.Binding
+	Lyrics          key.Binding
+	Hints           key.Binding
+	Downloads       key.Binding
+	Open            key.Binding
+	Update          key.Binding
+	ClearHistory    key.Binding
+	PageStream      key.Binding // 1
+	PageDownloads   key.Binding // 5
+	PageFavorites   key.Binding // 2
+	PageLibrary     key.Binding // 3
+	PageHistory     key.Binding // 4
+	PageSettings    key.Binding // 7
+	PagePlaylists   key.Binding // 6
+	AddToPlaylist   key.Binding
+	SavePlaylist    key.Binding
+	Escape          key.Binding
 }
 
 // Keys is the canonical keymap singleton.
@@ -176,6 +177,10 @@ var Keys = KeyMap{
 	Enqueue: key.NewBinding(
 		key.WithKeys("e"),
 		key.WithHelp("e", "queue every track listed"),
+	),
+	EnqueueDownload: key.NewBinding(
+		key.WithKeys("E"),
+		key.WithHelp("E", "download every track listed"),
 	),
 	ArtistInfo: key.NewBinding(
 		key.WithKeys("A"),
@@ -332,6 +337,7 @@ func (k KeyMap) FullHelp() [][]key.Binding {
 			k.Recs,
 			k.Album,
 			k.Enqueue,
+			k.EnqueueDownload,
 			k.ArtistInfo,
 			k.Visualizer,
 			k.Lyrics,

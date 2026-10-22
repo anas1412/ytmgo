@@ -2,6 +2,7 @@ package tui
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
@@ -50,6 +51,29 @@ func (m *Model) queueAll(list []search.Result) tea.Cmd {
 		ts[i] = m.resolveTrack(r)
 	}
 	return m.queueTracks(ts)
+}
+
+// downloadAll enqueues every track in ts for download, skipping any
+// already in the download queue. On-screen lists already carry a watch
+// URL, so — unlike the single-track x path, which may have to resolve a
+// bare track — no resolve step is needed here.
+func (m *Model) downloadAll(ts []queue.Track) tea.Cmd {
+	m.ensureDownloader()
+	queued := 0
+	for _, t := range ts {
+		if t.URL == "" || m.downloader.HasPendingJob(t.ID) {
+			continue
+		}
+		m.downloader.Enqueue(t.ID, t.Title, t.Artist, t.URL, m.downloadDir(), t.CoverURL)
+		queued++
+	}
+	if queued == 0 {
+		m.setStatus("Nothing new to download")
+		return nil
+	}
+	m.switchPage(PageDownloads) // show the jobs that just started
+	m.setStatus(fmt.Sprintf("Downloading %d track(s)", queued))
+	return downloadCmd(m.downloader)
 }
 
 // queueTracks is queueAll for songs already resolved: a playlist's.
