@@ -26,7 +26,7 @@ func TestRecentSources(t *testing.T) {
 // Only the newest sourcesKept are kept.
 func TestRecentSourcesTrimmed(t *testing.T) {
 	d := openTestDB(t)
-	for i := 0; i < sourcesKept+5; i++ {
+	for i := range sourcesKept + 5 {
 		if err := d.RecordSource(Source{Kind: "album", ID: string(rune('a'+i%26)) + string(rune('a'+i/26))}); err != nil {
 			t.Fatal(err)
 		}

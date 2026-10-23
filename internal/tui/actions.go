@@ -2,6 +2,7 @@ package tui
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
@@ -50,6 +51,29 @@ func (m *Model) queueAll(list []search.Result) tea.Cmd {
 		ts[i] = m.resolveTrack(r)
 	}
 	return m.queueTracks(ts)
+}
+
+// downloadAll enqueues every track in ts for download, skipping any that
+// are already downloaded or in the download queue. On-screen lists
+// already carry a watch URL, so — unlike the single-track x path, which
+// may have to resolve a bare track — no resolve step is needed here.
+func (m *Model) downloadAll(ts []queue.Track) tea.Cmd {
+	m.ensureDownloader()
+	queued := 0
+	for _, t := range ts {
+		if t.URL == "" || t.Downloaded || m.downloader.HasPendingJob(t.ID) {
+			continue
+		}
+		m.downloader.Enqueue(t.ID, t.Title, t.Artist, t.URL, m.downloadDir(), t.CoverURL)
+		queued++
+	}
+	if queued == 0 {
+		m.setStatus("Nothing new to download")
+		return nil
+	}
+	m.switchPage(PageDownloads) // show the jobs that just started
+	m.setStatus(fmt.Sprintf("Downloading %d track(s)", queued))
+	return downloadCmd(m.downloader)
 }
 
 // queueTracks is queueAll for songs already resolved: a playlist's.
@@ -111,6 +135,7 @@ func (m *Model) activateSelection() tea.Cmd {
 				m.albumSeq++
 				m.albumCoverURL = a.CoverURL
 				m.setStatus("Opening " + a.Title + "…")
+				m.saveBrowseRestore()
 				return openAlbumCmd(a, m.albumSeq)
 			}
 			return nil
@@ -438,6 +463,7 @@ func (m *Model) openAlbumOfSelected() tea.Cmd {
 	// The song's own thumbnail is the album's art; the fetched page
 	// refines it in handleAlbumTracks.
 	m.albumCoverURL = t.CoverURL
+	m.saveBrowseRestore()
 	name := albumLabel(t.Album)
 	if name == "" {
 		name = "album"
@@ -492,6 +518,7 @@ func (m *Model) openArtistOfSelected() tea.Cmd {
 	m.artistSeq++
 	m.browseLoadingName = who
 	m.setStatus("Opening " + who + "…")
+	m.saveBrowseRestore()
 	if t.ArtistBrowseID == "" {
 		// Queue and history rows saved before tracks carried an artist
 		// id; the album they name knows who made it.

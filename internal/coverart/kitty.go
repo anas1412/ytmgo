@@ -212,10 +212,3 @@ func fit(img image.Image, maxW, maxH int) image.Image {
 	}
 	return dst
 }
-
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
-}

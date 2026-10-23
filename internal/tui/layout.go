@@ -51,10 +51,7 @@ func openInOS(path string) error {
 func (m Model) panelHeight() int {
 	// Fixed overhead: header(1) + status(1) + player(6) + help(1) + border(2) = 11
 	overhead := 11
-	h := m.height - overhead
-	if h < 1 {
-		h = 1
-	}
+	h := max(m.height-overhead, 1)
 	return h
 }
 
@@ -91,24 +88,15 @@ func (m Model) visibleItems() int {
 			strip = albumStripRows
 		}
 		if m.streamShowsTracks() {
-			n := h - strip - 1
-			if n < 1 {
-				n = 1
-			}
+			n := max(h-strip-1, 1)
 			return n
 		}
 		if strip > 0 {
-			n := (h - 1 - strip) / 2
-			if n < 1 {
-				n = 1
-			}
+			n := max((h-1-strip)/2, 1)
 			return n
 		}
 	}
-	n := (h - 1) / 2
-	if n < 1 {
-		n = 1
-	}
+	n := max((h-1)/2, 1)
 	return n
 }
 
@@ -122,10 +110,7 @@ func (m Model) rightPanelSplit() (queueContentH, lyricsContentH int) {
 		return m.panelHeight() - 2, 0
 	}
 	total := m.panelHeight() - 4
-	lyricsContentH = total * bottomPaneRatio / 100
-	if lyricsContentH < bottomPaneMin {
-		lyricsContentH = bottomPaneMin
-	}
+	lyricsContentH = max(total*bottomPaneRatio/100, bottomPaneMin)
 	if total-lyricsContentH < topPaneMin {
 		lyricsContentH = total - topPaneMin
 	}
@@ -192,10 +177,7 @@ func (m Model) leftPanelSplit() (resultsH, npH int) {
 	}
 	// Same ratio and minimums as the lyrics pane opposite, so the two
 	// bottom panels are one height and their borders align.
-	npH = total * bottomPaneRatio / 100
-	if npH < bottomPaneMin {
-		npH = bottomPaneMin
-	}
+	npH = max(total*bottomPaneRatio/100, bottomPaneMin)
 	if total-npH < topPaneMin {
 		npH = total - topPaneMin
 	}
@@ -213,10 +195,7 @@ func (m Model) npFits() bool {
 // height and shows (height - 1) / 2 two-line rows.
 func (m Model) queueVisibleItems() int {
 	qh, _ := m.rightPanelSplit()
-	n := (qh - 1) / 2
-	if n < 1 {
-		n = 1
-	}
+	n := max((qh-1)/2, 1)
 	return n
 }
 
@@ -236,10 +215,7 @@ func (m Model) settingsVisibleItems() int {
 // settingsInnerWidth is the width one settings row is laid out in,
 // derived exactly as renderSettingsPanels derives it.
 func (m Model) settingsInnerWidth() int {
-	panelWidth := (m.width-2)/2 - 2
-	if panelWidth < 10 {
-		panelWidth = 10
-	}
+	panelWidth := max((m.width-2)/2-2, 10)
 	return max(1, panelWidth-2)
 }
 

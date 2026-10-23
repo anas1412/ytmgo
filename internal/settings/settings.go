@@ -178,7 +178,7 @@ func userDataDir() (string, error) {
 func (s *Settings) ResolveLibraryDirs() []string {
 	var out []string
 	home, _ := os.UserHomeDir()
-	for _, part := range strings.Split(s.LibraryDirs, ",") {
+	for part := range strings.SplitSeq(s.LibraryDirs, ",") {
 		p := strings.TrimSpace(part)
 		// A folder dropped onto the terminal arrives however the
 		// terminal likes to paste it: quoted, as a file:// URL, or with

@@ -50,10 +50,7 @@ const (
 // wraps rather than truncates, so an input rendering wider than its box
 // loses the text it renders past the edge.
 func searchBoxWidth(termW int) int {
-	w := termW / 3
-	if w < searchBoxMin {
-		w = searchBoxMin
-	}
+	w := max(termW/3, searchBoxMin)
 	if w > searchBoxMax {
 		w = searchBoxMax
 	}
@@ -343,10 +340,7 @@ func (m Model) renderSettingsPage() string {
 // renderSettingsPanels renders the left (settings) and right (shortcuts) panels.
 func (m Model) renderSettingsPanels() string {
 	outerWidth := (m.width - 2) / 2
-	panelWidth := outerWidth - 2
-	if panelWidth < 10 {
-		panelWidth = 10
-	}
+	panelWidth := max(outerWidth-2, 10)
 	panelHeight := m.panelHeight()
 
 	// Both titles ride the top border, the way every other panel's
@@ -373,10 +367,7 @@ func (m Model) renderSettingsPanels() string {
 		m.renderHelpPanel(panelWidth, contentH), panelWidth, contentH)
 
 	// Horizontal spacer between columns
-	leftover := m.width - lipgloss.Width(leftPanel) - lipgloss.Width(rightPanel)
-	if leftover < 1 {
-		leftover = 1
-	}
+	leftover := max(m.width-lipgloss.Width(leftPanel)-lipgloss.Width(rightPanel), 1)
 	spacer := strings.Repeat(" ", leftover)
 
 	return lipgloss.JoinHorizontal(lipgloss.Top, leftPanel, spacer, rightPanel)
@@ -433,10 +424,7 @@ func (m Model) renderHeader() string {
 	// [X], so the two panel toggles are advertised together in one place.
 	left := lipgloss.JoinHorizontal(lipgloss.Center, logo, searchView, "  ", m.tabHint())
 
-	gap := m.width - lipgloss.Width(left) - lipgloss.Width(tabsStr) - 2
-	if gap < 1 {
-		gap = 1
-	}
+	gap := max(m.width-lipgloss.Width(left)-lipgloss.Width(tabsStr)-2, 1)
 	spacer := strings.Repeat(" ", gap)
 
 	// Hard-truncate: a header wider than the terminal wraps to a second
@@ -460,10 +448,7 @@ func (m Model) renderPanels() string {
 	// of the 1-char spacer), no matter the terminal width. Do NOT clamp
 	// to a hard minimum — that would overflow when the terminal is narrow.
 	outerWidth := (m.width - 2) / 2
-	panelWidth := outerWidth - 2
-	if panelWidth < 10 {
-		panelWidth = 10
-	}
+	panelWidth := max(outerWidth-2, 10)
 
 	panelHeight := m.panelHeight()
 
@@ -632,10 +617,7 @@ func (m Model) renderPanels() string {
 	}
 
 	// Calculate precise spaces to spread across the horizontal plane
-	leftover := m.width - lipgloss.Width(leftPanel) - lipgloss.Width(rightPanel)
-	if leftover < 1 {
-		leftover = 1
-	}
+	leftover := max(m.width-lipgloss.Width(leftPanel)-lipgloss.Width(rightPanel), 1)
 	spacer := strings.Repeat(" ", leftover)
 
 	return lipgloss.JoinHorizontal(lipgloss.Top, leftPanel, spacer, rightPanel)
@@ -719,15 +701,9 @@ func (m Model) renderStreamList(width, height int) string {
 	}
 
 	var lines []string
-	maxItems := (height - 1) / 2
-	if maxItems < 1 {
-		maxItems = 1
-	}
+	maxItems := max((height-1)/2, 1)
 	start := m.searchOffset
-	end := start + maxItems
-	if end > len(m.results) {
-		end = len(m.results)
-	}
+	end := min(start+maxItems, len(m.results))
 
 	for i := start; i < end; i++ {
 		isSelected := !m.searchFocused && m.activePanel == PanelSearch && i == m.searchCursor
@@ -764,10 +740,8 @@ func (m Model) vizBars() int {
 	// The spectrum owns the whole panel now — the artwork moved to the
 	// player bar, so nothing is subtracted for it any more.
 	avail := (m.width-2)/2 - 4
-	n := avail / 3 // roughly two cells per bar plus a gap
-	if n < 4 {
-		n = 4
-	}
+	// roughly two cells per bar plus a gap
+	n := max(avail/3, 4)
 	if n > 128 {
 		n = 128
 	}
@@ -792,10 +766,7 @@ func coverFitCells(img image.Image, maxCols, maxRows int) (cols, rows int) {
 	cols = int(float64(rows)*coverart.CellAspect/ratio + 0.5)
 	if cols > maxCols {
 		cols = maxCols
-		rows = int(float64(cols)*ratio/coverart.CellAspect + 0.5)
-		if rows > maxRows {
-			rows = maxRows
-		}
+		rows = min(int(float64(cols)*ratio/coverart.CellAspect+0.5), maxRows)
 	}
 	if cols < 1 || rows < 1 {
 		return 0, 0
@@ -869,7 +840,7 @@ func renderArtBlock(img image.Image, url string, cols, rows, height, sendN, kitt
 	}
 	top := max(0, (height-rows)/2)
 	out := make([]string, 0, height)
-	for i := 0; i < top; i++ {
+	for range top {
 		out = append(out, "")
 	}
 
@@ -1058,10 +1029,10 @@ func (m Model) renderSpectrum(width, height int) []string {
 	edge := func(i int) int { return i * width / n }
 
 	rows := make([]string, 0, height)
-	for row := 0; row < height; row++ {
+	for row := range height {
 		remaining := height - row
 		var b strings.Builder
-		for i := 0; i < n; i++ {
+		for i := range n {
 			span := edge(i+1) - edge(i)
 			if span < 1 {
 				continue
@@ -1234,10 +1205,7 @@ func (m Model) renderAlbums(width, height int) string {
 	// with no name on it says nothing about whose they are.
 	head := m.browseStrip(rowW, nil)
 	lines = append(lines, head...)
-	maxItems := (height - 1 - len(head)) / 2
-	if maxItems < 1 {
-		maxItems = 1
-	}
+	maxItems := max((height-1-len(head))/2, 1)
 	start := m.searchOffset
 	albums := m.streamAlbums()
 	end := min(start+maxItems, len(albums))
@@ -1297,10 +1265,7 @@ func (m Model) renderAlbumTracks(width, height int) string {
 	// so repeating it under every row bought nothing and halved the
 	// visible tracks. A track's own artist shows only when it differs —
 	// features, compilations — dimmed after the title.
-	maxItems := height - albumStripRows - 1
-	if maxItems < 1 {
-		maxItems = 1
-	}
+	maxItems := max(height-albumStripRows-1, 1)
 	start := m.searchOffset
 	end := min(start+maxItems, len(tracks))
 
@@ -1358,10 +1323,7 @@ func (m Model) renderAlbumTracks(width, height int) string {
 // stray row or an over-wide line would shift every mouse hit zone.
 func boxTitled(title string, borderColor lipgloss.TerminalColor, content string, panelWidth, contentH int) string {
 	bs := lipgloss.NewStyle().Foreground(borderColor)
-	fill := panelWidth - lipgloss.Width(title) - 3
-	if fill < 0 {
-		fill = 0
-	}
+	fill := max(panelWidth-lipgloss.Width(title)-3, 0)
 	var b strings.Builder
 	b.WriteString(bs.Render("╭─ "))
 	b.WriteString(title)
@@ -1369,7 +1331,7 @@ func boxTitled(title string, borderColor lipgloss.TerminalColor, content string,
 
 	side := bs.Render("│")
 	lines := strings.Split(content, "\n")
-	for i := 0; i < contentH; i++ {
+	for i := range contentH {
 		line := ""
 		if i < len(lines) {
 			line = truncate(lines[i], panelWidth)
@@ -1407,10 +1369,7 @@ func renderAlbumTrackLine(prefix, title, byline, right string, isSelected bool, 
 		bg = lipgloss.NewStyle().Width(width)
 	}
 	left := titleStyle.Render(prefix+title) + byStyle.Render(byline)
-	gap := width - lipgloss.Width(left) - lipgloss.Width(right)
-	if gap < 1 {
-		gap = 1
-	}
+	gap := max(width-lipgloss.Width(left)-lipgloss.Width(right), 1)
 	return bg.Render(truncate(left+gapStyle.Render(strings.Repeat(" ", gap))+rightStyle.Render(right), width))
 }
 
@@ -1461,15 +1420,9 @@ func (m Model) renderLibrary(width, height int) string {
 	// right-hand column.
 	rowW := max(1, width-2)
 	var lines []string
-	maxItems := (height - 1) / 2
-	if maxItems < 1 {
-		maxItems = 1
-	}
+	maxItems := max((height-1)/2, 1)
 	start := m.libraryOffset
-	end := start + maxItems
-	if end > len(tracks) {
-		end = len(tracks)
-	}
+	end := min(start+maxItems, len(tracks))
 
 	for i := start; i < end; i++ {
 		isSelected := !m.searchFocused && m.activePanel == PanelSearch && i == m.libraryCursor
@@ -1503,10 +1456,7 @@ func (m Model) renderLibrary(width, height int) string {
 		if maxLeft > 3 {
 			leftInfo = truncate(leftInfo, maxLeft)
 		}
-		spacing := rowW - lipgloss.Width(leftInfo) - lipgloss.Width(rightInfo)
-		if spacing < 1 {
-			spacing = 1
-		}
+		spacing := max(rowW-lipgloss.Width(leftInfo)-lipgloss.Width(rightInfo), 1)
 		info := leftInfo + strings.Repeat(" ", spacing) + rightInfo
 
 		lines = append(lines, renderListItemBlock(line, info, isSelected, false, rowW))
@@ -1556,15 +1506,9 @@ func (m Model) renderFavoriteSongs(width, height int) string {
 	// right-hand column.
 	rowW := max(1, width-2)
 	var lines []string
-	maxItems := (height - 1) / 2
-	if maxItems < 1 {
-		maxItems = 1
-	}
+	maxItems := max((height-1)/2, 1)
 	start := m.favOffset
-	end := start + maxItems
-	if end > len(tracks) {
-		end = len(tracks)
-	}
+	end := min(start+maxItems, len(tracks))
 
 	for i := start; i < end; i++ {
 		isSelected := !m.searchFocused && m.activePanel == PanelSearch && i == m.favCursor
@@ -1591,10 +1535,7 @@ func (m Model) renderFavoriteSongs(width, height int) string {
 		if maxLeft > 3 {
 			leftInfo = truncate(leftInfo, maxLeft)
 		}
-		spacing := rowW - lipgloss.Width(leftInfo) - lipgloss.Width(rightInfo)
-		if spacing < 1 {
-			spacing = 1
-		}
+		spacing := max(rowW-lipgloss.Width(leftInfo)-lipgloss.Width(rightInfo), 1)
 		info := leftInfo + strings.Repeat(" ", spacing) + rightInfo
 
 		lines = append(lines, renderListItemBlock(line, info, isSelected, false, rowW))
@@ -1634,15 +1575,9 @@ func (m Model) renderHistory(width, height int) string {
 	// right-hand column.
 	rowW := max(1, width-2)
 	var lines []string
-	maxItems := (height - 1) / 2
-	if maxItems < 1 {
-		maxItems = 1
-	}
+	maxItems := max((height-1)/2, 1)
 	start := m.historyOffset
-	end := start + maxItems
-	if end > len(entries) {
-		end = len(entries)
-	}
+	end := min(start+maxItems, len(entries))
 
 	for i := start; i < end; i++ {
 		isSelected := !m.searchFocused && m.activePanel == PanelSearch && i == m.historyCursor
@@ -1666,10 +1601,7 @@ func (m Model) renderHistory(width, height int) string {
 		if maxLeft > 3 {
 			leftInfo = truncate(leftInfo, maxLeft)
 		}
-		spacing := rowW - lipgloss.Width(leftInfo) - lipgloss.Width(timeAgo)
-		if spacing < 1 {
-			spacing = 1
-		}
+		spacing := max(rowW-lipgloss.Width(leftInfo)-lipgloss.Width(timeAgo), 1)
 		info := leftInfo + strings.Repeat(" ", spacing) + timeAgo
 
 		lines = append(lines, renderListItemBlock(line, info, isSelected, false, rowW))
@@ -1715,10 +1647,7 @@ func (m Model) formatResultRow(idx int, r search.Result, width int, isSelected b
 		leftInfo = truncate(leftInfo, maxLeft)
 	}
 
-	spacing := width - lipgloss.Width(leftInfo) - lipgloss.Width(rightInfo)
-	if spacing < 1 {
-		spacing = 1
-	}
+	spacing := max(width-lipgloss.Width(leftInfo)-lipgloss.Width(rightInfo), 1)
 	info := leftInfo + strings.Repeat(" ", spacing) + rightInfo
 
 	return renderListItemBlock(line, info, isSelected, false, width)
@@ -1735,17 +1664,11 @@ func (m Model) renderQueue(width, height int) string {
 	}
 
 	var lines []string
-	maxItems := (height - 1) / 2
-	if maxItems < 1 {
-		maxItems = 1
-	}
+	maxItems := max((height-1)/2, 1)
 	// Spotify's order (queueorder.go): playing, next, then played.
 	order, live := m.queueOrder()
 	start := m.queueOffset
-	end := start + maxItems
-	if end > len(order) {
-		end = len(order)
-	}
+	end := min(start+maxItems, len(order))
 
 	for pos := start; pos < end; pos++ {
 		lines = append(lines, m.formatQueueRow(pos, live, tracks[order[pos]], width-2))
@@ -1814,10 +1737,7 @@ func (m Model) formatQueueRow(pos, live int, t queue.Track, width int) string {
 		leftInfo = truncate(leftInfo, maxLeft)
 	}
 
-	spacing := width - lipgloss.Width(leftInfo) - lipgloss.Width(rightInfo)
-	if spacing < 1 {
-		spacing = 1
-	}
+	spacing := max(width-lipgloss.Width(leftInfo)-lipgloss.Width(rightInfo), 1)
 	info := leftInfo + strings.Repeat(" ", spacing) + rightInfo
 
 	isSelected := m.activePanel == PanelQueue && pos == m.queueCursor
@@ -2005,7 +1925,7 @@ func (m Model) settingsRow(idx, innerW int) []string {
 	// lipgloss wraps to the style's width; the style's own left padding
 	// is part of that width, so wrap at innerW and let it do the maths.
 	wrapped := styleSettingsDesc.Width(innerW).Render(def.desc(&m))
-	for _, l := range strings.Split(wrapped, "\n") {
+	for l := range strings.SplitSeq(wrapped, "\n") {
 		out = append(out, truncate(l, innerW))
 	}
 	return append(out, "")
@@ -2055,7 +1975,7 @@ func (m Model) renderSettingsList(panelWidth, panelHeight int) string {
 	// cut off, it lost the half naming the keys that leave the page.
 	// The page numbers are not named here: the tabs carry them, and
 	// they work on every page rather than this one.
-	for _, l := range strings.Split(styleSettingsDesc.Width(innerW).
+	for l := range strings.SplitSeq(styleSettingsDesc.Width(innerW).
 		Render("↑↓ navigate · Enter toggle/edit · Esc cancel edit"), "\n") {
 		lines = append(lines, truncate(l, innerW))
 	}
@@ -2202,7 +2122,7 @@ func (m Model) renderPlayerBar() string {
 		// keeps the text from shifting while the art loads.
 		cover := m.renderCoverBlock(m.playerCoverFit())
 		lines := make([]string, 4)
-		for i := 0; i < 4; i++ {
+		for i := range 4 {
 			c := ""
 			if i < len(cover) {
 				c = cover[i]
@@ -2238,10 +2158,7 @@ func (m Model) playerCoverFit() (cols, rows, height int) {
 // ─── Help Bar ──────────────────────────────────────────────────────
 
 func (m Model) renderHelpBar() string {
-	width := m.width
-	if width < 10 {
-		width = 10
-	}
+	width := max(m.width, 10)
 
 	margin := 2
 	innerWidth := width - 2*margin
@@ -2275,10 +2192,7 @@ func (m Model) renderHelpBar() string {
 
 	leftW := lipgloss.Width(left)
 	rightW := lipgloss.Width(right)
-	gap := innerWidth - leftW - rightW
-	if gap < 1 {
-		gap = 1
-	}
+	gap := max(innerWidth-leftW-rightW, 1)
 	// Hard-truncate so the help bar can never wrap (see renderStatus).
 	return truncate(strings.Repeat(" ", margin)+left+strings.Repeat(" ", gap)+right+strings.Repeat(" ", margin), m.width)
 }
@@ -2334,7 +2248,7 @@ func (m Model) renderHelpPanel(panelWidth, panelHeight int) string {
 		colW := innerW / 2
 		rows := (len(entries) + 1) / 2
 		left, right := entries[:rows], entries[rows:]
-		for i := 0; i < rows; i++ {
+		for i := range rows {
 			l := truncate(left[i], colW)
 			l += strings.Repeat(" ", max(0, colW-lipgloss.Width(l)))
 			r := ""

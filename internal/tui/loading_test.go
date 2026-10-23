@@ -68,8 +68,8 @@ func TestBothBrowseLoadsLookTheSame(t *testing.T) {
 
 	// And the titles match, rather than one keeping a title whose keys
 	// do nothing yet.
-	at := strings.Split(loadingArtist.renderPanels(), "\n")[0]
-	bt := strings.Split(loadingAlbum.renderPanels(), "\n")[0]
+	at, _, _ := strings.Cut(loadingArtist.renderPanels(), "\n")
+	bt, _, _ := strings.Cut(loadingAlbum.renderPanels(), "\n")
 	if at != bt {
 		t.Errorf("the two loads carry different titles:\n%s\n%s", at, bt)
 	}

@@ -59,7 +59,7 @@ const multiArtistRow = `{
 }`
 
 func TestParseSearchItemMultiArtist(t *testing.T) {
-	var item interface{}
+	var item any
 	if err := json.Unmarshal([]byte(multiArtistRow), &item); err != nil {
 		t.Fatal(err)
 	}

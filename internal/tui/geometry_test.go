@@ -40,7 +40,7 @@ func worstCaseModel(t *testing.T, w, h int) Model {
 	m = nm.(Model)
 
 	long := "ラブ・ストーリーは突然に - Love Story Wa Totsuzenni (Extended Album Version)"
-	for i := 0; i < 30; i++ {
+	for range 30 {
 		m.queue.Add(queue.Track{
 			ID:          "sZxzPcT1Meg",
 			Title:       long,
@@ -49,7 +49,7 @@ func worstCaseModel(t *testing.T, w, h int) Model {
 			DurationSec: 288,
 		})
 	}
-	for i := 0; i < 20; i++ {
+	for range 20 {
 		m.results = append(m.results, search.Result{
 			ID: "m9SMT5ipbxk", Title: long, Uploader: "YOASOBI feat. somebody with a long name", Duration: 213,
 		})
@@ -105,7 +105,7 @@ func TestLayoutGeometryAlbums(t *testing.T) {
 		// Album list.
 		m := worstCaseModel(t, w, h)
 		m.albumMode = true
-		for i := 0; i < 25; i++ {
+		for range 25 {
 			m.albums = append(m.albums, ytmusic.Album{
 				BrowseID: "MPREb_x", Title: long,
 				Artist: "小田和正 Kazumasa Oda and Friends", Year: "2015",
@@ -119,7 +119,7 @@ func TestLayoutGeometryAlbums(t *testing.T) {
 		m.openAlbum = &alb
 		m.albumArtImg = image.NewRGBA(image.Rect(0, 0, 544, 544))
 		m.albumArtURL = "https://example/album.jpg"
-		for i := 0; i < 25; i++ {
+		for range 25 {
 			m.albumTracks = append(m.albumTracks, search.Result{
 				ID: "sZxzPcT1Meg", Title: "ラブ・ストーリーは突然に - " + long,
 				Uploader: "Mild High Club", Duration: 214,
@@ -187,8 +187,8 @@ func TestLayoutGeometrySettingsPage(t *testing.T) {
 // miscount would shift every mouse hit zone in that column.
 func TestLayoutGeometryNowPlaying(t *testing.T) {
 	img := image.NewRGBA(image.Rect(0, 0, 544, 544))
-	for y := 0; y < 544; y++ {
-		for x := 0; x < 544; x++ {
+	for y := range 544 {
+		for x := range 544 {
 			img.Set(x, y, color.RGBA{uint8(x % 256), uint8(y % 256), 90, 255})
 		}
 	}
@@ -266,8 +266,8 @@ func TestCoverEscapesSurviveDiscardedFrames(t *testing.T) {
 	t.Setenv("KITTY_WINDOW_ID", "1")
 
 	img := image.NewRGBA(image.Rect(0, 0, 544, 544))
-	for y := 0; y < 544; y++ {
-		for x := 0; x < 544; x++ {
+	for y := range 544 {
+		for x := range 544 {
 			img.Set(x, y, color.RGBA{uint8(x % 256), 40, 90, 255})
 		}
 	}
@@ -281,7 +281,7 @@ func TestCoverEscapesSurviveDiscardedFrames(t *testing.T) {
 
 	// Rendering the same state repeatedly must keep carrying the
 	// transmit — View is pure, so a discarded frame changes nothing.
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		if !strings.Contains(m.View(), "\x1b_Ga=t") {
 			t.Fatalf("render %d dropped the transmit even though Update still owes it", i)
 		}
@@ -290,7 +290,7 @@ func TestCoverEscapesSurviveDiscardedFrames(t *testing.T) {
 	// Once Update has counted the frames down, only the cheap placement
 	// is emitted — re-sending the pixels every frame is what caused the
 	// lag.
-	for i := 0; i < coverSendFrames; i++ {
+	for range coverSendFrames {
 		nm, _ := m.Update(tickMsg{})
 		m = nm.(Model)
 	}
@@ -306,12 +306,12 @@ func TestCoverEscapesSurviveDiscardedFrames(t *testing.T) {
 	// stays on screen over whatever is drawn next.
 	m.playerState = player.StateStopped
 	m.coverClearN = coverSendFrames
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		if !strings.Contains(m.View(), "\x1b_Ga=d") {
 			t.Fatalf("render %d after closing dropped the delete", i)
 		}
 	}
-	for i := 0; i < coverSendFrames; i++ {
+	for range coverSendFrames {
 		nm, _ := m.Update(tickMsg{})
 		m = nm.(Model)
 	}
@@ -390,7 +390,7 @@ func TestTransmitSurvivesMessageStorm(t *testing.T) {
 	m = nm.(Model)
 
 	// Messages keep arriving; nothing is flushed in between.
-	for i := 0; i < 4; i++ {
+	for range 4 {
 		nm, _ = m.Update(playerTickMsg{})
 		m = nm.(Model)
 	}
@@ -403,7 +403,7 @@ func TestTransmitSurvivesMessageStorm(t *testing.T) {
 	}
 
 	// Once the terminal holds it, the payload must not ride every frame.
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		nm, _ = m.Update(playerTickMsg{})
 		m = nm.(Model)
 	}
@@ -436,7 +436,7 @@ func TestLayoutGeometryLyrics(t *testing.T) {
 			m.lyricsOn = on
 			m.lyricsTrackID = "sZxzPcT1Meg"
 			m.lyricsSynced = true
-			for i := 0; i < 40; i++ {
+			for i := range 40 {
 				m.lyricLines = append(m.lyricLines, lyrics.Line{
 					Time: float64(i * 10),
 					Text: "ラブ・ストーリーは突然に long lyric line to stress the width",
@@ -661,7 +661,7 @@ func TestAlbumClickMatchesRow(t *testing.T) {
 
 	// Find where each numbered row actually renders, then click it.
 	lines := strings.Split(m.View(), "\n")
-	for want := 0; want < 3; want++ {
+	for want := range 3 {
 		marker := fmt.Sprintf("%02d. ", want+1)
 		row := -1
 		for i, l := range lines {
@@ -807,7 +807,7 @@ func TestDownloadJumpsToDownloadsPage(t *testing.T) {
 	m.downloader.Close()
 	// Wait for the worker to finish failing the job, so its mkdir
 	// cannot race the temp dir's cleanup.
-	for i := 0; i < 100; i++ {
+	for range 100 {
 		if st := m.downloader.Jobs()[0].Status; st != 0 && m.downloader.Jobs()[0].Progress == 0 {
 			break
 		}
@@ -983,7 +983,7 @@ func TestUnplayableTracksStopRatherThanRaceThroughTheQueue(t *testing.T) {
 // track that plays must not add up to a stop.
 func TestNaturalEndClearsTheFailureRun(t *testing.T) {
 	m := worstCaseModel(t, 150, 40)
-	for i := 0; i < maxFailedInARow-1; i++ {
+	for range maxFailedInARow - 1 {
 		nm, _ := m.handleSongEnded(SongEndedMsg{Natural: false})
 		m = nm.(Model)
 	}
@@ -1045,7 +1045,7 @@ func artistModel(t *testing.T, w, h int, showAlbums bool) Model {
 	a := ytmusic.ArtistPage{
 		BrowseID: "UCRr1xG_2WIDs18a6cIiCxeA", Name: long, Subscribers: "7.17M",
 	}
-	for i := 0; i < 20; i++ {
+	for range 20 {
 		a.Albums = append(a.Albums, ytmusic.Album{
 			BrowseID: "MPREb_x", Title: "ラブ・ストーリーは突然に - " + long, Artist: long, Year: "2015",
 		})
@@ -1055,7 +1055,7 @@ func artistModel(t *testing.T, w, h int, showAlbums bool) Model {
 	m.artistShowsAlbums = showAlbums
 	m.albumMode = showAlbums
 	if !showAlbums {
-		for i := 0; i < 100; i++ {
+		for range 100 {
 			m.artistSongs = append(m.artistSongs, search.Result{
 				ID: "sZxzPcT1Meg", Title: "ラブ・ストーリーは突然に - " + long,
 				Uploader: long, Duration: 214,

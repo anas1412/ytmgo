@@ -87,7 +87,7 @@ func TestLocate(t *testing.T) {
 		}, nil
 	}}
 	song := queue.Track{ID: "y", Title: "End of Beginning", Artist: "Djo"}
-	for i := 0; i < 2; i++ {
+	for range 2 {
 		got, err := a.Locate(song)
 		if err != nil || got.AlbumBrowseID != "MPREb_decide" || got.ArtistBrowseID != "UCdjo" || got.Album != "DECIDE" {
 			t.Fatalf("got %+v, %v", got, err)

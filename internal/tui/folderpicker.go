@@ -3,6 +3,7 @@ package tui
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/filepicker"
@@ -22,10 +23,7 @@ const pickerChromeRows = 3
 
 // pickerHeight is how many entries the list can show in the panel.
 func (m Model) pickerHeight() int {
-	h := m.panelHeight() - 2 - pickerChromeRows
-	if h < 3 {
-		h = 3
-	}
+	h := max(m.panelHeight()-2-pickerChromeRows, 3)
 	return h
 }
 
@@ -82,11 +80,9 @@ func (m Model) handlePickerKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 // folder already listed is left alone rather than listed twice.
 func (m *Model) addLibraryFolder(dir string) tea.Cmd {
 	dir = filepath.Clean(dir)
-	for _, have := range m.settings.ResolveLibraryDirs() {
-		if have == dir {
-			m.setStatus("Already in the library: " + shortenHome(dir))
-			return nil
-		}
+	if slices.Contains(m.settings.ResolveLibraryDirs(), dir) {
+		m.setStatus("Already in the library: " + shortenHome(dir))
+		return nil
 	}
 	if m.settings.LibraryDirs == "" {
 		m.settings.LibraryDirs = dir
@@ -156,7 +152,7 @@ func (m Model) renderFolderPicker(width, height int) string {
 		" " + styleTextDim.Render(truncate("space add this folder · enter open · backspace up · esc cancel", w-1)),
 		"",
 	}
-	for _, l := range strings.Split(strings.TrimRight(m.folderPicker.View(), "\n"), "\n") {
+	for l := range strings.SplitSeq(strings.TrimRight(m.folderPicker.View(), "\n"), "\n") {
 		lines = append(lines, truncate(l, w))
 	}
 	// Exact height, like every panel: the layout and the mouse both

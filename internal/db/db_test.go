@@ -91,7 +91,7 @@ func TestFavoritesKeepURL(t *testing.T) {
 func TestRecordPlayDedupsConsecutive(t *testing.T) {
 	d := openTestDB(t)
 	tr := queue.Track{ID: "aaaaaaaaaaa", Title: "T", Artist: "A"}
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		if err := d.RecordPlay(tr); err != nil {
 			t.Fatalf("RecordPlay: %v", err)
 		}

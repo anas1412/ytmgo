@@ -7,7 +7,7 @@ import (
 
 func mkQueue(n int) *Queue {
 	q := New()
-	for i := 0; i < n; i++ {
+	for i := range n {
 		q.Add(Track{ID: string(rune('a' + i)), Title: "t"})
 	}
 	return q
@@ -15,7 +15,7 @@ func mkQueue(n int) *Queue {
 
 func TestNextLinear(t *testing.T) {
 	q := mkQueue(3)
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		tr, ok := q.Next()
 		if !ok {
 			t.Fatalf("Next %d returned !ok", i)
@@ -33,7 +33,7 @@ func TestNextRepeatOne(t *testing.T) {
 	q := mkQueue(2)
 	q.Next() // now at index 0
 	q.ToggleRepeat()
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		tr, ok := q.Next()
 		if !ok || tr.ID != "a" {
 			t.Fatalf("repeat-one Next = %s ok=%v, want a", tr.ID, ok)
@@ -45,7 +45,7 @@ func TestNextRepeatAllWraps(t *testing.T) {
 	q := mkQueue(2)
 	q.ToggleRepeatAll()
 	ids := []string{}
-	for i := 0; i < 4; i++ {
+	for range 4 {
 		tr, ok := q.Next()
 		if !ok {
 			t.Fatal("repeat-all should never exhaust")
@@ -213,7 +213,7 @@ func TestPrevFollowsShuffleOrder(t *testing.T) {
 	if cur, ok := q.Current(); ok {
 		played = append(played, cur.ID)
 	}
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		t2, ok := q.Skip()
 		if !ok {
 			t.Fatalf("Skip %d failed early", i)

@@ -6,6 +6,8 @@ package tui
 // places in that list; these turn them into places in the queue and
 // back.
 
+import "slices"
+
 // queueOrder is the queue in the panel's order, as indices into
 // queue.Tracks, and how many of them are the playing track and what
 // comes next (the rest have played).
@@ -16,8 +18,8 @@ func (m Model) queueOrder() (order []int, live int) {
 	}
 	order = append(order, next...)
 	live = len(order)
-	for i := len(played) - 1; i >= 0; i-- {
-		order = append(order, played[i])
+	for _, p := range slices.Backward(played) {
+		order = append(order, p)
 	}
 	return order, live
 }

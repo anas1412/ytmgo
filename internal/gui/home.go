@@ -77,13 +77,11 @@ func (a *App) Home() (HomeView, error) {
 	found := make([]string, len(top))
 	var wg sync.WaitGroup
 	for i, e := range top {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			if t, err := a.Locate(queue.Track{ID: e.TrackID, Title: e.Title, Artist: e.Artist}); err == nil {
 				found[i] = t.ArtistBrowseID
 			}
-		}()
+		})
 	}
 	wg.Wait()
 	for _, id := range found {
@@ -297,9 +295,7 @@ func (a *App) artistPages(ids []string) map[string]ytmusic.ArtistPage {
 	// An artist can be listed twice (followed, and in the top artists);
 	// fetched at the same moment, both would miss the cache.
 	for _, id := range slices.Compact(slices.Sorted(slices.Values(ids))) {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			sem <- struct{}{}
 			defer func() { <-sem }()
 			if p, err := a.artistPage(id); err == nil {
@@ -307,7 +303,7 @@ func (a *App) artistPages(ids []string) map[string]ytmusic.ArtistPage {
 				out[id] = p
 				mu.Unlock()
 			}
-		}()
+		})
 	}
 	wg.Wait()
 	return out

@@ -80,7 +80,7 @@ func TestTwoAgainStepsFavTabs(t *testing.T) {
 	m := worstCaseModel(t, 150, 40)
 	m.activePage = PageStream
 	var tabs []int
-	for i := 0; i < 4; i++ {
+	for range 4 {
 		m = pressKeys(m, "2")
 		tabs = append(tabs, m.favTab)
 	}

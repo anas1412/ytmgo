@@ -160,7 +160,7 @@ func TestMigrateIsIdempotent(t *testing.T) {
 	if err := os.MkdirAll(filepath.Dir(newPath), 0755); err != nil {
 		t.Fatal(err)
 	}
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		if err := migrateLegacyDB(oldPath, newPath); err != nil {
 			t.Fatalf("run %d: %v", i+1, err)
 		}

@@ -131,6 +131,10 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		key := msg.String()
 		confirmed := key == "enter"
 		switch {
+		case key == "ctrl+c":
+			m.quitting = true
+			m.Shutdown()
+			return m, tea.Quit
 		case confirmed:
 			return m.executeConfirmedAction()
 		case key == "esc":
@@ -147,10 +151,18 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	// ── Global keybindings ───────────────────────────────
 	switch msg.String() {
-	case "q", "ctrl+c":
+	case "ctrl+c":
 		m.quitting = true
 		m.Shutdown()
 		return m, tea.Quit
+
+	case "q":
+		if !m.isConfirming() {
+			action := lipgloss.NewStyle().Foreground(colorText).Bold(true).Render("Quit ytmgo?")
+			m.startConfirm(confirmQuit, "")
+			m.setStatus(confirmStatus(action, ""))
+		}
+		return m, nil
 
 	case "?":
 		m.switchPage(PageSettings)
@@ -215,7 +227,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			// behind would put a query in the box that matches nothing
 			// on the screen it returns to.
 			m.searchInput.SetValue("")
-			m.resetStreamCursor()
+			m.restoreBrowseRestore()
 			m.setStatus("Back to results")
 			return m, m.refreshCoverCmd()
 		}
@@ -223,13 +235,13 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		// cover override leaves with it, restoring the playing art.
 		if m.activePage == PageStream && (m.openAlbum != nil || m.isLoadingAlbum || m.albumCoverURL != "") {
 			coverCmd := m.leaveAlbumView()
-			m.resetStreamCursor()
 			// An album opened from an artist steps back to that artist,
 			// not out of it. leaveAlbumView has just cleared the strip's
 			// art, so the artist's photo is fetched again.
 			if m.openArtist != nil {
 				m.artistShowsAlbums = true
 				m.albumMode = true
+				m.resetStreamCursor() // the artist's releases start at the top
 				m.setStatus(fmt.Sprintf("%s — %d releases", m.openArtist.Name, len(m.openArtist.Albums)))
 				if m.artistArtURL != "" {
 					m.albumSeq++
@@ -238,6 +250,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				}
 				return m, coverCmd
 			}
+			m.restoreBrowseRestore() // back to the results row the album was opened from
 			m.setStatus("Albums")
 			return m, coverCmd
 		}
@@ -453,6 +466,38 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.setStatus(fmt.Sprintf("Queued %d tracks", len(list)))
 		return m, cmd
 
+	case "X":
+		// Download the whole list on screen — the uppercase counterpart
+		// to x (download one). Same contexts as e: a pasted playlist, a
+		// search, or an artist's songs. Each track goes into the
+		// download folder.
+		if m.activePage == PagePlaylists && m.plOpen != nil && m.activePanel == PanelSearch {
+			if len(m.plOpen.Tracks) == 0 {
+				return m, nil
+			}
+			return m, m.downloadAll(m.plOpen.Tracks)
+		}
+		if !m.browsingHere() {
+			return m, nil
+		}
+		list := m.results
+		if m.streamShowsTracks() {
+			list = m.streamTracks()
+		} else if m.albumMode {
+			// The list on screen is releases, not tracks.
+			m.setStatus("Open an album to download its tracks")
+			return m, nil
+		}
+		if len(list) == 0 {
+			m.setStatus("Nothing to download")
+			return m, nil
+		}
+		ts := make([]queue.Track, len(list))
+		for i, r := range list {
+			ts[i] = m.resolveTrack(r)
+		}
+		return m, m.downloadAll(ts)
+
 	case "v":
 		// The visualizer: the spectrum beneath the results, on every
 		// page that has a results list.
@@ -520,15 +565,6 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.setStatus("Key hints hidden  (z to bring them back)")
 		}
 		return m, saveSettingsCmd(m.db, m.settings)
-
-	case "X":
-		// Downloads live on their own page; X jumps there and back.
-		if m.activePage == PageDownloads {
-			m.switchPage(PageStream)
-		} else {
-			m.switchPage(PageDownloads)
-		}
-		return m, nil
 
 	case "g":
 		m.moveCursorToEdge(false)
@@ -809,34 +845,23 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			tracks := m.filteredLibrary()
 			if m.libraryCursor >= 0 && m.libraryCursor < len(tracks) {
 				t := tracks[m.libraryCursor]
-				m.startConfirm(confirmDeleteTrack, t.Title)
-				// Styled confirmation: orange bullet, white action, mint Enter, pink Esc
-				bullet := lipgloss.NewStyle().Foreground(colorWarning).Render("●")
 				action := lipgloss.NewStyle().Foreground(colorText).Bold(true).Render("Delete")
 				title := lipgloss.NewStyle().Foreground(colorText).Render("\"" + t.Title + "\"?")
-				enterKey := lipgloss.NewStyle().Foreground(colorAccent2).Bold(true).Render("[Enter]")
-				enterDesc := lipgloss.NewStyle().Foreground(colorTextDim).Render("yes")
-				escKey := lipgloss.NewStyle().Foreground(colorAccent3).Bold(true).Render("[Esc]")
-				escDesc := lipgloss.NewStyle().Foreground(colorTextDim).Render("no")
-				m.setStatus(bullet + " " + action + " " + title + "  " + enterKey + " " + enterDesc + "  " + escKey + " " + escDesc)
+				m.startConfirm(confirmDeleteTrack, t.Title)
+				m.setStatus(confirmStatus(action, title))
+				return m, nil
 			}
 			return m, nil
 		}
-		return m, nil
 
 	case "D":
 		if m.queue.Len() == 0 {
 			return m, nil
 		}
 		if !m.isConfirming() {
-			m.startConfirm(confirmClearQueue, "")
-			bullet := lipgloss.NewStyle().Foreground(colorWarning).Render("●")
 			action := lipgloss.NewStyle().Foreground(colorText).Bold(true).Render("Clear queue?")
-			enterKey := lipgloss.NewStyle().Foreground(colorAccent2).Bold(true).Render("[Enter]")
-			enterDesc := lipgloss.NewStyle().Foreground(colorTextDim).Render("yes")
-			escKey := lipgloss.NewStyle().Foreground(colorAccent3).Bold(true).Render("[Esc]")
-			escDesc := lipgloss.NewStyle().Foreground(colorTextDim).Render("no")
-			m.setStatus(bullet + " " + action + "  " + enterKey + " " + enterDesc + "  " + escKey + " " + escDesc)
+			m.startConfirm(confirmClearQueue, "")
+			m.setStatus(confirmStatus(action, ""))
 			return m, nil
 		}
 		return m, nil
@@ -844,16 +869,10 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "U":
 		if m.updateAvailable != "" && m.updateAvailable != "latest" {
 			// Update already known — start confirmation immediately
-			m.startConfirm(confirmUpdate, m.updateAvailable)
-			// Styled confirmation: orange bullet, white action, mint Enter, pink Esc
-			bullet := lipgloss.NewStyle().Foreground(colorWarning).Render("●")
 			action := lipgloss.NewStyle().Foreground(colorText).Bold(true).Render("Update to")
 			verStr := lipgloss.NewStyle().Foreground(colorAccent2).Bold(true).Render(m.updateAvailable + "?")
-			enterKey := lipgloss.NewStyle().Foreground(colorAccent2).Bold(true).Render("[Enter]")
-			enterDesc := lipgloss.NewStyle().Foreground(colorTextDim).Render("yes")
-			escKey := lipgloss.NewStyle().Foreground(colorAccent3).Bold(true).Render("[Esc]")
-			escDesc := lipgloss.NewStyle().Foreground(colorTextDim).Render("no")
-			m.setStatus(bullet + " " + action + " " + verStr + "  " + enterKey + " " + enterDesc + "  " + escKey + " " + escDesc)
+			m.startConfirm(confirmUpdate, m.updateAvailable)
+			m.setStatus(confirmStatus(action, verStr))
 			return m, nil
 		}
 		m.updateCheckManual = true
@@ -865,14 +884,9 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		if !m.isConfirming() {
-			m.startConfirm(confirmClearHistory, "")
-			bullet := lipgloss.NewStyle().Foreground(colorWarning).Render("●")
 			action := lipgloss.NewStyle().Foreground(colorText).Bold(true).Render("Clear history?")
-			enterKey := lipgloss.NewStyle().Foreground(colorAccent2).Bold(true).Render("[Enter]")
-			enterDesc := lipgloss.NewStyle().Foreground(colorTextDim).Render("yes")
-			escKey := lipgloss.NewStyle().Foreground(colorAccent3).Bold(true).Render("[Esc]")
-			escDesc := lipgloss.NewStyle().Foreground(colorTextDim).Render("no")
-			m.setStatus(bullet + " " + action + "  " + enterKey + " " + enterDesc + "  " + escKey + " " + escDesc)
+			m.startConfirm(confirmClearHistory, "")
+			m.setStatus(confirmStatus(action, ""))
 			return m, nil
 		}
 		return m, nil

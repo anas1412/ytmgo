@@ -67,7 +67,7 @@ func TestSettingsDescriptionsWrapInsteadOfTruncating(t *testing.T) {
 		// The left half only: the shortcuts panel beside it is a
 		// fixed two-column table, not prose, and is not what wraps.
 		var left string
-		for _, l := range strings.Split(m.renderSettingsPanels(), "\n") {
+		for l := range strings.SplitSeq(m.renderSettingsPanels(), "\n") {
 			if len(l) > w/2 {
 				l = l[:w/2]
 			}

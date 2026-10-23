@@ -238,7 +238,7 @@ func TestReleaseClickMatchesRow(t *testing.T) {
 	}
 	lines := strings.Split(m.View(), "\n")
 	checked := 0
-	for want := 0; want < 3; want++ {
+	for want := range 3 {
 		// Match the row number, not the title: two of an artist's
 		// releases can share a prefix, and the first match would then
 		// be the wrong row.

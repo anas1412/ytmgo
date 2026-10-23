@@ -31,6 +31,7 @@ type KeyMap struct {
 	MoveUp        key.Binding
 	MoveDown      key.Binding
 	Download      key.Binding
+	DownloadAll   key.Binding
 	Recs          key.Binding
 	Album         key.Binding
 	Enqueue       key.Binding
@@ -38,7 +39,6 @@ type KeyMap struct {
 	Visualizer    key.Binding
 	Lyrics        key.Binding
 	Hints         key.Binding
-	Downloads     key.Binding
 	Open          key.Binding
 	Update        key.Binding
 	ClearHistory  key.Binding
@@ -164,6 +164,10 @@ var Keys = KeyMap{
 		key.WithKeys("x"),
 		key.WithHelp("x", "download track"),
 	),
+	DownloadAll: key.NewBinding(
+		key.WithKeys("X"),
+		key.WithHelp("X", "download every track listed"),
+	),
 	Recs: key.NewBinding(
 		key.WithKeys("R"),
 		key.WithHelp("R", "recommendations"),
@@ -188,10 +192,6 @@ var Keys = KeyMap{
 	Lyrics: key.NewBinding(
 		key.WithKeys("y"),
 		key.WithHelp("y", "lyrics"),
-	),
-	Downloads: key.NewBinding(
-		key.WithKeys("X"),
-		key.WithHelp("X", "downloads"),
 	),
 	Hints: key.NewBinding(
 		key.WithKeys("z"),
@@ -312,6 +312,7 @@ func (k KeyMap) FullHelp() [][]key.Binding {
 			k.MoveUp,
 			k.MoveDown,
 			k.Download,
+			k.DownloadAll,
 			k.CopyLink,
 			k.Open,
 			k.Update,
@@ -336,7 +337,6 @@ func (k KeyMap) FullHelp() [][]key.Binding {
 			k.Visualizer,
 			k.Lyrics,
 			k.Hints,
-			k.Downloads,
 		},
 		{
 			k.Help,
