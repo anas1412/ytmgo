@@ -53,15 +53,15 @@ func (m *Model) queueAll(list []search.Result) tea.Cmd {
 	return m.queueTracks(ts)
 }
 
-// downloadAll enqueues every track in ts for download, skipping any
-// already in the download queue. On-screen lists already carry a watch
-// URL, so — unlike the single-track x path, which may have to resolve a
-// bare track — no resolve step is needed here.
+// downloadAll enqueues every track in ts for download, skipping any that
+// are already downloaded or in the download queue. On-screen lists
+// already carry a watch URL, so — unlike the single-track x path, which
+// may have to resolve a bare track — no resolve step is needed here.
 func (m *Model) downloadAll(ts []queue.Track) tea.Cmd {
 	m.ensureDownloader()
 	queued := 0
 	for _, t := range ts {
-		if t.URL == "" || m.downloader.HasPendingJob(t.ID) {
+		if t.URL == "" || t.Downloaded || m.downloader.HasPendingJob(t.ID) {
 			continue
 		}
 		m.downloader.Enqueue(t.ID, t.Title, t.Artist, t.URL, m.downloadDir(), t.CoverURL)

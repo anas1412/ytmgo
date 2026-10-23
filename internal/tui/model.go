@@ -879,6 +879,9 @@ func (m *Model) resetStreamCursor() {
 // searchCursor/searchOffset, so this must run before they start using
 // them — at the moment the open fetch is issued.
 func (m *Model) saveBrowseRestore() {
+	if m.openArtist != nil || m.openAlbum != nil {
+		return // already browsing: the results position is saved
+	}
 	m.preBrowseCursor = m.searchCursor
 	m.preBrowseOffset = m.searchOffset
 }
@@ -897,6 +900,7 @@ func (m *Model) restoreBrowseRestore() {
 	}
 	m.searchCursor = m.preBrowseCursor
 	m.searchOffset = m.preBrowseOffset
+	m.clampSearchOffset()
 }
 
 // showRecommendations restores the recommendations list in the results

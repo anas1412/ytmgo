@@ -338,9 +338,9 @@ func (m Model) playlistsLabel() string {
 	esc := styleKeyHint.Render("[esc]")
 	d := styleKeyHint.Render("[d]")
 	e := styleKeyHint.Render("[e]")
-	E := styleKeyHint.Render("[E]")
+	X := styleKeyHint.Render("[X]")
 	if m.plOpen != nil {
-		return strings.ToUpper(m.plOpen.Name) + m.hints("  "+e+" queue all  "+E+" download all  "+d+" remove  "+
+		return strings.ToUpper(m.plOpen.Name) + m.hints("  "+e+" queue all  "+X+" download all  "+d+" remove  "+
 			styleKeyHint.Render("[ctrl+↑↓]")+" reorder  "+esc+" back")
 	}
 	return fmt.Sprintf("PLAYLISTS %d", len(m.playlists)) +

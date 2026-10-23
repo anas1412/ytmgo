@@ -131,6 +131,10 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		key := msg.String()
 		confirmed := key == "enter"
 		switch {
+		case key == "ctrl+c":
+			m.quitting = true
+			m.Shutdown()
+			return m, tea.Quit
 		case confirmed:
 			return m.executeConfirmedAction()
 		case key == "esc":
@@ -147,7 +151,12 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	// ── Global keybindings ───────────────────────────────
 	switch msg.String() {
-	case "q", "ctrl+c":
+	case "ctrl+c":
+		m.quitting = true
+		m.Shutdown()
+		return m, tea.Quit
+
+	case "q":
 		if !m.isConfirming() {
 			action := lipgloss.NewStyle().Foreground(colorText).Bold(true).Render("Quit ytmgo?")
 			m.startConfirm(confirmQuit, "")
@@ -457,10 +466,11 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.setStatus(fmt.Sprintf("Queued %d tracks", len(list)))
 		return m, cmd
 
-	case "E":
-		// Download the whole list on screen — the download-queue sibling
-		// of e. Same contexts as e: a pasted playlist, a search, or an
-		// artist's songs. Each track goes into the download folder.
+	case "X":
+		// Download the whole list on screen — the uppercase counterpart
+		// to x (download one). Same contexts as e: a pasted playlist, a
+		// search, or an artist's songs. Each track goes into the
+		// download folder.
 		if m.activePage == PagePlaylists && m.plOpen != nil && m.activePanel == PanelSearch {
 			if len(m.plOpen.Tracks) == 0 {
 				return m, nil
@@ -555,15 +565,6 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.setStatus("Key hints hidden  (z to bring them back)")
 		}
 		return m, saveSettingsCmd(m.db, m.settings)
-
-	case "X":
-		// Downloads live on their own page; X jumps there and back.
-		if m.activePage == PageDownloads {
-			m.switchPage(PageStream)
-		} else {
-			m.switchPage(PageDownloads)
-		}
-		return m, nil
 
 	case "g":
 		m.moveCursorToEdge(false)

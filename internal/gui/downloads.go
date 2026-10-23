@@ -405,7 +405,6 @@ func (a *App) downloadFirst(t queue.Track) (string, error) {
 	for {
 		jobs := dl.Jobs()
 		for _, j := range slices.Backward(jobs) {
-
 			if j.TrackID != t.ID {
 				continue
 			}

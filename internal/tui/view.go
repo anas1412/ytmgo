@@ -740,9 +740,8 @@ func (m Model) vizBars() int {
 	// The spectrum owns the whole panel now — the artwork moved to the
 	// player bar, so nothing is subtracted for it any more.
 	avail := (m.width-2)/2 - 4
-	n := max(
-		// roughly two cells per bar plus a gap
-		avail/3, 4)
+	// roughly two cells per bar plus a gap
+	n := max(avail/3, 4)
 	if n > 128 {
 		n = 128
 	}

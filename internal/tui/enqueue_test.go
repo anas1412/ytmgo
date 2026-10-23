@@ -3,7 +3,9 @@ package tui
 import (
 	"testing"
 
+	"ytmgo/internal/db"
 	"ytmgo/internal/player"
+	"ytmgo/internal/queue"
 	"ytmgo/internal/search"
 
 	"ytmgo/internal/ytmusic"
@@ -37,23 +39,23 @@ func pressE(t *testing.T, m Model) Model {
 	return nm.(Model)
 }
 
-func pressUppercaseE(t *testing.T, m Model) Model {
+func pressUppercaseX(t *testing.T, m Model) Model {
 	t.Helper()
-	nm, _ := m.handleKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'E'}})
+	nm, _ := m.handleKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'X'}})
 	return nm.(Model)
 }
 
-// E downloads the whole list on screen — the download-queue sibling of
-// e. Every track lands as a download job.
+// X downloads the whole list on screen — the uppercase counterpart
+// to x. Every track lands as a download job.
 func TestBulkDownloadDownloadsTheList(t *testing.T) {
 	t.Setenv("PATH", t.TempDir()) // keep the worker's exec from launching a real yt-dlp
 	m := enqueueModel(t, 5)
-	m = pressUppercaseE(t, m)
+	m = pressUppercaseX(t, m)
 	if m.downloader == nil || len(m.downloader.Jobs()) != 5 {
-		t.Fatalf("E queued %d download jobs, want all 5", len(m.downloader.Jobs()))
+		t.Fatalf("X queued %d download jobs, want all 5", len(m.downloader.Jobs()))
 	}
 	if m.activePage != PageDownloads {
-		t.Errorf("E left the user on page %v, want the downloads page", m.activePage)
+		t.Errorf("X left the user on page %v, want the downloads page", m.activePage)
 	}
 }
 
@@ -62,8 +64,8 @@ func TestBulkDownloadDownloadsTheList(t *testing.T) {
 func TestBulkDownloadIgnoredFromQueuePanel(t *testing.T) {
 	m := enqueueModel(t, 5)
 	m.activePanel = PanelQueue
-	if got := pressUppercaseE(t, m); got.downloader != nil && len(got.downloader.Jobs()) != 0 {
-		t.Fatalf("E queued download jobs with the focus in the queue, want none")
+	if got := pressUppercaseX(t, m); got.downloader != nil && len(got.downloader.Jobs()) != 0 {
+		t.Fatalf("X queued download jobs with the focus in the queue, want none")
 	}
 }
 
@@ -71,8 +73,8 @@ func TestBulkDownloadIgnoredFromQueuePanel(t *testing.T) {
 func TestBulkDownloadSkipsAlbumGrid(t *testing.T) {
 	m := enqueueModel(t, 5)
 	m.albumMode = true
-	if got := pressUppercaseE(t, m); got.downloader != nil && len(got.downloader.Jobs()) != 0 {
-		t.Fatalf("E queued download jobs from the album grid, want none")
+	if got := pressUppercaseX(t, m); got.downloader != nil && len(got.downloader.Jobs()) != 0 {
+		t.Fatalf("X queued download jobs from the album grid, want none")
 	}
 }
 
@@ -80,11 +82,35 @@ func TestBulkDownloadSkipsAlbumGrid(t *testing.T) {
 func TestBulkDownloadSkipsQueuedTracks(t *testing.T) {
 	t.Setenv("PATH", t.TempDir())
 	m := enqueueModel(t, 5)
-	m = pressUppercaseE(t, m) // queues all 5
+	m = pressUppercaseX(t, m) // queues all 5
 	before := len(m.downloader.Jobs())
-	m = pressUppercaseE(t, m) // all pending already — nothing new
+	m = pressUppercaseX(t, m) // all pending already — nothing new
 	if got := len(m.downloader.Jobs()); got != before {
-		t.Fatalf("E queued %d jobs on a second press, want it to stay at %d", got, before)
+		t.Fatalf("X queued %d jobs on a second press, want it to stay at %d", got, before)
+	}
+}
+
+// Already-downloaded tracks (t.Downloaded) are skipped — in local
+// playlists, they carry file paths rather than YouTube URLs and would fail
+// if passed to yt-dlp.
+func TestBulkDownloadSkipsDownloadedTracks(t *testing.T) {
+	t.Setenv("PATH", t.TempDir())
+	m := enqueueModel(t, 5)
+	pl := db.Playlist{
+		Name: "Mixed",
+		Tracks: []queue.Track{
+			{ID: "t1", Title: "Track 1", URL: "https://youtube.com/watch?v=1", Downloaded: false},
+			{ID: "t2", Title: "Track 2", URL: "/local/path/song.mp3", Downloaded: true},
+			{ID: "t3", Title: "Track 3", URL: "https://youtube.com/watch?v=3", Downloaded: false},
+		},
+	}
+	m.activePage = PagePlaylists
+	m.plOpen = &pl
+	m.activePanel = PanelSearch
+
+	m = pressUppercaseX(t, m)
+	if m.downloader == nil || len(m.downloader.Jobs()) != 2 {
+		t.Fatalf("X queued %d jobs, want 2 (skipping the downloaded one)", len(m.downloader.Jobs()))
 	}
 }
 
